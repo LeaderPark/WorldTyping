@@ -1,0 +1,412 @@
+// spec: docs/04 §6.1(생명주기)·§6.2(검증 10단계)·§2.3-4/5(RunStart/RunSubmit 스키마), docs/06 §3.1(서명
+//       세션·rejected는 HTTP 200)·§3.2(재계산)·§3.5(섀도우밴 누적 3회)·§2.3(데일리 1일 1회·스트릭),
+//       docs/00 §11-D5·§11-D16(제출 경로 동기, Queue 금지)·§11-D21·§11-D38(user_id=pid) + WT-M3-03
+//
+// POST /runs/start — 세트 확정 + 서명 runToken 발급(KV sess:{rid}는 미설정, submit에서 사용 플래그).
+// POST /runs/submit — 클라 점수를 절대 믿지 않는 서버 권위 검증. verdict='valid'만 리더보드에 도달
+//   (UPSERT·rank 인라인은 WT-M3-04에서 결합; 이 태스크는 verdict 판별 + runs INSERT까지).
+//
+// rejected는 HTTP 200 + verdict:'rejected'로 응답한다(4xx로 어뷰저에게 탐지 신호를 주지 않음,
+// docs/06 §3.1). verdict_reason은 DB에만 기록하고 응답에는 노출하지 않는다.
+import { Hono } from "hono";
+import { z } from "zod";
+import {
+  verifyToken,
+  signRunToken,
+  RunTokenPayloadSchema,
+  RUN_TOKEN_TTL_MS,
+  type RunTokenPayload,
+} from "@wt/shared";
+import type { Env } from "../env";
+import type { RunVerdict } from "../db/types";
+import { ApiHttpError } from "../lib/api-error";
+import { KV_KEYS } from "../lib/kv-keys";
+import { getGeoCountry } from "../lib/ip-hash";
+import { requireAuth, type AuthVariables } from "../mw/auth";
+import { rateLimit } from "../mw/ratelimit";
+import { uuidv7 } from "../lib/uuid";
+import { kstDate, kstYesterday } from "../lib/kst";
+import { loadAnticheatConfig } from "../lib/anticheat-config";
+import { buildSetForStart, rebuildSet, computeSetHash, type SingleMode } from "../lib/set-builder";
+import { verifyRun, type ServerValues } from "../lib/run-verify";
+
+/** run 세션 사용 플래그 TTL(docs/06 §3.1 — 2h). */
+const SESS_FLAG_TTL_SEC = 2 * 60 * 60;
+
+const ContinentSchema = z.enum([
+  "asia",
+  "europe",
+  "africa",
+  "north-america",
+  "south-america",
+  "oceania",
+]);
+
+const RunStartReqSchema = z
+  .object({
+    mode: z.enum(["continent", "tier", "worldtour", "daily"]),
+    lang: z.enum(["ko", "en"]),
+    platform: z.enum(["desktop", "mobile"]),
+    continent: ContinentSchema.optional(),
+    tier: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]).optional(),
+  })
+  .strict()
+  .refine((v) => v.mode !== "continent" || v.continent !== undefined, {
+    message: "mode=continent에는 continent가 필요합니다.",
+  })
+  .refine((v) => v.mode !== "tier" || v.tier !== undefined, {
+    message: "mode=tier에는 tier가 필요합니다.",
+  });
+
+const PerCountrySchema = z
+  .object({
+    code: z.string().min(1).max(8),
+    ms: z.number().nonnegative(),
+    keystrokes: z.number().int().nonnegative(),
+    errors: z.number().int().nonnegative(),
+    skipped: z.boolean(),
+    inputUsed: z.string().max(256),
+  })
+  .strict();
+
+const RunSubmitReqSchema = z
+  .object({
+    runToken: z.string().min(1).max(4096),
+    result: z
+      .object({
+        elapsedMs: z.number().nonnegative(),
+        totalKeystrokes: z.number().int().nonnegative(),
+        correctKeystrokes: z.number().int().nonnegative(),
+        maxCombo: z.number().int().nonnegative(),
+        countriesCleared: z.number().int().nonnegative(),
+        countriesSkipped: z.number().int().nonnegative(),
+        livesLost: z.number().int().nonnegative(),
+        finished: z.boolean(),
+        perCountry: z.array(PerCountrySchema).min(1).max(200),
+      })
+      .strict(),
+    clientScore: z.number(),
+    inputDigest: z
+      .object({
+        n: z.number().int().nonnegative(),
+        mean: z.number().nonnegative(),
+        stdev: z.number().nonnegative(),
+        p10: z.number().nonnegative(),
+        p50: z.number().nonnegative(),
+        p90: z.number().nonnegative(),
+        burstMax: z.number().nonnegative(),
+      })
+      .strict(),
+    nickname: z.string().min(1).max(64).optional(),
+  })
+  .strict();
+
+interface RunStartRes {
+  runToken: string;
+  runId: string;
+  serverStartTs: number;
+  countryIds: string[];
+  seed: string;
+}
+
+interface RunSubmitRes {
+  verdict: RunVerdict;
+  score: number;
+  pi: number;
+  cpm: number;
+  accMilli: number;
+  grade: string;
+  completed: boolean;
+  // 리더보드 순위 인라인은 WT-M3-04에서 채운다(verified 시 upsertBest + rank/total/isPersonalBest).
+  rank: number | null;
+  total: number | null;
+  isPersonalBest: boolean | null;
+}
+
+export const runs = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
+
+// ───────────────────────── POST /runs/start ─────────────────────────
+
+runs.post("/runs/start", requireAuth, rateLimit("runs/start"), async (c) => {
+  const pid = c.get("pid");
+  const parsed = RunStartReqSchema.safeParse(await c.req.json().catch(() => undefined));
+  if (!parsed.success) {
+    throw new ApiHttpError(400, "INVALID_BODY", "runs/start 요청 형식이 올바르지 않습니다.");
+  }
+  const { mode, lang, platform, continent, tier } = parsed.data;
+
+  const now = Date.now();
+  const built = await buildSetForStart(c.env, { mode: mode as SingleMode, continent, tier }, now);
+  const setHash = await computeSetHash(built.countryIds);
+  const rid = uuidv7(now);
+
+  const runToken = await signRunToken(
+    c.env.RUN_HMAC_SECRET,
+    { rid, pid, mode, modeKey: built.modeKey, lang, platform, setHash, seed: built.seed },
+    now,
+  );
+
+  const body: RunStartRes = {
+    runToken,
+    runId: rid,
+    serverStartTs: now,
+    countryIds: built.countryIds,
+    seed: built.seed,
+  };
+  return c.json(body);
+});
+
+// ───────────────────────── POST /runs/submit ─────────────────────────
+
+runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
+  const pid = c.get("pid");
+  const db = c.env.DB;
+  if (!db) throw new ApiHttpError(503, "SERVICE_UNAVAILABLE", "DB binding not configured");
+
+  const parsed = RunSubmitReqSchema.safeParse(await c.req.json().catch(() => undefined));
+  if (!parsed.success) {
+    throw new ApiHttpError(400, "INVALID_BODY", "runs/submit 요청 형식이 올바르지 않습니다.");
+  }
+  const body = parsed.data;
+  const now = Date.now();
+
+  // 토큰 검증(서명/exp) — 실패 시 HTTP 200 rejected. 신뢰 가능한 run 식별자가 없어 INSERT하지 않는다.
+  const verified = await verifyToken(body.runToken, c.env.RUN_HMAC_SECRET, RunTokenPayloadSchema, now);
+  if (!verified.ok) return c.json(submitRes("rejected", ZERO));
+  const token: RunTokenPayload = verified.payload;
+
+  const config = await loadAnticheatConfig(c.env.KV);
+
+  // 토큰만으로 세트 재현(서버 권위 기준 세트) + 무결성 해시.
+  const fullSet = await rebuildSet(c.env, token);
+  const rebuiltSetHash = await computeSetHash(fullSet);
+
+  // ② 리플레이 플래그(KV sess:{rid}) 조회.
+  const alreadyUsed = c.env.KV ? (await c.env.KV.get(KV_KEYS.session(token.rid))) !== null : false;
+
+  // 과거 기록 요약(휴리스틱 + 데일리 1일 1회 판정) — 한 번의 집계 쿼리로 해소.
+  const personal = await loadPersonalStats(db, pid, token.modeKey);
+
+  const vr = verifyRun({
+    sessionPid: pid,
+    token,
+    rebuiltSetHash,
+    fullSet,
+    alreadyUsed,
+    submit: { result: body.result, clientScore: body.clientScore, inputDigest: body.inputDigest },
+    now,
+    runTokenTtlMs: RUN_TOKEN_TTL_MS,
+    config,
+    personal: {
+      sampleSize: personal.boardValidCount,
+      bestPi: personal.boardBestPi,
+      isFirstSubmission: personal.accountValidCount === 0,
+    },
+  });
+
+  // ①(pid 불일치)·②(리플레이)는 신뢰 가능한 신규 run이 아니다 → INSERT/KV 마킹 없이 응답만.
+  //   - invalid_token: 남의 토큰 → 이 세션 유저에 귀속 불가.
+  //   - replay: 동일 rid 행이 이미 존재(run_id PK) → 재삽입 불가.
+  if (vr.verdict === "rejected" && (vr.verdictReason === "invalid_token" || vr.verdictReason === "replay")) {
+    return c.json(submitRes(vr.verdict, vr.server));
+  }
+
+  // 토큰 소비(일회용) — reject 여부와 무관하게 사용 플래그를 남겨 재제출을 차단한다.
+  if (c.env.KV) {
+    await c.env.KV.put(KV_KEYS.session(token.rid), "1", { expirationTtl: SESS_FLAG_TTL_SEC });
+  }
+
+  // 데일리 1일 1회 등재(§2.3): 같은 (uid, daily:{date})에 이미 정식 기록이 있으면 practice 강등.
+  //   boardValidCount는 modeKey 기준이므로 daily 보드에서 곧 "이 날짜의 과거 정식 제출 수"다.
+  let finalVerdict: RunVerdict = vr.verdict;
+  let finalReason = vr.verdictReason;
+  let dailyFirstValid = false;
+  if (token.mode === "daily" && vr.verdict === "valid") {
+    if (personal.boardValidCount > 0) {
+      finalVerdict = "practice";
+      finalReason = "daily_practice";
+    } else {
+      dailyFirstValid = true; // 첫 정식 제출 → 스트릭 갱신
+    }
+  }
+
+  // 섀도우밴(§3.5): rejected 누적(이번 판 포함)이 임계 도달 시 자동 shadowbanned.
+  const newRejectedCount = personal.rejectedCount + (finalVerdict === "rejected" ? 1 : 0);
+  const shadowban = newRejectedCount >= config.rejectedShadowbanThreshold;
+
+  const stmts = [
+    insertRunStmt(db, {
+      runId: token.rid,
+      userId: pid,
+      token,
+      server: vr.server,
+      verdict: finalVerdict,
+      verdictReason: finalReason,
+      geo: getGeoCountry(c),
+      detailJson: JSON.stringify({
+        result: body.result,
+        clientScore: body.clientScore,
+        inputDigest: body.inputDigest,
+        ...(body.nickname !== undefined ? { nickname: body.nickname } : {}),
+      }),
+      now,
+    }),
+  ];
+  if (dailyFirstValid) {
+    const today = kstDate(now);
+    stmts.push(streakStmt(db, pid, today, kstYesterday(today), now));
+  }
+  if (shadowban) {
+    stmts.push(shadowbanStmt(db, pid, now));
+  }
+  await db.batch(stmts);
+
+  return c.json(submitRes(finalVerdict, vr.server));
+});
+
+// ───────────────────────── 응답/SQL 헬퍼 ─────────────────────────
+
+const ZERO: ServerValues = {
+  score: 0,
+  pi: 0,
+  cpm: 0,
+  accMilli: 0,
+  grade: "D",
+  completed: false,
+  maxCombo: 0,
+  countriesCleared: 0,
+  countriesSkipped: 0,
+  elapsedMs: 0,
+};
+
+function submitRes(verdict: RunVerdict, s: ServerValues): RunSubmitRes {
+  return {
+    verdict,
+    score: s.score,
+    pi: s.pi,
+    cpm: s.cpm,
+    accMilli: s.accMilli,
+    grade: s.grade,
+    completed: s.completed,
+    rank: null,
+    total: null,
+    isPersonalBest: null,
+  };
+}
+
+interface PersonalStatsRow {
+  board_valid_count: number | null;
+  board_best_pi: number | null;
+  account_valid_count: number | null;
+  rejected_count: number | null;
+}
+
+interface PersonalStats {
+  boardValidCount: number;
+  boardBestPi: number | null;
+  accountValidCount: number;
+  rejectedCount: number;
+}
+
+/**
+ * 이 유저의 과거 기록 요약을 단일 집계 쿼리로 조회한다(CASE WHEN — FILTER 미지원 SQLite 대비 이식성).
+ * board_* 는 mode_key 한정, account_valid_count는 계정 전체, rejected_count는 섀도우밴 누적 판정용.
+ */
+async function loadPersonalStats(db: D1Database, userId: string, modeKey: string): Promise<PersonalStats> {
+  const row = await db
+    .prepare(
+      `SELECT
+         SUM(CASE WHEN verdict='valid' AND mode_key = ?2 THEN 1 ELSE 0 END)  AS board_valid_count,
+         MAX(CASE WHEN verdict='valid' AND mode_key = ?2 THEN pi END)        AS board_best_pi,
+         SUM(CASE WHEN verdict='valid' THEN 1 ELSE 0 END)                    AS account_valid_count,
+         SUM(CASE WHEN verdict='rejected' THEN 1 ELSE 0 END)                 AS rejected_count
+       FROM runs WHERE user_id = ?1`,
+    )
+    .bind(userId, modeKey)
+    .first<PersonalStatsRow>();
+  return {
+    boardValidCount: Number(row?.board_valid_count ?? 0),
+    boardBestPi: row?.board_best_pi ?? null,
+    accountValidCount: Number(row?.account_valid_count ?? 0),
+    rejectedCount: Number(row?.rejected_count ?? 0),
+  };
+}
+
+interface InsertRunArgs {
+  runId: string;
+  userId: string;
+  token: RunTokenPayload;
+  server: ServerValues;
+  verdict: RunVerdict;
+  verdictReason: string | null;
+  geo: string | null;
+  detailJson: string;
+  now: number;
+}
+
+function insertRunStmt(db: D1Database, a: InsertRunArgs): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO runs (
+         run_id, user_id, mode_key, lang, platform,
+         score, pi, cpm, acc_milli, elapsed_ms,
+         countries_cleared, countries_skipped, max_combo, completed, grade,
+         seed, session_id, verdict, verdict_reason, geo, detail_json, created_at
+       ) VALUES (
+         ?1, ?2, ?3, ?4, ?5,
+         ?6, ?7, ?8, ?9, ?10,
+         ?11, ?12, ?13, ?14, ?15,
+         ?16, ?17, ?18, ?19, ?20, ?21, ?22
+       )`,
+    )
+    .bind(
+      a.runId,
+      a.userId,
+      a.token.modeKey,
+      a.token.lang,
+      a.token.platform,
+      a.server.score,
+      a.server.pi,
+      a.server.cpm,
+      a.server.accMilli,
+      a.server.elapsedMs,
+      a.server.countriesCleared,
+      a.server.countriesSkipped,
+      a.server.maxCombo,
+      a.server.completed ? 1 : 0,
+      a.server.grade,
+      a.token.seed,
+      a.runId, // session_id = rid (KV sess:{rid}와 동일 식별자)
+      a.verdict,
+      a.verdictReason,
+      a.geo,
+      a.detailJson,
+      a.now,
+    );
+}
+
+/** 스트릭 갱신(§2.3): streak_updated가 어제면 +1, 아니면 1로 리셋. */
+function streakStmt(
+  db: D1Database,
+  userId: string,
+  today: string,
+  yesterday: string,
+  now: number,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE users SET
+         streak_daily = CASE WHEN streak_updated = ?2 THEN streak_daily + 1 ELSE 1 END,
+         streak_updated = ?3,
+         updated_at = ?4
+       WHERE user_id = ?1`,
+    )
+    .bind(userId, yesterday, today, now);
+}
+
+/** 섀도우밴(§3.5): active 유저만 shadowbanned로. banned/deleted는 건드리지 않는다. */
+function shadowbanStmt(db: D1Database, userId: string, now: number): D1PreparedStatement {
+  return db
+    .prepare(`UPDATE users SET status = 'shadowbanned', updated_at = ?2 WHERE user_id = ?1 AND status = 'active'`)
+    .bind(userId, now);
+}

@@ -1,0 +1,20 @@
+{
+  "minMsPerKeystroke": 35,
+  "cpmHardCapKo": 1100,
+  "cpmHardCapEn": 1000,
+  "cpmSoftCapKo": 950,
+  "cpmSoftCapEn": 900,
+  "rhythmCvThreshold": 0.12,
+  "rhythmSpreadMsThreshold": 25,
+  "burstMaxThreshold": 3,
+  "growthJumpFactor": 0.6,
+  "growthMinSample": 5,
+  "accComboCpmThreshold": 800,
+  "timeEnvelopeGraceMs": 3000,
+  "sumMsToleranceLowFactor": 0.99,
+  "sumMsToleranceHighFactor": 1.01,
+  "sumMsToleranceFlatMs": 500,
+  "scoreMismatchTolerance": 1,
+  "rejectedShadowbanThreshold": 3,
+  "multi": { "reactionFloorMs": 250, "maxKps": { "ko": 14, "en": 18 } }
+}

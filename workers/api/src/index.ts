@@ -9,6 +9,7 @@ import { health } from "./routes/health";
 import { session } from "./routes/session";
 import { config } from "./routes/config";
 import { data } from "./routes/data";
+import { runs } from "./routes/runs";
 import { securityHeaders } from "./mw/security-headers";
 import { corsMiddleware } from "./mw/cors";
 import { apiErrorHandler } from "./lib/api-error";
@@ -32,6 +33,7 @@ app.route("/api/v1", health);
 app.route("/api/v1", session); // WT-M3-02: POST /session, GET /session/me
 app.route("/api/v1", config); // WT-M3-02: GET /config
 app.route("/api/v1", data); // WT-M3-02: GET /data/countries (KV 핫스왑 서빙)
+app.route("/api/v1", runs); // WT-M3-03: POST /runs/start, POST /runs/submit
 
 // /api/v1/* 중 위에서 매칭되지 않은 경로 → docs/04 §2.1 ApiError 포맷 404
 // (health를 포함해 이후 마일스톤에서 추가되는 모든 /api/v1/* 라우트는 이 줄보다 위에 등록한다).

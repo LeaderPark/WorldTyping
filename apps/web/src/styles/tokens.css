@@ -1,0 +1,110 @@
+/* spec: docs/01 §1.3(대륙 6색 — 지하철 노선색 감성), §13.2(등급색 S/A/B/C/D),
+   docs/03 §3.3(지도 상태색 --map-*), §3.4(카메라 non-scaling-stroke), WT-M2-04.
+
+   이 파일은 색 토큰(변수)과 그 변수만 참조하는 지도 레이어 스타일을 담는다. 지도 코드(SVG)는
+   색을 직접 쓰지 않고 CSS 변수만 참조하므로 테마(다크/라이트) 전환 시 지도 로직 무수정이다.
+   기본은 다크(docs/01 §13.2 "다크 모드 기본"). index.html FOUC 스니펫이 <html data-theme>를 페인트
+   전에 세팅한다. */
+
+:root {
+  /* ── 대륙 6색(docs/01 §1.3, §3.1) — 노선 시그니처. 테마 불변. ── */
+  --continent-asia: #e5484d; /* 레드 */
+  --continent-europe: #3b82f6; /* 블루 */
+  --continent-africa: #f97316; /* 오렌지 */
+  --continent-north-america: #22c55e; /* 그린 */
+  --continent-south-america: #eab308; /* 옐로 */
+  --continent-oceania: #06b6d4; /* 시안 */
+
+  /* ── 등급색(docs/01 §13.2: S=골드 A=퍼플 B=블루 C=그린 D=그레이) ── */
+  --grade-s: #fbbf24;
+  --grade-a: #a855f7;
+  --grade-b: #3b82f6;
+  --grade-c: #22c55e;
+  --grade-d: #94a3b8;
+
+  /* ── 지도 상태색(docs/03 §3.3) — 다크 기본값 ── */
+  --map-pending: #2a3340; /* 미해결(출제 세트 내) */
+  --map-idle: #222a35; /* 출제 세트 외 */
+  --map-neutral: #1b222c; /* 중립 feature(속령 등) — 인터랙션 없음 */
+  --map-skipped: #3a424e; /* 스킵(회색+빗금) */
+  --map-border: #0f141a; /* 폴리곤 경계선 */
+  --map-dot: #64748b; /* 초소국 circle 기본 */
+}
+
+/* 라이트 테마: 지도 상태색만 반전(대륙/등급색은 채도가 충분해 공용). docs/01 §13.2 라이트=옵션. */
+:root[data-theme='light'] {
+  --map-pending: #cbd5e1;
+  --map-idle: #e2e8f0;
+  --map-neutral: #edf1f5;
+  --map-skipped: #b4bcc7;
+  --map-border: #ffffff;
+  --map-dot: #94a3b8;
+}
+
+/* ── 지도 레이어 스타일(§3.2 계층) — .wt-map 아래 5 레이어. 모든 색은 위 변수만 참조. ── */
+.wt-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.wt-map__country {
+  fill: var(--map-idle);
+  stroke: var(--map-border);
+  stroke-width: 0.5;
+}
+.wt-map__neutral {
+  fill: var(--map-neutral);
+  stroke: var(--map-border);
+  stroke-width: 0.5;
+  pointer-events: none; /* 인터랙션 없음(02 §7b) */
+}
+.wt-map__dot {
+  fill: var(--map-dot);
+  stroke: var(--map-border);
+  stroke-width: 0.5;
+}
+/* 현재 타깃: 대륙색 + 밝기 + 외곽선 펄스(§3.3). --continent-color는 setTarget이 인라인 지정. */
+.wt-map__target {
+  fill: var(--continent-color);
+  filter: brightness(1.25);
+  stroke: var(--continent-color);
+  stroke-width: 1.5;
+  animation: wt-map-pulse 1.2s ease-in-out infinite;
+}
+/* 해결: 대륙색 불투명(전이는 markSolved의 WAAPI opacity 0→1이 담당). */
+.wt-map__solved {
+  stroke: var(--map-border);
+  stroke-width: 0.5;
+}
+/* 노선 라인(§3.5): 드로잉은 dashoffset(animateDash), 색은 흰빛 반투명. transform/opacity만 애니메이션. */
+.wt-map__route {
+  fill: none;
+  stroke: #f8fafc;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+@keyframes wt-map-pulse {
+  0%,
+  100% {
+    stroke-opacity: 0.4;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
+}
+
+/* juice 강등(§3.6): level>=1 이면 타깃 펄스 정지(카메라 스냅·드로잉 즉시완성은 JS가 처리). */
+.wt-map[data-juice='1'] .wt-map__target,
+.wt-map[data-juice='2'] .wt-map__target {
+  animation: none;
+}
+/* reduced-motion: 펄스 등 비정보성 모션 제거(§7.3, AppShell이 html[data-reduced] 부여). */
+:root[data-reduced] .wt-map__target {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-map__target {
+    animation: none;
+  }
+}

@@ -4,6 +4,9 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { AppProviders } from "./app/providers";
 import { devRouteChildren, rootRoute } from "./app/router";
+// tokens.css: 색 토큰(대륙/등급/지도 상태색) + 지도 레이어 스타일(WT-M2-04). globals.css보다 먼저
+// 로드해 CSS 변수를 선언한다(globals.css의 --wt-prompt-* 폴백은 그대로 유지).
+import "./styles/tokens.css";
 import "./styles/globals.css";
 
 // 실제 브라우저 히스토리에 연결된 라우터 싱글턴은 여기서만 만든다(router.tsx는 순수 route

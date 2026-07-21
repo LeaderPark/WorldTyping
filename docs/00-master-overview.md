@@ -417,6 +417,7 @@ flowchart LR
 | D23 | 멀티 모드 노출 | 05: race-continent/race-tier 프로토콜 존재 | v1 UI(퀵매치·방 생성 모두)는 **race-mixed만** 노출. 나머지는 프로토콜 예약 |
 | D24 | LB 캐시 주기·KV 구성 | 04: 5분 스냅샷, 단일 KV ↔ 06: 1분 dirty, LB_CACHE 분리 | **주기는 06(1분 dirty)**, **네임스페이스는 04(단일 KV + `lb:` 프리픽스)** |
 | D25 | AE 바인딩·Queue 이름 | 04: `AE`/score-postprocess ↔ 06: `ANALYTICS`/wt-events | 바인딩 `AE`, Queue `wt-events` |
+| D26 | D1 백업 버킷 | 06 §8.5: 별도 `wt-backups` 버킷 ↔ 00 §7.2: `wt-{env}` 겸용 | **00 §7.2 승**: 별도 버킷 없이 R2 `wt-{env}`의 `d1-backups/` 프리픽스에 저장. 06 §8.5의 `wt-backups`는 이 경로로 치환해 읽는다 (M0 구현 확정, 2026-07-21) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

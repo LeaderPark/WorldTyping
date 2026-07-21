@@ -374,3 +374,172 @@
     animation: none;
   }
 }
+
+/* ── S1 홈(WT-M2-07) ──────────────────────────────────────────────────
+   spec: docs/01 §10.2(S1 와이어프레임), §11.1(1단계 — 싱글플레이 카드 펄스). */
+.wt-home {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+.wt-home__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wt-home__nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+.wt-home__daily-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--map-border);
+  font-size: 0.85rem;
+}
+.wt-home-hero__map {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 960 / 500;
+  max-height: 28rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+}
+.wt-home-hero__map-svg {
+  width: 100%;
+  height: 100%;
+}
+.wt-home-hero__map-placeholder {
+  width: 100%;
+  height: 100%;
+  background: var(--map-idle);
+}
+/* 대륙 호버 점등(구현 세부 지시 1) — WorldMapHandle 확장 없이 base 레이어 class만 토글
+   (HeroMap.tsx). setTarget(.wt-map__target)과 시각적으로 유사하되 완전히 별개 경로다. */
+.wt-map__country--hero-lit {
+  fill: var(--continent-color);
+  filter: brightness(1.15);
+  transition: fill 150ms ease-out;
+}
+:root[data-reduced] .wt-map__country--hero-lit {
+  transition: none;
+}
+
+.wt-home__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+.wt-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--map-border);
+  background: color-mix(in srgb, var(--map-idle) 60%, transparent);
+  text-decoration: none;
+  color: inherit;
+}
+.wt-mode-card__title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.wt-mode-card__meta,
+.wt-mode-card__desc {
+  opacity: 0.8;
+  font-size: 0.9rem;
+}
+.wt-mode-card__progress {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+/* §11.1 1단계: 완주 기록이 하나도 없으면 "싱글플레이" 카드가 펄스(온보딩 유도). */
+.wt-mode-card--pulse {
+  animation: wt-mode-card-pulse 1.6s ease-in-out infinite;
+}
+@keyframes wt-mode-card-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--grade-s) 55%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--grade-s) 0%, transparent); }
+}
+:root[data-reduced] .wt-mode-card--pulse {
+  animation: none;
+}
+.wt-home__ticker {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  text-align: center;
+}
+
+/* ── S3/S4 모드·노선 선택(WT-M2-07) ── */
+.wt-mode-select,
+.wt-track-select {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+.wt-mode-select__header,
+.wt-track-select__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.wt-mode-select__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+.wt-track-select__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  list-style: none;
+  padding: 0;
+}
+.wt-track-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--map-border);
+  text-decoration: none;
+  color: inherit;
+}
+.wt-track-item__best {
+  opacity: 0.75;
+  font-size: 0.9rem;
+}
+.wt-track-item__cta {
+  font-weight: 700;
+}
+
+/* ── 온보딩(WT-M2-07, §11.1 2단계) ── */
+.wt-onboarding-tip {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--grade-b) 85%, black);
+  color: #fff;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.wt-onboarding-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--grade-a) 85%, black);
+  color: #fff;
+  font-size: 0.9rem;
+}

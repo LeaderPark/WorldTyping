@@ -181,5 +181,8 @@
 
   "error.network": "연결이 끊겼어요. 다시 시도해 주세요.",
   "error.boundary.title": "문제가 발생했어요",
-  "notice.disputed": "국가 표기는 게임 목적의 편의상 구분이며 정치적 입장을 나타내지 않습니다."
+  "notice.disputed": "국가 표기는 게임 목적의 편의상 구분이며 정치적 입장을 나타내지 않습니다.",
+
+  "onboarding.followAlong": "보이는 대로 따라 치면 돼요",
+  "onboarding.autoAdvance": "Enter 없이 자동으로 넘어가요!"
 }

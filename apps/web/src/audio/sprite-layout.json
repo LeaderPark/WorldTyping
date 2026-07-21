@@ -1,0 +1,77 @@
+{
+  "_license": "자체 생성(WT-M2-07) — 사인/삼각/사각파 신디사이저로 합성한 톤, 외부 라이선스 에셋 아님. tooling/scripts/generate-sound-sprite.mjs 참조.",
+  "sampleRate": 48000,
+  "gapSec": 0.05,
+  "regions": [
+    {
+      "name": "keyMech",
+      "durationSec": 0.035,
+      "freqStart": 1400,
+      "freqEnd": 1100,
+      "wave": "square",
+      "attackSec": 0.002,
+      "releaseSec": 0.02,
+      "gain": 0.35
+    },
+    {
+      "name": "keyMembrane",
+      "durationSec": 0.05,
+      "freqStart": 620,
+      "freqEnd": 480,
+      "wave": "sine",
+      "attackSec": 0.003,
+      "releaseSec": 0.035,
+      "gain": 0.45
+    },
+    {
+      "name": "miss",
+      "durationSec": 0.1,
+      "freqStart": 220,
+      "freqEnd": 170,
+      "wave": "sine",
+      "attackSec": 0.005,
+      "releaseSec": 0.08,
+      "gain": 0.4
+    },
+    {
+      "name": "confirm",
+      "durationSec": 0.18,
+      "freqStart": 300,
+      "freqEnd": 520,
+      "wave": "triangle",
+      "attackSec": 0.005,
+      "releaseSec": 0.15,
+      "gain": 0.6
+    },
+    {
+      "name": "checkpoint",
+      "durationSec": 0.5,
+      "freqStart": 523.25,
+      "freqEnd": 1046.5,
+      "wave": "sine",
+      "attackSec": 0.01,
+      "releaseSec": 0.4,
+      "gain": 0.55
+    },
+    {
+      "name": "countdownBeep",
+      "durationSec": 0.12,
+      "freqStart": 880,
+      "freqEnd": 880,
+      "wave": "sine",
+      "attackSec": 0.005,
+      "releaseSec": 0.08,
+      "gain": 0.5
+    },
+    {
+      "name": "countdownStart",
+      "durationSec": 0.3,
+      "freqStart": 660,
+      "freqEnd": 1320,
+      "wave": "sine",
+      "attackSec": 0.005,
+      "releaseSec": 0.25,
+      "gain": 0.6
+    }
+  ]
+}

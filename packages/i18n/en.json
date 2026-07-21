@@ -181,5 +181,8 @@
 
   "error.network": "Connection lost. Please try again.",
   "error.boundary.title": "Something went wrong",
-  "notice.disputed": "Country labels are for gameplay convenience only and do not reflect any political position."
+  "notice.disputed": "Country labels are for gameplay convenience only and do not reflect any political position.",
+
+  "onboarding.followAlong": "Just type what you see",
+  "onboarding.autoAdvance": "No need to press Enter — it advances automatically!"
 }

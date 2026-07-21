@@ -24,6 +24,7 @@ import { useGameSession } from '../../features/typing/useGameSession';
 import { useTypingEngine } from '../../features/typing/useTypingEngine';
 import { useGameClock } from '../../features/typing/useGameClock';
 import { HiddenTypingInput } from '../../features/typing/HiddenTypingInput';
+import { useSoundManager } from '../../audio/useSoundManager';
 import { WorldMap } from '../../features/map/WorldMap';
 import { useWorldGeoIndex } from '../../features/map/useWorldGeoIndex';
 import type { WorldMapHandle } from '../../features/map/map-handle';
@@ -56,6 +57,9 @@ export function GamePage() {
   const { engine, countries, start, retry, abort } = useGameSession({ mode, trackId });
   const { inputRef, focusInput, controller, getInputValue } = useTypingEngine(engine);
   const { bindTimerEl, bindGaugeEl } = useGameClock(engine);
+  // 사운드: 엔진(확정/체크포인트/카운트다운)+컨트롤러(정타/오타) 이벤트 구독(§13.1, 구현
+  // 세부 지시 3). 고빈도 값이 아니라 이벤트 배선뿐이므로 §4.5 불변식과 무관하다.
+  useSoundManager(engine, controller);
   const geoIndex = useWorldGeoIndex();
 
   const mapHandleRef = useRef<WorldMapHandle | null>(null);

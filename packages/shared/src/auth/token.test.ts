@@ -203,6 +203,12 @@ describe('포맷 오류', () => {
 });
 
 describe('성능 스모크 — 세션 검증이 병목이 아님(docs/07 WT-M1-04 acceptance)', () => {
+  // [WT-M2-07 세션 조정] 판정 대상은 user CPU 상한(D29)뿐이지만, 이 it() 자체의 vitest
+  // testTimeout(기본 5000ms)은 2,000회 sign+verify 왕복의 "벽시계" 소요에 걸린다 — 모노레포
+  // 전체를 병렬로 돌리는 루트 `pnpm test`(워크스페이스 8개 동시 실행)에서는 코어 오버서브스크립션
+  // 때문에 격리 실행 시(≈550ms)보다 벽시계가 몇 배 늘어나 5000ms를 넘겨 타임아웃 처리될 수
+  // 있었다(단언 실패가 아니라 프레임워크 타임아웃 — D29가 이미 벽시계를 판정에서 제외한 것과
+  // 동일한 비결정성의 다른 얼굴). 판정 로직은 그대로 두고 프레임워크 타임아웃 여유만 늘린다.
   it('생성→검증 1,000회 루프의 compute 상한', async () => {
     const run = async (n: number) => {
       for (let i = 0; i < n; i++) {
@@ -229,5 +235,5 @@ describe('성능 스모크 — 세션 검증이 병목이 아님(docs/07 WT-M1-0
       expect(userMs).toBeLessThan(250);
     }
     expect(wallMs).toBeGreaterThan(0);
-  });
+  }, 20_000);
 });

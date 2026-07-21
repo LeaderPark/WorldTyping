@@ -8,14 +8,21 @@
 // 화면은 그 위에 카드가 슬라이드 인(CSS)하는 것만 담당한다. 세그먼트를 처음부터 다시 그리는
 // 완전 재생 대신 카메라 리빌을 택한 것은 이미 그려진 것을 지웠다 다시 그리는 depublicated 작업을
 // 피하기 위함이며, 정지 컷(공유 카드)이라는 목적은 동일하게 달성한다.
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
 import type { Country, GameMode } from '@wt/shared';
 import { useHotkeys } from '../../lib/hotkeys';
+import { useMetaStore } from '../../stores/meta';
 import { ResultCard } from '../../features/result/ResultCard';
 import { describeRouteLabel } from './route-label';
+
+/** KST 기준 "yyyy-mm-dd"(meta.recordPlay/스트릭 판정용, docs/00 §11 KST 관례). */
+function todayKST(): string {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
 
 export interface ResultViewProps {
   engine: GameSessionEngine;
@@ -53,6 +60,39 @@ export function ResultView({ engine, result, countries, lang, mode, trackId, ret
   // 세계일주 게임오버 후 마지막 체크포인트 이어하기(엔진 1급 기능 — §5.1 resumeFromCheckpoint).
   // 스냅샷은 렌더 시점 값으로 충분하다(phase가 바뀌면 이 컴포넌트 자체가 언마운트된다).
   const canResume = engine.getSnapshot().checkpointResumeAvailable;
+
+  // ModeSelectPage/TrackSelectPage(WT-M2-07)의 "완주/최고 기록"·"최고 도달지" 표시는 이 1회
+  // 기록이 유일한 원천이다(로컬 진행 캐시 — 랭킹 제출과 무관, meta.ts 주석). 벌크 삽입/블러
+  // 강등(practice)은 부정 의심 판이므로 개인 기록에도 반영하지 않는다(치트 스코어가 "내 최고"
+  // 로 굳는 것을 방지). recordRun/recordWorldtourProgress는 각각 "더 나은 점수"/"더 깊은 도달"
+  // 일 때만 갱신하는 멱등 연산이라 리액트 18 StrictMode 이중 호출에도 안전하다.
+  useEffect(() => {
+    if (result.practice) return;
+    useMetaStore.getState().recordRun({
+      mode,
+      trackId,
+      dateKST: todayKST(),
+      pi: result.score.pi,
+      grade: result.score.grade,
+      timeMs: result.stats.elapsedMs,
+      score: result.score.finalScore,
+      completed: result.outcome === 'completed',
+    });
+    if (mode === 'worldtour') {
+      const lastIndex = result.stats.perCountry.length - 1;
+      const lastCountry = countries[lastIndex];
+      if (lastCountry) {
+        useMetaStore.getState().recordWorldtourProgress({
+          index: lastIndex,
+          countryId: lastCountry.id,
+          nameKo: lastCountry.nameKo,
+          nameEn: lastCountry.nameEn,
+        });
+      }
+    }
+    // result/countries/mode/trackId는 이 컴포넌트의 마운트 수명(phase==='finished') 동안 불변
+    // (GamePage가 phase 전환마다 언마운트/재마운트한다) — 의도적으로 마운트 1회만 실행한다.
+  }, [mode, trackId, result, countries]);
 
   return (
     <div className="wt-result-view" data-testid="result-view">

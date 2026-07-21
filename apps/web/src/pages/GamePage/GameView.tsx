@@ -13,6 +13,7 @@ import { HudBar } from '../../features/hud/HudBar';
 import { ProgressLine } from '../../features/hud/ProgressLine';
 import { TimeLimitGauge } from '../../features/hud/TimeLimitGauge';
 import { useLongTaskObserver } from '../../lib/useLongTaskObserver';
+import { FirstRunTips } from '../../features/onboarding/FirstRunTips';
 
 /** GDD §13.3-3 콤보 글로우 배수. */
 const GLOW_STEP = 5;
@@ -110,6 +111,8 @@ export function GameView({
       )}
 
       <ProgressLine countryIds={countryIds} currentIndex={currentIndex} nextCountryName={nextName} />
+
+      <FirstRunTips controller={controller} currentIndex={currentIndex} />
     </div>
   );
 }

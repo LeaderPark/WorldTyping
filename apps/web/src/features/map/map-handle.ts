@@ -26,6 +26,8 @@ export interface WorldMapHandle {
   setTarget(id: CountryId | null): void;
   /** solved 레이어에 해당 국가 도형 추가 + fill 0→1 전이(300ms). colorVar 예: 'var(--continent-asia)'. */
   markSolved(id: CountryId, colorVar: string): void;
+  /** 스킵된 국가를 skipped 레이어에 표시(회색 --map-skipped, docs/03 §3.3). solved와 별개 레이어. */
+  markSkipped(id: CountryId): void;
   /** from→to centroid 사이 노선 세그먼트 드로잉(300ms dash). 날짜변경선 교차 시 2-패스(§3.5). */
   drawRouteSegment(from: CountryId, to: CountryId): void;
   /** 주어진 국가 집합의 bounds에 카메라를 맞춘다(WAAPI 800ms, §3.4). */

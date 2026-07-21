@@ -76,6 +76,13 @@
   stroke: var(--map-border);
   stroke-width: 0.5;
 }
+/* 스킵(§3.3): 회색 --map-skipped fill로 미해결/해결과 구분. fill/opacity만 조작 — 레이아웃 불변(§4.5). */
+.wt-map__skipped {
+  fill: var(--map-skipped);
+  stroke: var(--map-border);
+  stroke-width: 0.5;
+  opacity: 0.85;
+}
 /* 노선 라인(§3.5): 드로잉은 dashoffset(animateDash), 색은 흰빛 반투명. transform/opacity만 애니메이션. */
 .wt-map__route {
   fill: none;

@@ -1,9 +1,17 @@
-// spec: docs/03 §4.4(useTypingEngine 시그니처), §2.7(컨트롤러 마운트·파이프), §4.5(고빈도 값 규약),
-//       docs/00 §11-D19. WT-M2-03.
+// spec: docs/03 §4.4(useTypingEngine 시그니처), §2.7(컨트롤러 마운트·파이프·라이프사이클),
+//       §4.5(고빈도 값 규약), docs/00 §11-D19·D33(useTypingEngine 반환 계약). WT-M2-03 / WT-M2-09.
 //
 // hidden input ref에 TypingInputController(@wt/engine)를 attach하고, 컨트롤러의 TypingEvent를
 // 엔진(handleInput)으로 파이프한다. 컨트롤러 인스턴스를 노출해 PromptArea가 같은 이벤트 스트림을
 // 구독(채색)하게 한다 — 컨트롤러는 클라 로직/DOM 계층이지 React state가 아니다(§4.5 불변식 준수).
+//
+// [StrictMode 안전성 — WT-M2-09] attach/detach는 ref 콜백이 아니라 useEffect가 소유한다. ref
+// 콜백은 부수효과 없이 요소만 state에 기록하고, effect가 (요소, 엔진) 키로 setup=attach·
+// cleanup=detach를 대칭 수행한다. vite dev의 React.StrictMode는 마운트 직후 effect를
+// setup→cleanup→setup으로 이중 호출하는데, 이 대칭 구조에서는 항상 컨트롤러 1개가 부착된
+// 상태로 수렴한다. (과거 결함: 부수효과를 ref 콜백에 두고 `useEffect(()=>teardown)`만 뒀더니
+// StrictMode 이중 호출의 cleanup이 detach만 하고 ref 콜백은 재호출되지 않아 재부착이 누락됨 —
+// dev 빌드에서 hidden input에 컨트롤러가 안 붙어 타이핑·ESC가 엔진에 전달되지 않았다.)
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefCallback } from 'react';
 import { TypingInputController, type GameSessionEngine } from '@wt/engine';
@@ -21,41 +29,35 @@ export interface UseTypingEngineResult {
 
 export function useTypingEngine(engine: GameSessionEngine): UseTypingEngineResult {
   const [controller, setController] = useState<TypingInputController | null>(null);
+  // ref 콜백이 요소를 여기에 기록하면 아래 effect가 재실행돼 attach/detach를 수행한다.
+  // (ref 콜백 자체는 부수효과가 없어야 StrictMode 이중 호출에서 안전하다 — 파일 상단 주석.)
+  const [inputEl, setInputEl] = useState<HTMLInputElement | null>(null);
   const controllerRef = useRef<TypingInputController | null>(null);
   const inputElRef = useRef<HTMLInputElement | null>(null);
-  const unsubRef = useRef<(() => void) | null>(null);
 
-  const teardown = useCallback(() => {
-    unsubRef.current?.();
-    unsubRef.current = null;
-    controllerRef.current?.detach();
-    controllerRef.current = null;
-    inputElRef.current = null;
+  const inputRef = useCallback<RefCallback<HTMLInputElement>>((el) => {
+    inputElRef.current = el;
+    setInputEl(el);
   }, []);
 
-  const inputRef = useCallback<RefCallback<HTMLInputElement>>(
-    (el) => {
-      if (el) {
-        // 같은 요소로 재호출되면 무시(React는 보통 언마운트 시 null만 준다).
-        if (controllerRef.current && inputElRef.current === el) return;
-        teardown();
-        const lang = engine.getSnapshot().lang;
-        const c = new TypingInputController(el, lang);
-        c.attach();
-        unsubRef.current = c.subscribe((e) => engine.handleInput(e));
-        controllerRef.current = c;
-        inputElRef.current = el;
-        setController(c);
-      } else {
-        teardown();
-        setController(null);
-      }
-    },
-    [engine, teardown],
-  );
-
-  // 엔진 자체가 교체되면(세션 재생성) 이전 컨트롤러를 확실히 정리한다.
-  useEffect(() => teardown, [teardown]);
+  // 요소·엔진이 준비/교체되면 컨트롤러를 새로 붙이고, cleanup에서 반드시 뗀다(대칭). 요소가
+  // 아직 없으면(초기 렌더) no-op. 엔진 교체(세션 재생성) 시에도 이 effect가 재실행돼 이전
+  // 컨트롤러를 정리하고 새 언어/엔진으로 재부착한다.
+  useEffect(() => {
+    if (!inputEl) return;
+    const c = new TypingInputController(inputEl, engine.getSnapshot().lang);
+    c.attach();
+    const unsub = c.subscribe((e) => engine.handleInput(e));
+    controllerRef.current = c;
+    setController(c);
+    return () => {
+      unsub();
+      c.detach();
+      if (controllerRef.current === c) controllerRef.current = null;
+      // StrictMode 이중 호출/엔진 교체로 이미 다른 컨트롤러가 들어섰다면 그 값을 보존한다.
+      setController((prev) => (prev === c ? null : prev));
+    };
+  }, [inputEl, engine]);
 
   const focusInput = useCallback(() => {
     controllerRef.current?.focus();

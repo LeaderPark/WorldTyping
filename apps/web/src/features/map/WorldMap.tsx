@@ -73,6 +73,7 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
   const cameraRef = useRef<SVGGElement>(null);
   const routeRef = useRef<SVGGElement>(null);
   const solvedRef = useRef<SVGGElement>(null);
+  const skippedRef = useRef<SVGGElement>(null);
   const targetRef = useRef<SVGGElement>(null);
   const juiceRef = useRef<JuiceLevel>(0);
   const targetIdRef = useRef<CountryId | null>(null);
@@ -116,6 +117,19 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
           targetIdRef.current = null;
         }
       },
+      markSkipped(id) {
+        // 스킵은 축하 연출이 아니라 상태 표시다 — 회색(--map-skipped) 도형을 skipped 레이어에
+        // 추가만 한다(fill 전이 없음, 클래스로만 채색 — 레이아웃 유발 속성 미사용, §3.3·§4.5).
+        const shape = createCountryShape(index, id);
+        if (!shape || !skippedRef.current) return;
+        shape.setAttribute('class', 'wt-map__skipped');
+        skippedRef.current.appendChild(shape);
+        // 스킵된 국가가 현재 타깃이면 타깃 하이라이트 해제.
+        if (targetIdRef.current === id) {
+          clearLayer(targetRef.current);
+          targetIdRef.current = null;
+        }
+      },
       drawRouteSegment(from, to) {
         const a = index.byCountry.get(from);
         const b = index.byCountry.get(to);
@@ -143,6 +157,7 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
       reset() {
         clearLayer(routeRef.current);
         clearLayer(solvedRef.current);
+        clearLayer(skippedRef.current);
         clearLayer(targetRef.current);
         targetIdRef.current = null;
         if (cameraRef.current) applyCamera(cameraRef.current, WORLD_CAMERA, { immediate: true });
@@ -213,6 +228,7 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
           </g>
           <g ref={routeRef} data-layer="route" />
           <g ref={solvedRef} data-layer="solved" />
+          <g ref={skippedRef} data-layer="skipped" />
           <g ref={targetRef} data-layer="target" />
           <g data-layer="dots">{dots}</g>
         </g>

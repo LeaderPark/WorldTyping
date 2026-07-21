@@ -122,10 +122,16 @@ export function GamePage() {
         case 'countryCommitted': {
           const c = countries[e.index];
           if (c) {
-            // juice #2: 폴리곤이 대륙(노선)색으로 채워진다(§13.3-2).
-            mapHandleRef.current?.markSolved(c.id, `var(--continent-${c.continent})`);
-            const prev = countries[e.index - 1];
-            if (prev) mapHandleRef.current?.drawRouteSegment(prev.id, c.id);
+            if (e.skipped) {
+              // ESC 스킵(docs/03 §10.2 E3, GDD §5.5): 축하 연출·노선 세그먼트 없이 회색 빗금
+              // (--map-skipped)으로만 표시한다 — 스킵은 방문한 경유지가 아니다.
+              mapHandleRef.current?.markSkipped(c.id);
+            } else {
+              // juice #2: 폴리곤이 대륙(노선)색으로 채워진다(§13.3-2).
+              mapHandleRef.current?.markSolved(c.id, `var(--continent-${c.continent})`);
+              const prev = countries[e.index - 1];
+              if (prev) mapHandleRef.current?.drawRouteSegment(prev.id, c.id);
+            }
           }
           break;
         }

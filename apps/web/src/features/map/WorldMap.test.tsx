@@ -49,7 +49,7 @@ function renderMap(): { handle: WorldMapHandle; container: HTMLElement } {
 describe('1회 렌더 구조(§3.2)', () => {
   it('5개 레이어 + base 폴리곤 + dots circle 렌더', () => {
     const { container } = renderMap();
-    for (const layer of ['camera', 'base', 'route', 'solved', 'target', 'dots']) {
+    for (const layer of ['camera', 'base', 'route', 'solved', 'skipped', 'target', 'dots']) {
       expect(container.querySelector(`[data-layer="${layer}"]`)).not.toBeNull();
     }
     expect(container.querySelectorAll('[data-layer="base"] path').length).toBeGreaterThan(100);
@@ -128,6 +128,27 @@ describe('핸들 명령형 조작(§3.2)', () => {
     // 같은 국가 확정 시 타깃 하이라이트 제거.
     expect(container.querySelector('[data-layer="target"]')!.children).toHaveLength(0);
   });
+  it('markSkipped: skipped 레이어에 .wt-map__skipped 도형 추가·타깃 해제(solved와 분리)', () => {
+    const { handle, container } = renderMap();
+    handle.setTarget('KR');
+    handle.markSkipped('KR');
+    const skipped = container.querySelector(
+      '[data-layer="skipped"] [data-country="KR"]',
+    ) as SVGElement;
+    expect(skipped).not.toBeNull();
+    expect(skipped.getAttribute('class')).toBe('wt-map__skipped');
+    // 스킵은 solved가 아니다 — solved 레이어에는 들어가지 않는다.
+    expect(container.querySelector('[data-layer="solved"] [data-country="KR"]')).toBeNull();
+    // 스킵된 국가가 현재 타깃이면 타깃 하이라이트 해제.
+    expect(container.querySelector('[data-layer="target"]')!.children).toHaveLength(0);
+  });
+  it('markSkipped: 초소국(MC)은 circle로 스킵 표시', () => {
+    const { handle, container } = renderMap();
+    handle.markSkipped('MC');
+    const el = container.querySelector('[data-layer="skipped"] [data-country="MC"]')!;
+    expect(el.tagName.toLowerCase()).toBe('circle');
+    expect(el.getAttribute('class')).toBe('wt-map__skipped');
+  });
   it('drawRouteSegment: 비래핑은 route 레이어에 path 1개', () => {
     const { handle, container } = renderMap();
     handle.drawRouteSegment('KR', 'JP');
@@ -144,11 +165,13 @@ describe('핸들 명령형 조작(§3.2)', () => {
     const { handle, container } = renderMap();
     handle.setTarget('KR');
     handle.markSolved('JP', 'var(--continent-asia)');
+    handle.markSkipped('CN');
     handle.drawRouteSegment('KR', 'JP');
     handle.flyTo(['KR']);
     handle.reset();
     expect(container.querySelector('[data-layer="target"]')!.children).toHaveLength(0);
     expect(container.querySelector('[data-layer="solved"]')!.children).toHaveLength(0);
+    expect(container.querySelector('[data-layer="skipped"]')!.children).toHaveLength(0);
     expect(container.querySelector('[data-layer="route"]')!.children).toHaveLength(0);
     expect(container.querySelector('[data-layer="camera"]')!.getAttribute('transform')).toBe(
       'translate(0 0) scale(1)',

@@ -55,3 +55,43 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # docs/03 §10.2: E2E Chromium은 모든 PR에서 실행(한글 IME 재현은 CDP → Chromium 전용).
+  # WebKit/Firefox 프로젝트는 e2e/playwright.config.ts에 정의돼 있으나(E1·E3 매치) 브라우저
+  # 설치·실행은 후속으로 이관(WT-M2-08 세션 조정) — 여기서는 chromium만 설치·실행한다.
+  # webServer가 apps/web을 프로덕션 빌드 후 vite preview로 띄운다(config 주석: dev StrictMode
+  # 이펙트 이중 호출이 입력 컨트롤러 부착을 깨므로 프로덕션 빌드를 대상으로 검증).
+  e2e:
+    name: e2e (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @wt/e2e exec playwright install --with-deps chromium
+
+      - name: E2E (Chromium E1~E4)
+        run: pnpm e2e
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

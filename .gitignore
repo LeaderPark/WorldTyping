@@ -7,6 +7,10 @@ dist/
 Thumbs.db
 coverage/
 .vite/
+test-results/
+playwright-report/
+.playwright/
+blob-report/
 .env
 .env.*
 !.env.example

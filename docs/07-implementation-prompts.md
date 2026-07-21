@@ -71,6 +71,9 @@
 6. 코드 스타일: TypeScript strict, 에러를 조용히 삼키지 말 것(빌드 파이프라인은 누락 시 throw),
    주석은 "왜"만. 파일 상단에 관할 문서 좌표를 주석으로 남겨라
    (예: // spec: docs/05 §5, docs/00 §11-D7).
+7. 테스트 파일을 패키지의 src/ 밖(예: content/, test/)에 추가할 때는 루트 vitest.config.ts의
+   해당 projects include에도 그 글롭을 추가하라 — 루트 `pnpm test`와 `--filter` 실행이 항상
+   같은 테스트 집합을 돌아야 한다(거짓 그린 방지, M1 교훈).
 ````
 
 ### 0.5 의존성 그래프
@@ -472,7 +475,8 @@ Workers(WebCrypto)와 테스트(Node)에서 동작하는 stateless HMAC 토큰 �
 
 [완료 조건 / acceptance]
 - `pnpm --filter @wt/shared test` 그린, coverage 95%+.
-- 토큰 생성→검증 1,000회 루프가 100ms 내(성능 스모크, 세션 검증이 병목이 아님을 확인).
+- 토큰 생성→검증 1,000회 루프의 user CPU < 250ms(성능 스모크, 세션 검증이 병목이 아님을 확인
+  — §11-D29: 병렬 vitest 워커에서 벽시계는 비결정이므로 process.cpuUsage().user 기준).
 ````
 
 ### WT-M1-05 · 국가 데이터 빌드 파이프라인
@@ -1259,6 +1263,11 @@ UI 문자열 단일 원천(ko/en 키 집합 동일) + 닉네임·채팅 공용 �
    admin 감사 없이 KV rl:nickname 정책 카운터(30일 윈도 2회).
 4. 테스트: 시드 결정성(같은 날짜+salt → 같은 10개), 티어 분포 3/3/2/1/1, 멱등 cron,
    닉네임 경계(중복/금칙어/횟수 초과), 신고 5건 임계.
+5. @wt/moderation 단어 목록 로딩(M1 이관 사항): filter.ts는 현재 node:fs로 .txt를 읽는다
+   (M1 acceptance가 vitest/Node만 요구했음). Workers 번들에는 node:fs가 없으므로 이 태스크에서
+   로더를 주입형으로 리팩터하라 — 권장: filter 생성 함수가 {ko, en, allow} 단어 배열을 파라미터로
+   받고, workers/api는 빌드타임 스냅샷(.txt → TS 상수 생성 스텝 또는 esbuild text loader)으로
+   주입. toJamoSeq 재사용 원칙 유지, 기존 vitest 테스트는 그대로 통과해야 한다.
 
 [제약/금지]
 - 클라가 데일리 세트를 스스로 계산하게 하는 API 설계 금지(salt는 서버 전용 — §11-D21).

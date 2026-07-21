@@ -9,6 +9,7 @@
   "menu.settings": "Settings",
   "menu.passport": "Passport",
 
+  "mode.select.title": "Select Mode",
   "mode.continent.title": "Continent Route",
   "mode.continent.desc": "{continent} — {count} countries in order",
   "mode.continent.count": "{count} routes",
@@ -28,6 +29,7 @@
   "continent.south-america": "South America",
   "continent.oceania": "Oceania",
 
+  "game.title": "In Game",
   "game.start.tap": "Tap your passport to depart",
   "game.progress": "{current} / {total}",
   "game.next": "Next destination",
@@ -66,6 +68,7 @@
   "multi.publicRooms.title": "Open public rooms",
   "multi.publicRooms.entry": "{code} {current}/{max} waiting ({lang})",
 
+  "room.title": "Waiting Room",
   "room.code": "Room code {code}",
   "room.copy": "Copy",
   "room.shareLink": "Share link",
@@ -157,7 +160,13 @@
 
   "common.on": "ON",
   "common.off": "OFF",
+  "common.close": "Close",
+
+  "settings.theme.label": "Theme",
+  "settings.theme.dark": "Dark",
+  "settings.theme.light": "Light",
 
   "error.network": "Connection lost. Please try again.",
+  "error.boundary.title": "Something went wrong",
   "notice.disputed": "Country labels are for gameplay convenience only and do not reflect any political position."
 }

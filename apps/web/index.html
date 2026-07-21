@@ -4,19 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WORLD TYPING — TypeTrip</title>
-    <!-- 테마 FOUC 방지 스니펫 (docs/03 §8.1): localStorage 저장 테마를 페인트 전에 적용 -->
+    <!-- 테마 FOUC 방지 스니펫 (docs/03 §8.1): localStorage 저장 테마를 페인트 전에 적용.
+         기본값은 시스템 설정이 아니라 다크 고정(docs/01 §13.2 "다크 모드 기본, 라이트는 옵션"). -->
     <script>
       (function () {
         try {
           var stored = localStorage.getItem("wt:theme");
-          var theme =
-            stored || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          var theme = stored === "light" || stored === "dark" ? stored : "dark";
           document.documentElement.setAttribute("data-theme", theme);
         } catch (e) {
-          /* localStorage 접근 불가 환경(사생활 모드 등) — 기본 라이트로 진행 */
+          /* localStorage 접근 불가 환경(사생활 모드 등) — 기본 다크로 진행 */
+          document.documentElement.setAttribute("data-theme", "dark");
         }
       })();
     </script>
+    <!-- 폰트 프리로드 (docs/03 §8.2): Pretendard Variable subset + JetBrains Mono.
+         세션 환경 어댑테이션(리드 사전 승인) — 폰트 파일이 저장소에 없어 시스템 폰트 스택
+         폴백으로 구성했다. 로컬 폰트 자산이 추가되는 M5에서 아래 주석을 해제한다.
+    <link rel="preload" href="/fonts/Pretendard-Variable.subset.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/JetBrainsMono-Variable.woff2" as="font" type="font/woff2" crossorigin />
+    -->
   </head>
   <body>
     <div id="root"></div>

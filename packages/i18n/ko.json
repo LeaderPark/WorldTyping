@@ -9,6 +9,7 @@
   "menu.settings": "설정",
   "menu.passport": "여권",
 
+  "mode.select.title": "모드 선택",
   "mode.continent.title": "대륙 노선",
   "mode.continent.desc": "{continent} {count}개국을 순서대로",
   "mode.continent.count": "{count}개 노선",
@@ -28,6 +29,7 @@
   "continent.south-america": "남아메리카",
   "continent.oceania": "오세아니아",
 
+  "game.title": "게임 진행",
   "game.start.tap": "여권을 눌러 출발",
   "game.progress": "{current} / {total}",
   "game.next": "다음 목적지",
@@ -66,6 +68,7 @@
   "multi.publicRooms.title": "진행 중인 공개 방",
   "multi.publicRooms.entry": "{code} {current}/{max} 대기중 ({lang})",
 
+  "room.title": "대기실",
   "room.code": "방 코드 {code}",
   "room.copy": "복사",
   "room.shareLink": "링크 공유",
@@ -157,7 +160,13 @@
 
   "common.on": "ON",
   "common.off": "OFF",
+  "common.close": "닫기",
+
+  "settings.theme.label": "테마",
+  "settings.theme.dark": "다크",
+  "settings.theme.light": "라이트",
 
   "error.network": "연결이 끊겼어요. 다시 시도해 주세요.",
+  "error.boundary.title": "문제가 발생했어요",
   "notice.disputed": "국가 표기는 게임 목적의 편의상 구분이며 정치적 입장을 나타내지 않습니다."
 }

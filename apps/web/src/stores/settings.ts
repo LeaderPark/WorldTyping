@@ -1,0 +1,106 @@
+// spec: docs/03 §4.3(SettingsState 전문), §7.1(platform 휴리스틱), §8.1(테마/lang 동기화),
+//       docs/00 §11-D6(lang 단일 통합 설정), WT-M2-05
+//
+// localStorage persist(key 'wt:settings'). 고빈도 값(§4.5 불변식) 없음 — 저빈도 사용자 설정만.
+// theme/lang은 FOUC 스니펫·LanguageGateOverlay가 zustand persist 하이드레이션을 기다리지 않고도
+// 동기적으로 읽을 수 있도록 각각 원시 localStorage 키('wt:theme','wt:lang')에도 미러링한다.
+
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { detectPlatform, type Platform } from '../lib/platform';
+
+const THEME_KEY = 'wt:theme';
+const LANG_GATE_KEY = 'wt:lang';
+const DEVICE_ID_KEY = 'wt:did';
+
+function safeLocalStorage(): Storage | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null; // 사생활 모드 등 접근 자체가 throw하는 환경
+  }
+}
+
+/** S2 언어 게이트가 이미 통과됐는지(localStorage 'wt:lang' 존재 여부). */
+export function hasChosenLanguage(): boolean {
+  return safeLocalStorage()?.getItem(LANG_GATE_KEY) != null;
+}
+
+function detectDefaultLang(): 'ko' | 'en' {
+  if (typeof navigator === 'undefined' || !navigator.language) return 'ko';
+  return navigator.language.toLowerCase().startsWith('ko') ? 'ko' : 'en';
+}
+
+function readOrCreateDeviceId(): string {
+  const store = safeLocalStorage();
+  const existing = store?.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const id = crypto.randomUUID();
+  store?.setItem(DEVICE_ID_KEY, id);
+  return id;
+}
+
+export type Theme = 'dark' | 'light';
+export type KeySound = 'off' | 'mech' | 'membrane';
+export type FontScale = 0 | 1 | 2;
+
+export interface VolumeSettings {
+  master: number;
+  sfx: number;
+  bgm: number;
+}
+
+export interface SettingsState {
+  lang: 'ko' | 'en';
+  theme: Theme;
+  reducedMotion: boolean | 'auto';
+  highContrast: boolean;
+  keySound: KeySound;
+  volume: VolumeSettings;
+  fontScale: FontScale;
+  nickname: string;
+  guestId: string;
+  platform: Platform;
+
+  setLang(l: 'ko' | 'en'): void;
+  setTheme(t: Theme): void;
+  setReducedMotion(v: boolean | 'auto'): void;
+  setHighContrast(v: boolean): void;
+  setKeySound(v: KeySound): void;
+  setVolume(v: Partial<VolumeSettings>): void;
+  setFontScale(v: FontScale): void;
+  setNickname(v: string): void;
+}
+
+export const useSettingsStore = create<SettingsState>()(
+  persist(
+    (set, get) => ({
+      lang: detectDefaultLang(),
+      theme: 'dark', // 다크 모드 기본(docs/01 §13.2)
+      reducedMotion: 'auto',
+      highContrast: false,
+      keySound: 'off',
+      volume: { master: 0.8, sfx: 0.8, bgm: 0.5 },
+      fontScale: 1,
+      nickname: '',
+      guestId: readOrCreateDeviceId(),
+      platform: detectPlatform(),
+
+      setLang: (l) => {
+        safeLocalStorage()?.setItem(LANG_GATE_KEY, l);
+        set({ lang: l });
+      },
+      setTheme: (t) => {
+        safeLocalStorage()?.setItem(THEME_KEY, t);
+        set({ theme: t });
+      },
+      setReducedMotion: (v) => set({ reducedMotion: v }),
+      setHighContrast: (v) => set({ highContrast: v }),
+      setKeySound: (v) => set({ keySound: v }),
+      setVolume: (v) => set({ volume: { ...get().volume, ...v } }),
+      setFontScale: (v) => set({ fontScale: v }),
+      setNickname: (v) => set({ nickname: v }),
+    }),
+    { name: 'wt:settings' },
+  ),
+);

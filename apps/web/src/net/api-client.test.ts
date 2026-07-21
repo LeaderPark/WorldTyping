@@ -1,5 +1,24 @@
+// @vitest-environment jsdom
+// 세션 부트스트랩(ensureSession)이 localStorage에 토큰을 저장하므로 jsdom이 필요하다(그 외
+// 순수 fetch 목 테스트는 jsdom 여부와 무관하게 동일하게 통과한다).
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiClient, ApiError } from './api-client';
+import {
+  apiClient,
+  ApiError,
+  buildBoardKey,
+  checkNickname,
+  ensureSession,
+  fetchDailyMe,
+  fetchDailyToday,
+  fetchLbMe,
+  fetchLbPage,
+  getSessionToken,
+  modeKeyFor,
+  putNickname,
+  startRun,
+  submitRun,
+  __resetSessionForTests,
+} from './api-client';
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -80,5 +99,124 @@ describe('apiClient', () => {
 
     const result = await apiClient.post('/session');
     expect(result).toBeUndefined();
+  });
+});
+
+describe('board_key / modeKey 조립(docs/06 §1.1)', () => {
+  it('modeKeyFor: 대륙/티어/세계일주/데일리', () => {
+    expect(modeKeyFor('continent', 'europe')).toBe('continent:europe');
+    expect(modeKeyFor('tier', '3')).toBe('tier:3');
+    expect(modeKeyFor('worldtour', '')).toBe('worldtour');
+    expect(modeKeyFor('daily', '2026-07-21')).toBe('daily:2026-07-21');
+    expect(modeKeyFor('race', '')).toBe('multi');
+  });
+
+  it('buildBoardKey: 4파트 파이프 조립', () => {
+    expect(buildBoardKey('worldtour', 'ko', 'desktop', 'all')).toBe('worldtour|ko|desktop|all');
+    expect(buildBoardKey('tier:1', 'en', 'mobile', 'd:2026-07-21')).toBe('tier:1|en|mobile|d:2026-07-21');
+  });
+});
+
+describe('세션 부트스트랩(ensureSession)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetSessionForTests();
+  });
+
+  it('성공 시 토큰을 저장하고 이후 호출은 in-flight/캐시를 재사용한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ token: 'wt1.tok', playerId: 'p1', nickname: 'GUEST_0001', expiresAt: '2026-08-01T00:00:00.000Z' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await ensureSession('device-1');
+    expect(res?.token).toBe('wt1.tok');
+    expect(getSessionToken()).toBe('wt1.tok');
+
+    // 두 번째 호출은 캐시된 프라미스를 반환 — fetch 재호출 없음.
+    await ensureSession('device-1');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('실패(오프라인) 시 null을 반환하고 캐시를 비워 재시도 가능하게 한다', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', fetchMock);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const res = await ensureSession('device-1');
+    expect(res).toBeNull();
+    expect(getSessionToken()).toBeNull();
+    warnSpy.mockRestore();
+  });
+});
+
+describe('runs/lb/daily/nickname 타입드 래퍼', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetSessionForTests();
+  });
+
+  it('startRun/submitRun이 올바른 경로·바디로 호출된다', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ runToken: 'rt', runId: 'r1', serverStartTs: 1, countryIds: ['CO'], seed: 's' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ verdict: 'valid', score: 100, pi: 10, cpm: 200, accMilli: 1000, grade: 'S', completed: true, rank: 1, total: 2, isPersonalBest: true }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const start = await startRun({ mode: 'continent', lang: 'ko', platform: 'desktop', continent: 'south-america' });
+    expect(start.runToken).toBe('rt');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/runs/start', expect.objectContaining({ method: 'POST' }));
+
+    const submit = await submitRun({
+      runToken: 'rt',
+      result: {
+        elapsedMs: 1,
+        totalKeystrokes: 1,
+        correctKeystrokes: 1,
+        maxCombo: 1,
+        countriesCleared: 1,
+        countriesSkipped: 0,
+        livesLost: 0,
+        finished: true,
+        perCountry: [],
+      },
+      clientScore: 100,
+      inputDigest: { n: 0, mean: 0, stdev: 0, p10: 0, p50: 0, p90: 0, burstMax: 0 },
+    });
+    expect(submit.verdict).toBe('valid');
+    expect(submit.rank).toBe(1);
+  });
+
+  it('daily today/me, lb page/me, nickname check/put', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ dailyNo: 1, dateKst: '2026-07-21', seed: 's', countryIds: ['CO'] }))
+      .mockResolvedValueOnce(jsonResponse({ dateKst: '2026-07-21', alreadyPlayed: false, streakDaily: 2 }))
+      .mockResolvedValueOnce(jsonResponse({ entries: [], nextCursor: null, total: 0 }))
+      .mockResolvedValueOnce(jsonResponse({ rank: null, total: 0, percentile: null, onBoard: false }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+      .mockResolvedValueOnce(jsonResponse({ nickname: 'NEW' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchDailyToday()).resolves.toMatchObject({ dailyNo: 1 });
+    await expect(fetchDailyMe()).resolves.toMatchObject({ alreadyPlayed: false });
+    await expect(fetchLbPage('worldtour|ko|desktop|all')).resolves.toMatchObject({ total: 0 });
+    await expect(fetchLbMe('worldtour|ko|desktop|all')).resolves.toMatchObject({ onBoard: false });
+    await expect(checkNickname('nick')).resolves.toMatchObject({ ok: true });
+    await expect(putNickname('nick')).resolves.toMatchObject({ nickname: 'NEW' });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/lb?board=worldtour%7Cko%7Cdesktop%7Call', expect.anything());
+  });
+
+  it('Authorization 헤더는 저장된 토큰이 없으면 첨부되지 않는다', async () => {
+    __resetSessionForTests(); // localStorage 토큰 제거
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiClient.get('/daily/today');
+    const [, initNoAuth] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((initNoAuth.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 });

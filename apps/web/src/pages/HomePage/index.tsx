@@ -4,11 +4,16 @@
 //
 // 랜딩 → 첫 타이핑 3클릭·15초 여정의 1번째 클릭 지점(§11.1 목표). 언어 게이트(S2)는 WT-M2-05가
 // 이미 완성한 그대로 유지한다.
-import { useState } from 'react';
+//
+// [WT-M3-06] 데일리 뱃지 실데이터(alreadyPlayed·dailyNo)와 티커(전체 1위)를 서버에서 채운다.
+// 조회 실패(오프라인 등)는 화면을 깨뜨리지 않고 조용히 placeholder/미표시로 폴백한다 — 이
+// 페이지는 "3클릭·15초" 여정의 첫 화면이라 네트워크 대기로 렌더를 막지 않는다(§11.1).
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
+import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
 import { HeroMap } from './HeroMap';
 
 /** useCountries.ts의 데일리 세트 키 계산과 동일 규약(UTC 자정 기준 ISO 날짜) — 이 페이지는
@@ -30,16 +35,54 @@ export function HomePage() {
   const { t } = useTranslation();
   const lang = useSettingsStore((s) => s.lang);
   const setLang = useSettingsStore((s) => s.setLang);
+  const guestId = useSettingsStore((s) => s.guestId);
   const bestPI = useMetaStore((s) => s.bestPI);
   const hasAnyStamp = useMetaStore((s) => Object.keys(s.stamps).length > 0);
+
+  // 데일리 뱃지 실데이터(alreadyPlayed·dailyNo)와 티커(전체 1위) — 조회 실패는 조용히 무시하고
+  // placeholder/미표시로 남는다(파일 상단 주석 — 첫 화면 렌더를 네트워크로 막지 않는다).
+  const [dailyNo, setDailyNo] = useState<number | null>(null);
+  const [alreadyPlayed, setAlreadyPlayed] = useState(false);
+  const [top1, setTop1] = useState<LbEntry | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchDailyToday()
+      .then((res) => {
+        if (!cancelled) setDailyNo(res.dailyNo);
+      })
+      .catch(() => {});
+    // fetchDailyMe는 인증 필요(requireAuth) — bootLoader의 세션 부트스트랩이 아직 안 끝났을 수
+    // 있어(부팅은 non-blocking) 여기서 먼저 확정 짓는다(이미 성공했다면 즉시 resolve).
+    void ensureSession(guestId)
+      .then(() => fetchDailyMe())
+      .then((res) => {
+        if (!cancelled) setAlreadyPlayed(res.alreadyPlayed);
+      })
+      .catch(() => {});
+    fetchLbPage('worldtour|ko|desktop|all')
+      .then((res) => {
+        if (!cancelled) setTop1(res.entries[0] ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // guestId는 세션 수명 동안 불변 — 마운트 시 1회만 실행.
+  }, []);
 
   return (
     <main className="wt-home" data-testid="home-page">
       <header className="wt-home__header">
         <h1 className="wt-home__title">{t('app.title')}</h1>
         <nav className="wt-home__nav">
-          <Link to={`/play/daily/${todayDailyKey()}`} data-testid="home-daily-badge" className="wt-home__daily-badge">
-            {t('home.daily.badge', { n: placeholderDailyNumber() })}
+          <Link
+            to={`/play/daily/${todayDailyKey()}`}
+            data-testid="home-daily-badge"
+            className={`wt-home__daily-badge${alreadyPlayed ? ' wt-home__daily-badge--played' : ''}`}
+            data-played={alreadyPlayed}
+          >
+            {t('home.daily.badge', { n: dailyNo ?? placeholderDailyNumber() })}
           </Link>
           <Link to="/rank" data-testid="home-nav-rank">{t('menu.ranking')}</Link>
           <Link to="/passport" data-testid="home-nav-passport">{t('menu.passport')}</Link>
@@ -79,11 +122,15 @@ export function HomePage() {
         </Link>
       </div>
 
-      {/* 오늘의 1위(서버 리더보드)는 M3 소관 — 여기서는 로컬 개인 최고 PI만 표시한다(연동 전
-          까지 허위 데이터를 만들지 않는다). */}
       {bestPI !== null && (
         <p className="wt-home__ticker" data-testid="home-ticker">
           {t('home.ticker.myBest', { pi: bestPI })}
+        </p>
+      )}
+      {/* 서버 리더보드 전체 1위(WT-M3-06) — 조회 실패/빈 보드는 조용히 미표시. */}
+      {top1 && (
+        <p className="wt-home__ticker" data-testid="home-ticker-top1">
+          {t('home.ticker.top1', { nickname: top1.nickname, score: top1.score })}
         </p>
       )}
 

@@ -30,7 +30,8 @@ import { useWorldGeoIndex } from '../../features/map/useWorldGeoIndex';
 import type { WorldMapHandle } from '../../features/map/map-handle';
 import { useSessionStore } from '../../stores/session';
 import { useSettingsStore } from '../../stores/settings';
-import { BoardingPass } from './BoardingPass';
+import { SERVER_SET_MODES } from '../../net/run-session';
+import { BoardingBlocked, BoardingPass } from './BoardingPass';
 import { GameView } from './GameView';
 import { ResultView } from './ResultView';
 
@@ -46,6 +47,7 @@ export function GamePage() {
   const lang = useSettingsStore((s) => s.lang);
   const nickname = useSettingsStore((s) => s.nickname);
   const guestId = useSettingsStore((s) => s.guestId);
+  const platform = useSettingsStore((s) => s.platform);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
 
   // 라우트 mode가 이 화면이 다루는 4모드(대륙/티어/세계일주/데일리) 밖이면(예: race — 멀티
@@ -54,7 +56,7 @@ export function GamePage() {
   const mode: GameMode = isValidMode(params.mode) ? params.mode : 'continent';
   const trackId = params.trackId ?? '';
 
-  const { engine, countries, start, retry, abort } = useGameSession({ mode, trackId });
+  const { engine, countries, runStart, start, retry, abort } = useGameSession({ mode, trackId });
   const { inputRef, focusInput, controller, getInputValue } = useTypingEngine(engine);
   const { bindTimerEl, bindGaugeEl } = useGameClock(engine);
   // 사운드: 엔진(확정/체크포인트/카운트다운)+컨트롤러(정타/오타) 이벤트 구독(§13.1, 구현
@@ -71,6 +73,8 @@ export function GamePage() {
   const [currentIndex, setCurrentIndex] = useState(() => engine.getSnapshot().currentIndex);
   const [lives, setLives] = useState<number | null>(() => engine.getSnapshot().lives);
   const [result, setResult] = useState<EngineRunResult | null>(() => engine.getSnapshot().result);
+  // finished 시점의 잔여 라이프 스냅샷(제출 페이로드의 livesLost 산출용, net/run-session.ts).
+  const [finalLives, setFinalLives] = useState<number | null>(() => engine.getSnapshot().lives);
 
   const startRun = useSessionStore((s) => s.startRun);
   const setStorePhase = useSessionStore((s) => s.setPhase);
@@ -144,6 +148,7 @@ export function GamePage() {
           break;
         case 'finished': {
           setResult(e.result);
+          setFinalLives(engine.getSnapshot().lives);
           storeFinish(e.result.score);
           // juice #6: 카메라를 완주(또는 진행분) 노선 전체 bounds로 리빌(1.2s) — ResultView 주석 참조.
           const clearedIds = countryIds.slice(0, e.result.stats.perCountry.length);
@@ -199,7 +204,8 @@ export function GamePage() {
       <HiddenTypingInput inputRef={inputRef} retainFocus={phase === 'countdown' || phase === 'playing'} />
 
       <div className="wt-game-page__content">
-        {phase === 'idle' && (
+        {phase === 'idle' && runStart.status === 'blocked' && <BoardingBlocked />}
+        {phase === 'idle' && runStart.status !== 'blocked' && (
           <BoardingPass
             mode={mode}
             trackId={trackId}
@@ -209,6 +215,7 @@ export function GamePage() {
             guestId={guestId}
             start={start}
             focusInput={focusInput}
+            locked={SERVER_SET_MODES.has(mode) && runStart.status === 'loading'}
           />
         )}
         {(phase === 'countdown' || phase === 'playing') && (
@@ -235,6 +242,11 @@ export function GamePage() {
             lang={lang}
             mode={mode}
             trackId={trackId}
+            platform={platform}
+            finalLives={finalLives}
+            runToken={runStart.runToken}
+            runTokenIssuedAt={runStart.runTokenIssuedAt}
+            nickname={nickname}
             retry={retry}
           />
         )}

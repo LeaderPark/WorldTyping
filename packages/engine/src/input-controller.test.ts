@@ -335,6 +335,36 @@ describe('TypingInputController', () => {
     expect(eventsOf(h.events, 'refocused')).toHaveLength(1);
   });
 
+  // 회귀 방지: flushIme()가 조합 중 EXACT를 강제 확정하려고 스스로 부르는 input.blur()는 실제
+  // 브라우저 'blur' 이벤트를 진짜로 일으킨다(위 테스트처럼 mock으로 감추지 않는다) — 이게
+  // 'blurred'로 새면 실사용자의 한글 IME 조합 중 확정마다(흔한 경로) 매번 practice로 강등되는
+  // 회귀가 생긴다(engine session.ts case 'blurred' → degrade). blur()/focus()를 실제로 호출해
+  // native 이벤트가 진짜 발생하는 상태에서 검증한다(§2.5, 이전 테스트는 h.input.blur를 스텁해
+  // 이 leak을 가리고 있었다 — 순서만 검증).
+  it('self-induced flushIme blur (composing EXACT) does NOT leak as a "blurred" TypingEvent', () => {
+    const h = harness('ko');
+    h.ctrl.setCountry(GHANA);
+    h.input.focus(); // 실제 포커스 상태에서 시작해야 이후 blur()가 진짜 이벤트를 낸다.
+    h.compositionStart();
+    h.type('ㄱ', true);
+    h.type('가', true);
+    h.type('간', true);
+    h.type('가나', true); // EXACT while composing → flushIme의 자기유발 blur→clear→focus.
+    expect(eventsOf(h.events, 'blurred')).toHaveLength(0);
+    expect(eventsOf(h.events, 'exact')).toHaveLength(1);
+    expect(document.activeElement).toBe(h.input); // 플러시 후 포커스 복귀 확인.
+  });
+
+  // 대조군: 자기유발 blur 억제 로직이 진짜 외부 blur까지 삼키면 안 된다(GDD §5.5 practice
+  // 강등이 계속 동작해야 함) — flushIme 밖에서 발생한 blur는 그대로 emit된다.
+  it('a genuine external blur (not from flushIme) still emits "blurred"', () => {
+    const h = harness('ko');
+    h.ctrl.setCountry(GHANA);
+    h.input.focus();
+    h.input.blur(); // 사용자가 창을 벗어난 것과 동등 — flushIme 경유가 아니다.
+    expect(eventsOf(h.events, 'blurred')).toHaveLength(1);
+  });
+
   it('detach removes all listeners', () => {
     const h = harness('ko');
     h.ctrl.setCountry(GHANA);

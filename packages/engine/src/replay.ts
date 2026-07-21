@@ -38,6 +38,8 @@ export interface SubmissionCountry {
   keystrokes: number;
   errors: number;
   skipped: boolean;
+  /** EXACT 확정에 쓰인 acceptedInput 원문(서버가 matchInput 재검증에 사용). skipped=true면 ''. */
+  inputUsed: string;
 }
 
 /** docs/06 §3.2 RunSubmission. token은 제출 직전 세션 계층이 채운다(엔진은 원천만 조립). */

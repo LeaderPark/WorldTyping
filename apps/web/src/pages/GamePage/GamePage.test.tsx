@@ -95,6 +95,39 @@ vi.mock('../../features/map/useWorldGeoIndex', () => ({
   useWorldGeoIndex: () => null,
 }));
 
+/** runs/start(모드별 세트)·runs/submit(제출)에 응답하는 최소 fetch 목(WT-M3-06). 티어는
+ *  TIER1_POOL과 동일 순서의 countryIds를 내려줘 이 파일의 손계산 제한시간 시나리오가 그대로
+ *  성립하게 한다(서버 세트로 교체되어도 로컬 픽스처와 동일 국가 집합·순서). */
+function mockFetch(url: string, init?: RequestInit): Promise<Response> {
+  const body = init?.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : undefined;
+  const json = (obj: unknown): Response =>
+    new Response(JSON.stringify(obj), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+  if (url.includes('/runs/start')) {
+    const countryIds = body?.mode === 'tier' ? TIER1_POOL.map((c) => c.id) : SOUTH_AMERICA.map((c) => c.id);
+    return Promise.resolve(
+      json({ runToken: 'test-run-token', runId: 'test-run-id', serverStartTs: Date.now(), countryIds, seed: 'test-seed' }),
+    );
+  }
+  if (url.includes('/runs/submit')) {
+    return Promise.resolve(
+      json({ verdict: 'valid', score: 1, pi: 1, cpm: 1, accMilli: 1000, grade: 'S', completed: true, rank: 1, total: 1, isPersonalBest: true }),
+    );
+  }
+  return Promise.resolve(json({}));
+}
+
+/** microtask 체인(fetch→json→apiClient→useRunStart의 .then)이 여러 hop이라 act(async) 몇 회로
+ *  전부 흘려보낸다(fake timers는 매크로태스크만 대상 — 마이크로태스크 큐와는 무관). */
+async function flushAsync(times = 8): Promise<void> {
+  for (let i = 0; i < times; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
 function renderGame(mode: string, trackId: string) {
   const router = createMemoryRouter(
     [
@@ -141,11 +174,13 @@ describe('GamePage — S5→S6→S7 수직 슬라이스(WT-M2-06 acceptance)', (
     vi.useFakeTimers();
     useSettingsStore.getState().setLang('ko');
     useSessionStore.getState().reset();
+    vi.stubGlobal('fetch', vi.fn(mockFetch));
   });
 
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('대륙 모드: 남미선 12개국 완주 → 결과 표시 → R 리트라이로 재개', () => {
@@ -169,8 +204,8 @@ describe('GamePage — S5→S6→S7 수직 슬라이스(WT-M2-06 acceptance)', (
     expect(cardText).toContain('100%'); // 무오타 완주 — 정확도 100%.
     expect(cardText).toContain('×12'); // 콤보 12(전 국가 무오타 확정).
 
-    // 랭킹/공유는 스텁(M3-06/M5 소관) — disabled로 노출.
-    expect(screen.getByTestId('result-ranking')).toBeDisabled();
+    // 랭킹은 /rank 링크(WT-M3-06), 공유는 여전히 스텁(M5 소관) — disabled로 노출.
+    expect(screen.getByTestId('result-ranking')).toHaveAttribute('href', '/rank');
     expect(screen.getByTestId('result-share')).toBeDisabled();
 
     // R 리트라이 → 2초(RETRY_COUNTDOWN_MS=1500ms) 내 재개.
@@ -182,8 +217,11 @@ describe('GamePage — S5→S6→S7 수직 슬라이스(WT-M2-06 acceptance)', (
     expect(screen.getByTestId('progress-count').textContent).toBe('1 / 12');
   });
 
-  it('티어 모드: T1 방치 → 타임아웃마다 라이프 차감 → 라이프 0 → 부분 점수(미완주) 결과', () => {
+  it('티어 모드: T1 방치 → 타임아웃마다 라이프 차감 → 라이프 0 → 부분 점수(미완주) 결과', async () => {
     renderGame('tier', '1');
+    // runs/start(서버 세트 확정) 응답을 기다린다 — 티어는 그 전까지 BoardingPass CTA가
+    // 잠긴다(WT-M3-06 구현 세부 지시 1, useRunStart status==='loading').
+    await flushAsync();
 
     boardAndDepart();
     expect(screen.getByTestId('game-view')).toBeInTheDocument();

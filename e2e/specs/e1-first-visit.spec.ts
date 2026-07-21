@@ -40,15 +40,22 @@ test.describe('E1 — 첫 방문 여정', () => {
     await page.getByTestId('hidden-typing-input').evaluate((el) => (el as HTMLInputElement).focus());
 
     // 12개국을 두벌식 IME로 순서대로 완주. 각 국가 제시를 expect 폴링으로 동기화(임의 sleep 없음).
+    // 국가별로 다른 고정 딜레이를 뽑아 쓴다(docs/06 §3.4 봇 시그니처 회피 + §3.3-(c) 물리 한계
+    // ms_i ≥ L_i×35ms + CPM 캡 회피). typeHangul 기본 30ms 그대로면 (1) 국가 내 등간격이라
+    // stdev/mean이 봇 임계(0.12) 밑으로 떨어지고 (2) 자모당 35ms 물리 하한보다 빨라 서버가
+    // 정당하게 rejected 처리한다 — WT-M3-06에서 실측 발견, 버그 아님(사람은 이렇게 등간격으로
+    // 못 친다). 국가마다 60~140ms 범위에서 다르게 골라 회당 등간격이되 판 전체로는 리듬 변주가
+    // 생기게 한다.
     for (let i = 0; i < SOUTH_AMERICA_KO.length; i++) {
       const name = SOUTH_AMERICA_KO[i]!;
+      const delayMs = 60 + Math.floor(Math.random() * 80);
       await awaitPrompt(promptMount, name);
       if (i === 0) {
         // 첫 정답(EXACT) 시 온보딩 자동진행 토스트(role=status aria-live) 1회 — 첫 방문 계정.
-        await typeHangul(cdp, name);
+        await typeHangul(cdp, name, { delayMs });
         await expect(page.getByTestId('onboarding-toast')).toBeVisible();
       } else {
-        await typeHangul(cdp, name);
+        await typeHangul(cdp, name, { delayMs });
       }
     }
 
@@ -57,6 +64,24 @@ test.describe('E1 — 첫 방문 여정', () => {
     await expect(result).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('result-grade')).toHaveText(/[SABCD]/);
     await expect(page.getByTestId('result-card')).toBeVisible();
+
+    // WT-M3-06: 결과 제출(POST /runs/submit)이 정착되면 순위(valid/flagged) 또는 verdict 라벨
+    // (practice/rejected/queued)이 뜬다 — 어느 쪽이든 "제출 배선이 실제로 동작했다"의 증거다.
+    const rankOrVerdict = page.locator('[data-testid="result-rank"], [data-testid="result-verdict-label"]');
+    await expect(rankOrVerdict.first()).toBeVisible({ timeout: 15_000 });
+
+    // 랭킹(/rank) → 남미선 보드에서 방금 제출한 내 기록을 확인. 같은 브라우저 컨텍스트의 새 탭을
+    // 써서(동일 세션/쿠키 공유) 원래 결과 화면(GamePage 세션 로컬 state)을 건드리지 않는다 —
+    // 뒤로가기로 돌아가면 GamePage가 idle(보딩패스)로 새로 마운트돼 result-view가 사라진다
+    // (세션 phase가 URL이 아니라 컴포넌트 로컬 state라 브라우저 히스토리로 복원되지 않는다).
+    const rankPage = await page.context().newPage();
+    await rankPage.goto('/rank');
+    await expect(rankPage.getByTestId('rank-page')).toBeVisible();
+    await rankPage.getByTestId('rank-filter-mode').selectOption('continent:south-america');
+    const myRow = rankPage.locator('.wt-rank-table__row--me');
+    const myPinned = rankPage.getByTestId('rank-my-row-pinned');
+    await expect(myRow.or(myPinned).first()).toBeVisible({ timeout: 15_000 });
+    await rankPage.close();
 
     // R 리트라이 → 2초 내 카운트다운 재개(RETRY_COUNTDOWN_MS=1500 → 곧바로 game-view 복귀).
     await page.keyboard.press('r');

@@ -607,6 +607,34 @@ describe('buildSubmission (docs/06 §3.2 RunSubmission)', () => {
     // 기본 토큰은 빈 문자열
     expect(h.eng.buildSubmission().token).toBe('');
   });
+
+  it('inputUsed = EXACT 확정 시 detail.bestTarget.display(서버 matchInput 재검증용, docs/06 §3.2)', () => {
+    const h = makeEngine(continentRules(), countries(2));
+    startPlaying(h);
+    const exactWithDisplay = (display: string): TypingEvent => ({
+      type: 'exact',
+      detail: { state: 'EXACT', bestTarget: { display, key: display }, matchedLen: 4, inputLen: 4 },
+      delta: delta(4, 4),
+      elapsedFromShownMs: 0,
+    });
+    h.eng.handleInput(exactWithDisplay('가나')); // 국가0
+    h.eng.handleInput(exactWithDisplay('Ghana')); // 국가1
+    finishedEvent(h.events);
+
+    const sub = h.eng.buildSubmission();
+    expect(sub.perCountry[0]).toMatchObject({ code: 'C0', inputUsed: '가나' });
+    expect(sub.perCountry[1]).toMatchObject({ code: 'C1', inputUsed: 'Ghana' });
+  });
+
+  it('inputUsed = 스킵 커밋은 빈 문자열', () => {
+    const h = makeEngine(continentRules(), countries(1));
+    startPlaying(h);
+    h.eng.handleInput({ type: 'skipRequested' });
+    finishedEvent(h.events);
+
+    const sub = h.eng.buildSubmission();
+    expect(sub.perCountry[0]).toMatchObject({ code: 'C0', skipped: true, inputUsed: '' });
+  });
 });
 
 // ── RunLog 직접 (docs/03 §5.4 · docs/06 §3.4) ─────────────────────────────────
@@ -676,7 +704,7 @@ describe('RunLog ring buffer + inputDigest', () => {
   it('toSubmissionPayload: token/perCountry 사본/digest 직렬화', () => {
     const log = new RunLog();
     log.append(progress(2, 2), 0, 2);
-    const pc = [{ code: 'C0', ms: 100, keystrokes: 4, errors: 0, skipped: false }];
+    const pc = [{ code: 'C0', ms: 100, keystrokes: 4, errors: 0, skipped: false, inputUsed: '가나' }];
     const sub = log.toSubmissionPayload(pc, 'tok');
     expect(sub.token).toBe('tok');
     expect(sub.perCountry).toEqual(pc);

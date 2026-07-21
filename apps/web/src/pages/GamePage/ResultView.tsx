@@ -1,5 +1,6 @@
 // spec: docs/01 §10.2(S7 결과 전문), §13.3-6(완주 리트레이스 → 결과 카드 슬라이드 인), docs/03
-//       §4.2(ResultView, phase: finished), WT-M2-06.
+//       §4.2(ResultView, phase: finished), docs/06 §1.4-③(제출 응답 인라인 순위)·§3.1(verdict),
+//       docs/00 §11-D9, WT-M2-06·WT-M3-06.
 //
 // [완주 리트레이스 — 구현 메모] §13.3-6은 "노선 전체가 지도 위에서 한 번에 리트레이스"를
 // 요구한다. 이 구현에서 solved/route 레이어는 이미 플레이 중 진행분으로 누적 그려져 있으므로
@@ -8,13 +9,21 @@
 // 화면은 그 위에 카드가 슬라이드 인(CSS)하는 것만 담당한다. 세그먼트를 처음부터 다시 그리는
 // 완전 재생 대신 카메라 리빌을 택한 것은 이미 그려진 것을 지웠다 다시 그리는 depublicated 작업을
 // 피하기 위함이며, 정지 컷(공유 카드)이라는 목적은 동일하게 달성한다.
-import { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+//
+// [WT-M3-06] 제출 배선은 net/run-session.ts의 useRunSubmit에 위임한다(마운트 시 1회 — 클라
+// 계산 점수를 최종 표시로 쓰지 않고 서버 값/순위로 교체, §11-D9). verdict별 라벨: valid/flagged는
+// 순위 표시(shadow — flagged를 구분 표시하지 않는다, docs/06 §3.5), practice="연습 기록",
+// rejected="기록이 검토 중입니다".
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
-import type { Country, GameMode } from '@wt/shared';
+import type { Continent, Country, DifficultyTier, GameMode } from '@wt/shared';
 import { useHotkeys } from '../../lib/hotkeys';
 import { useMetaStore } from '../../stores/meta';
+import { useSettingsStore } from '../../stores/settings';
+import { checkNickname, putNickname } from '../../net/api-client';
+import { useRunSubmit } from '../../net/run-session';
 import { ResultCard } from '../../features/result/ResultCard';
 import { describeRouteLabel } from './route-label';
 
@@ -31,12 +40,49 @@ export interface ResultViewProps {
   lang: 'ko' | 'en';
   mode: GameMode;
   trackId: string;
+  platform: 'desktop' | 'mobile';
+  /** finished 시점의 잔여 라이프(GamePage가 engine.getSnapshot().lives를 캡처). */
+  finalLives: number | null;
+  /** runs/start가 발급한 토큰. null이면 오프라인 출발 — 큐에 적재된다(net/run-session.ts). */
+  runToken: string | null;
+  runTokenIssuedAt: number | null;
+  nickname: string;
   retry(): void;
 }
 
-export function ResultView({ engine, result, countries, lang, mode, trackId, retry }: ResultViewProps) {
+export function ResultView({
+  engine,
+  result,
+  countries,
+  lang,
+  mode,
+  trackId,
+  platform,
+  finalLives,
+  runToken,
+  runTokenIssuedAt,
+  nickname,
+  retry,
+}: ResultViewProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+
+  const continent = mode === 'continent' ? (trackId as Continent) : undefined;
+  const tier = mode === 'tier' ? (Number(trackId) as DifficultyTier) : undefined;
+
+  const submission = useRunSubmit({
+    engine,
+    result,
+    finalLives,
+    mode: mode as 'continent' | 'tier' | 'worldtour' | 'daily',
+    continent,
+    tier,
+    lang,
+    platform,
+    runToken,
+    runTokenIssuedAt,
+    nickname,
+  });
 
   // R 리트라이(GDD §2.2 "결과 화면에서 R 키 … 2초 내 재개"). 대소문자 키 이벤트 값 모두 대응.
   useHotkeys({ r: retry, R: retry });
@@ -112,6 +158,9 @@ export function ResultView({ engine, result, countries, lang, mode, trackId, ret
         paceMs={paceMs}
       />
 
+      <SubmissionStatus submission={submission} />
+      {!nickname && <NicknameGate />}
+
       <div className="wt-result-view__actions">
         <button type="button" data-testid="result-retry" className="wt-btn wt-btn--primary" onClick={retry}>
           {t('result.action.retry')}
@@ -126,10 +175,9 @@ export function ResultView({ engine, result, countries, lang, mode, trackId, ret
             {t('result.action.resume')}
           </button>
         )}
-        {/* 랭킹 제출은 M3-06 소관 — 서버 API 연동 전까지 disabled 스텁(작업 특이 조정). */}
-        <button type="button" data-testid="result-ranking" className="wt-btn" disabled title="M3-06">
+        <Link to="/rank" data-testid="result-ranking" className="wt-btn">
           {t('result.action.ranking')}
-        </button>
+        </Link>
         {/* 공유 이미지 캡처는 M5 소관 — 레이아웃만(ResultCard 산출물 주석과 동일 조정). */}
         <button type="button" data-testid="result-share" className="wt-btn" disabled title="M5">
           {t('result.action.share')}
@@ -146,6 +194,113 @@ export function ResultView({ engine, result, countries, lang, mode, trackId, ret
           {t('nav.home')}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * verdict별 UI 문구(구현 세부 지시 4). valid/flagged는 순위 표시(flagged를 구분하지 않는다 —
+ * shadow 원칙, docs/06 §3.5). practice="연습 기록", rejected="기록이 검토 중입니다".
+ * submitting/queued는 그 자체로 상태 라벨(아직 verdict 없음).
+ */
+function SubmissionStatus({ submission }: { submission: ReturnType<typeof useRunSubmit> }) {
+  const { t } = useTranslation();
+
+  if (submission.status === 'submitting') {
+    return (
+      <p className="wt-result-view__submission" data-testid="result-verdict-label">
+        {t('result.verdict.submitting')}
+      </p>
+    );
+  }
+  if (submission.status === 'queued') {
+    return (
+      <p className="wt-result-view__submission" data-testid="result-verdict-label">
+        {t('result.verdict.queued')}
+      </p>
+    );
+  }
+  if (submission.status !== 'submitted') return null;
+
+  if (submission.verdict === 'practice') {
+    return (
+      <p className="wt-result-view__submission" data-testid="result-verdict-label">
+        {t('result.verdict.practice')}
+      </p>
+    );
+  }
+  if (submission.verdict === 'rejected') {
+    return (
+      <p className="wt-result-view__submission" data-testid="result-verdict-label">
+        {t('result.verdict.rejected')}
+      </p>
+    );
+  }
+  // valid | flagged — 서버 응답의 순위를 그대로 표시(§1.4-③ 인라인). flagged도 본인 화면에는
+  // 정상 표시(shadow — 구분 UI 없음, docs/06 §3.5).
+  if (submission.rank !== null && submission.total !== null && submission.total > 0) {
+    const topPercent = Math.max(1, Math.round((submission.rank / submission.total) * 100));
+    return (
+      <p className="wt-result-view__submission" data-testid="result-rank">
+        {t('result.rank.value', { rank: submission.rank, percent: topPercent })}
+        {submission.isPersonalBest && ` · ${t('result.rank.personalBest')}`}
+      </p>
+    );
+  }
+  return null;
+}
+
+/** 닉네임 미설정(기본 GUEST_xxxx) 유저에게 결과 화면에서 닉네임 설정을 유도(구현 세부 지시 3). */
+function NicknameGate() {
+  const { t } = useTranslation();
+  const setNickname = useSettingsStore((s) => s.setNickname);
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = useCallback(() => {
+    setBusy(true);
+    setError(null);
+    void (async () => {
+      try {
+        const checked = await checkNickname(value);
+        if (!checked.ok) {
+          setError(t('result.nickname.error'));
+          return;
+        }
+        const res = await putNickname(value);
+        setNickname(res.nickname);
+      } catch {
+        setError(t('result.nickname.error'));
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [value, setNickname, t]);
+
+  return (
+    <div className="wt-result-view__nickname" data-testid="result-nickname-gate">
+      <p>{t('result.nickname.prompt')}</p>
+      <input
+        data-testid="result-nickname-input"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={t('result.nickname.placeholder')}
+      />
+      <button
+        type="button"
+        data-testid="result-nickname-submit"
+        className="wt-btn"
+        disabled={busy || value.length < 2}
+        onClick={submit}
+      >
+        {t('result.nickname.submit')}
+      </button>
+      {error && (
+        <p role="alert" data-testid="result-nickname-error">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

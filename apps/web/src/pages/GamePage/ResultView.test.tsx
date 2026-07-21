@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 //
-// spec: docs/01 §10.2(S7 결과 전문), docs/03 §4.2(ResultView), WT-M2-06. GamePage.test.tsx가
-// 전체 여정(엔진 실배선)을 커버하므로, 여기서는 ResultView 자신의 표시/액션 분기(체크포인트
-// 이어하기 버튼, 랭킹/공유 disabled 스텁, 다른 노선/홈 내비게이션)를 엔진을 얕게 스텁해 단위
-// 검증한다.
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+// spec: docs/01 §10.2(S7 결과 전문), docs/03 §4.2(ResultView), docs/06 §3.1(verdict), WT-M2-06·
+// WT-M3-06. GamePage.test.tsx가 전체 여정(엔진 실배선)을 커버하므로, 여기서는 ResultView 자신의
+// 표시/액션 분기(체크포인트 이어하기 버튼, 제출/순위 표시, 닉네임 유도, 다른 노선/홈 내비게이션)를
+// 엔진을 얕게 스텁하고 net 계층을 목킹해 단위 검증한다.
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
@@ -12,6 +12,20 @@ import type { Country } from '@wt/shared';
 import { AppProviders } from '../../app/providers';
 import { useSettingsStore } from '../../stores/settings';
 import { ResultView } from './ResultView';
+
+const submitRunMock = vi.fn();
+const checkNicknameMock = vi.fn();
+const putNicknameMock = vi.fn();
+vi.mock('../../net/api-client', () => ({
+  submitRun: (...args: unknown[]) => submitRunMock(...args),
+  checkNickname: (...args: unknown[]) => checkNicknameMock(...args),
+  putNickname: (...args: unknown[]) => putNicknameMock(...args),
+}));
+
+const enqueuePendingMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../net/pending-queue', () => ({
+  enqueuePending: (...args: unknown[]) => enqueuePendingMock(...args),
+}));
 
 function mkEngine(checkpointResumeAvailable: boolean): {
   engine: GameSessionEngine;
@@ -21,6 +35,7 @@ function mkEngine(checkpointResumeAvailable: boolean): {
   const engine = {
     getSnapshot: () => ({ checkpointResumeAvailable }),
     resumeFromCheckpoint: resume,
+    buildSubmission: () => ({ token: '', perCountry: [], inputDigest: '{"n":0,"mean":0,"stdev":0,"p10":0,"p50":0,"p90":0,"burstMax":0}' }),
   } as unknown as GameSessionEngine;
   return { engine, resume };
 }
@@ -75,7 +90,15 @@ function baseResult(overrides: Partial<EngineRunResult> = {}): EngineRunResult {
   };
 }
 
-function renderResult(engine: GameSessionEngine, result: EngineRunResult, retry = vi.fn()) {
+interface RenderOpts {
+  retry?: ReturnType<typeof vi.fn>;
+  runToken?: string | null;
+  runTokenIssuedAt?: number | null;
+  nickname?: string;
+}
+
+function renderResult(engine: GameSessionEngine, result: EngineRunResult, opts: RenderOpts = {}) {
+  const retry = opts.retry ?? vi.fn();
   return render(
     <AppProviders>
       <MemoryRouter initialEntries={['/play/worldtour/world']}>
@@ -92,6 +115,11 @@ function renderResult(engine: GameSessionEngine, result: EngineRunResult, retry 
                 lang="ko"
                 mode="worldtour"
                 trackId="world"
+                platform="desktop"
+                finalLives={null}
+                runToken={opts.runToken ?? null}
+                runTokenIssuedAt={opts.runTokenIssuedAt ?? null}
+                nickname={opts.nickname ?? 'GUEST_TEST'}
                 retry={retry}
               />
             }
@@ -102,10 +130,13 @@ function renderResult(engine: GameSessionEngine, result: EngineRunResult, retry 
   );
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe('ResultView', () => {
-  it('게임오버 라벨·최다 오타·랭킹/공유 disabled 스텁을 렌더한다', () => {
+  it('게임오버 라벨·최다 오타·공유 disabled 스텁을 렌더하고 랭킹은 /rank 링크다', () => {
     useSettingsStore.getState().setLang('ko');
     const { engine } = mkEngine(false);
     renderResult(engine, baseResult());
@@ -113,7 +144,7 @@ describe('ResultView', () => {
     const card = screen.getByTestId('result-card');
     expect(card.textContent).toContain('라이프 소진');
     expect(card.textContent).toContain('일본'); // 최다 오타 국가(errors=3 > 0).
-    expect(screen.getByTestId('result-ranking')).toBeDisabled();
+    expect(screen.getByTestId('result-ranking')).toHaveAttribute('href', '/rank');
     expect(screen.getByTestId('result-share')).toBeDisabled();
     expect(screen.queryByTestId('result-resume')).not.toBeInTheDocument();
   });
@@ -132,7 +163,7 @@ describe('ResultView', () => {
     useSettingsStore.getState().setLang('ko');
     const { engine } = mkEngine(false);
     const retry = vi.fn();
-    renderResult(engine, baseResult(), retry);
+    renderResult(engine, baseResult(), { retry });
 
     act(() => fireEvent.keyDown(window, { key: 'r' }));
     expect(retry).toHaveBeenCalledOnce();
@@ -155,5 +186,117 @@ describe('ResultView', () => {
     const card = screen.getByTestId('result-card');
     expect(card.textContent).toContain('완주');
     expect(card.textContent).not.toContain('라이프 소진');
+  });
+
+  // ── 제출 배선(WT-M3-06) ─────────────────────────────────────────────────
+  describe('제출 배선', () => {
+    it('runToken 없음(오프라인 출발) → 큐에 적재하고 "온라인 연결 시 자동 제출" 라벨', () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      renderResult(engine, baseResult(), { runToken: null });
+
+      expect(screen.getByTestId('result-verdict-label').textContent).toBe('온라인 연결 시 자동 제출됩니다');
+      expect(enqueuePendingMock).toHaveBeenCalledOnce();
+      expect(submitRunMock).not.toHaveBeenCalled();
+    });
+
+    it('practice(클라 강등) 결과는 네트워크 없이 즉시 "연습 기록" 라벨', () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      renderResult(engine, baseResult({ practice: true }), { runToken: 'tok' });
+
+      expect(screen.getByTestId('result-verdict-label').textContent).toBe('연습 기록');
+      expect(submitRunMock).not.toHaveBeenCalled();
+      expect(enqueuePendingMock).not.toHaveBeenCalled();
+    });
+
+    it('runToken 있음 → submitRun 호출, valid 응답 시 순위/백분위/개인최고 표시', async () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      submitRunMock.mockResolvedValue({
+        verdict: 'valid', score: 500, pi: 400, cpm: 300, accMilli: 950, grade: 'A',
+        completed: true, rank: 5, total: 50, isPersonalBest: true,
+      });
+
+      renderResult(engine, baseResult(), { runToken: 'tok', runTokenIssuedAt: Date.now() });
+
+      await waitFor(() => expect(screen.getByTestId('result-rank')).toBeInTheDocument());
+      expect(screen.getByTestId('result-rank').textContent).toContain('5위');
+      expect(screen.getByTestId('result-rank').textContent).toContain('10%'); // 5/50=10%
+      expect(screen.getByTestId('result-rank').textContent).toContain('개인 최고 기록!');
+      expect(submitRunMock).toHaveBeenCalledWith(
+        expect.objectContaining({ runToken: 'tok', clientScore: baseResult().score.finalScore }),
+      );
+    });
+
+    it('rejected 응답은 "기록이 검토 중입니다"만 표시(순위 없음)', async () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      submitRunMock.mockResolvedValue({
+        verdict: 'rejected', score: 0, pi: 0, cpm: 0, accMilli: 0, grade: 'D',
+        completed: false, rank: null, total: null, isPersonalBest: null,
+      });
+
+      renderResult(engine, baseResult(), { runToken: 'tok', runTokenIssuedAt: Date.now() });
+
+      await waitFor(() => expect(screen.getByTestId('result-verdict-label').textContent).toBe('기록이 검토 중입니다'));
+      expect(screen.queryByTestId('result-rank')).not.toBeInTheDocument();
+    });
+
+    it('submitRun 네트워크 실패 → 큐에 적재하고 큐 라벨로 대체', async () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      submitRunMock.mockRejectedValue(new Error('network down'));
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      renderResult(engine, baseResult(), { runToken: 'tok', runTokenIssuedAt: Date.now() });
+
+      await waitFor(() => expect(enqueuePendingMock).toHaveBeenCalledOnce());
+      expect(screen.getByTestId('result-verdict-label').textContent).toBe('온라인 연결 시 자동 제출됩니다');
+      warnSpy.mockRestore();
+    });
+  });
+
+  // ── 닉네임 유도(구현 세부 지시 3) ───────────────────────────────────────────
+  describe('닉네임 유도', () => {
+    it('닉네임 미설정이면 유도 폼이 보이고, 설정되어 있으면 보이지 않는다', () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      const { unmount } = renderResult(engine, baseResult(), { nickname: '' });
+      expect(screen.getByTestId('result-nickname-gate')).toBeInTheDocument();
+      unmount();
+
+      renderResult(engine, baseResult(), { nickname: 'NIMBUS' });
+      expect(screen.queryByTestId('result-nickname-gate')).not.toBeInTheDocument();
+    });
+
+    it('check→put 성공 시 settings 스토어 닉네임이 갱신된다', async () => {
+      useSettingsStore.getState().setLang('ko');
+      checkNicknameMock.mockResolvedValue({ ok: true });
+      putNicknameMock.mockResolvedValue({ nickname: 'NEWNAME' });
+      const { engine } = mkEngine(false);
+      renderResult(engine, baseResult(), { nickname: '' });
+
+      const input = screen.getByTestId('result-nickname-input');
+      fireEvent.change(input, { target: { value: 'NEWNAME' } });
+      fireEvent.click(screen.getByTestId('result-nickname-submit'));
+
+      await waitFor(() => expect(useSettingsStore.getState().nickname).toBe('NEWNAME'));
+      expect(checkNicknameMock).toHaveBeenCalledWith('NEWNAME');
+      expect(putNicknameMock).toHaveBeenCalledWith('NEWNAME');
+    });
+
+    it('check 실패(reason) 시 에러 메시지를 표시하고 스토어는 갱신하지 않는다', async () => {
+      useSettingsStore.getState().setLang('ko');
+      checkNicknameMock.mockResolvedValue({ ok: false, reason: 'TAKEN' });
+      const { engine } = mkEngine(false);
+      renderResult(engine, baseResult(), { nickname: '' });
+
+      fireEvent.change(screen.getByTestId('result-nickname-input'), { target: { value: 'NIMBUS' } });
+      fireEvent.click(screen.getByTestId('result-nickname-submit'));
+
+      await waitFor(() => expect(screen.getByTestId('result-nickname-error')).toBeInTheDocument());
+      expect(putNicknameMock).not.toHaveBeenCalled();
+    });
   });
 });

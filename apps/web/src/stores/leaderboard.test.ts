@@ -1,5 +1,5 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BoardKey } from './leaderboard';
 import { useLeaderboardStore } from './leaderboard';
 
 function jsonResponse(body: unknown): Response {
@@ -15,24 +15,25 @@ describe('leaderboard store', () => {
     vi.unstubAllGlobals();
   });
 
-  const key: BoardKey = 'alltime:worldtour:ko:desktop';
+  const key = 'worldtour|ko|desktop|all';
 
   it('fetch() populates the board on success', async () => {
     const entries = [
-      { rank: 1, playerId: 'p1', nickname: 'A', score: 100, pi: 300, cpm: 400, accuracy: 0.98, elapsedMs: 1000, createdAt: '2026-01-01' },
+      { rank: 1, userId: 'p1', nickname: 'A', passportCover: 'basic-green', score: 100, elapsedMs: 1000, accMilli: 980, achievedAt: 1 },
     ];
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ entries, nextCursor: null, snapshotAt: 'now' }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ entries, nextCursor: null, total: 1 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await useLeaderboardStore.getState().fetch(key);
 
     const board = useLeaderboardStore.getState().boards.get(key);
     expect(board?.rows).toEqual(entries);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(board?.total).toBe(1);
+    expect(fetchMock).toHaveBeenCalledWith(`/api/v1/lb?board=${encodeURIComponent(key)}`, expect.anything());
   });
 
   it('fetch() skips refetching while the cached entry is still fresh', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ entries: [], nextCursor: null, snapshotAt: 'now' }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ entries: [], nextCursor: null, total: 0 }));
     vi.stubGlobal('fetch', fetchMock);
 
     await useLeaderboardStore.getState().fetch(key);

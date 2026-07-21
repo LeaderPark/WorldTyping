@@ -106,6 +106,12 @@ interface CommittedCountry {
   skipped: boolean;
   keystrokes: number; // 정타+오타
   correct: number; // 정타
+  // EXACT 확정에 쓰인 acceptedInput 원문(docs/06 §3.2 perCountry.inputUsed — 서버가
+  // matchInput으로 재검증). 'exact' TypingEvent의 detail.bestTarget.display를 그대로 쓴다:
+  // controller.flushIme()가 input.value를 이 이벤트보다 먼저 비우므로(input-controller.ts
+  // evaluate()), DOM 스냅샷은 이 시점에 이미 소실돼 있다 — bestTarget.display가 유일하게
+  // 남는 "무엇이 EXACT를 이뤘는가"의 원천이다. 스킵 커밋은 ''(서버도 skipped면 검증 skip).
+  inputUsed: string;
 }
 
 export class GameSessionEngine {
@@ -127,6 +133,8 @@ export class GameSessionEngine {
   private cCorrect = 0;
   private cErrors = 0;
   private committed: CommittedCountry[] = [];
+  // 진행 중인 국가에서 마지막으로 관측된 EXACT 매치의 bestTarget.display(commitExact에서 소비).
+  private pendingExactDisplay = '';
   private practice = false;
   private viaCheckpointUsed = false;
   private resumeUsed = false;
@@ -220,6 +228,7 @@ export class GameSessionEngine {
         this.accumulate(e.delta);
         break;
       case 'exact':
+        this.pendingExactDisplay = e.detail.bestTarget.display;
         this.accumulate(e.delta);
         this.commitExact();
         break;
@@ -294,6 +303,7 @@ export class GameSessionEngine {
       keystrokes: p.keystrokes,
       errors: p.errors,
       skipped: p.skipped,
+      inputUsed: p.inputUsed,
     }));
     return this.runLog.toSubmissionPayload(perCountry, token);
   }
@@ -367,6 +377,7 @@ export class GameSessionEngine {
       skipped: false,
       keystrokes: this.cAdded,
       correct: this.cCorrect,
+      inputUsed: this.pendingExactDisplay,
     });
     this.countriesCleared++;
     this.lastCommitAt = this.now();
@@ -400,6 +411,7 @@ export class GameSessionEngine {
       skipped: true,
       keystrokes: L,
       correct: 0,
+      inputUsed: '',
     });
     this.countriesSkipped++;
     this.lastCommitAt = this.now();
@@ -570,6 +582,7 @@ export class GameSessionEngine {
     this.cCorrect = 0;
     this.cErrors = 0;
     this.committed = [];
+    this.pendingExactDisplay = '';
     this.practice = false;
     this.viaCheckpointUsed = false;
     this.resumeUsed = false;

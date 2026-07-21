@@ -6,11 +6,18 @@
 // 세션 환경 어댑테이션: workers/api에는 아직 /api/v1/config 라우트가 없다(M3 소관). 이 파일은
 // 그 사실을 전제로 설계됐다 — config fetch 실패는 "치명적이지 않음"(번들 기본값 폴백),
 // countries.json fetch/파싱 실패만 라우터 loader 계약대로 throw해 errorElement로 넘어간다.
+//
+// [WT-M3-06] 부팅 시 세션 부트스트랩(POST /session) + 오프라인 큐 flush(net/pending-queue.ts)를
+// 함께 트리거한다. countries.json 로드를 막지 않는 부가 작업이라 await하지 않는다 — 실패해도
+// (오프라인 등) 라우터 loader는 이미 resolve된 뒤라 앱은 정상 부팅한다.
 
 import { z } from 'zod';
 import { CountriesDatasetSchema } from '@wt/data';
 import type { CountriesDataset } from '@wt/shared';
 import { DEFAULT_GRADE_CONFIG, DEFAULT_TIME_LIMIT_CONFIG } from '@wt/shared';
+import { ensureSession } from '../net/api-client';
+import { flushPendingQueue, registerPendingQueueAutoFlush } from '../net/pending-queue';
+import { useSettingsStore } from '../stores/settings';
 
 const ClientConfigSchema = z
   .object({
@@ -113,6 +120,14 @@ export async function bootLoader(): Promise<BootData> {
   const dataVersion = await loadDataVersion();
   const countries = await loadCountries(config.dataUrl, dataVersion);
   cached = Object.freeze({ config, countries, dataVersion });
+
+  registerPendingQueueAutoFlush();
+  void ensureSession(useSettingsStore.getState().guestId)
+    .then(() => flushPendingQueue())
+    .catch((err: unknown) => {
+      console.warn('[bootLoader] 세션 부트스트랩/큐 flush 실패(오프라인 추정):', err);
+    });
+
   return cached;
 }
 

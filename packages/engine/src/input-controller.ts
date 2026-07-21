@@ -49,6 +49,12 @@ export class TypingInputController {
   private latinWarned = false;
   private listeners = new Set<(e: TypingEvent) => void>();
   private detachFns: Array<() => void> = [];
+  // flushIme()가 조합 중 EXACT를 강제 확정하려고 스스로 input.blur()를 호출하는 동안(§2.5
+  // 프로토콜) true — 이 사이에 발생하는 'blur' 네이티브 이벤트는 사용자의 실제 창 이탈이
+  // 아니라 컨트롤러 자신이 유발한 것이므로 'blurred' TypingEvent로 승격시키지 않는다. 이 가드가
+  // 없으면 실제 한글 IME로 조합 중 확정할 때마다(흔한 경로) 매 국가 확정마다 practice로
+  // 강등되는 회귀가 생긴다(blur()/focus()는 동기 이벤트라 불리언 플래그로 안전하게 감쌀 수 있다).
+  private selfInducedBlur = false;
 
   constructor(
     private input: HTMLInputElement,
@@ -95,7 +101,10 @@ export class TypingInputController {
       }
       // 그 외 키는 일절 preventDefault 하지 않는다 — IME 파이프라인 보존(§2.7 제약)
     });
-    on('blur', () => this.emit({ type: 'blurred' }));
+    on('blur', () => {
+      if (this.selfInducedBlur) return; // flushIme 자기유발 blur — 사용자 이탈 아님(위 주석 참조)
+      this.emit({ type: 'blurred' });
+    });
     on('focus', () => this.emit({ type: 'refocused' }));
   }
 
@@ -159,7 +168,10 @@ export class TypingInputController {
   private flushIme(isComposing = this.composing): void {
     this.epoch++;
     if (isComposing) {
+      // blur()/focus()는 동기 디스패치라 불리언 플래그로 안전하게 감쌀 수 있다(위 필드 주석).
+      this.selfInducedBlur = true;
       this.input.blur(); // compositionend 강제(구세대 epoch로 도착 → 무시됨)
+      this.selfInducedBlur = false;
       this.input.value = '';
       this.input.focus(); // 반드시 동기 — setTimeout 금지(iOS 소프트키보드 유지 계약, §2.5)
       this.composing = false;

@@ -5,8 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run --root .",
+    "test:workers": "vitest run -c vitest.workers.config.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "dev": "wrangler dev",
     "deploy:staging": "wrangler deploy --env staging",
@@ -16,6 +17,7 @@
     "hono": "^4.6.11"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.12.21",
     "@cloudflare/workers-types": "^5.0.0",
     "wrangler": "^4.0.0"
   }

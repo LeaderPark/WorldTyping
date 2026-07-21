@@ -10,7 +10,7 @@
   "scripts": {
     "build:data": "tsx tooling/scripts/build-data.ts",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "test": "vitest run",
+    "test": "vitest run && pnpm --filter @wt/api run test:workers",
     "build": "pnpm -r --if-present run build",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "e2e": "pnpm --filter @wt/e2e run e2e"

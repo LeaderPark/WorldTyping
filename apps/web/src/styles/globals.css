@@ -75,3 +75,302 @@
 :root[data-reduced] .wt-prompt--shake {
   animation-duration: 0.01ms;
 }
+
+/* ── GamePage(S5–S7, WT-M2-06) ──────────────────────────────────────────
+   spec: docs/01 §10.2(S5/S6/S7 와이어프레임), §13.3(juice 체크리스트 1·2·3·4·6).
+   레이아웃은 Tailwind 유틸리티가 대부분 담당하고, 여기는 juice 애니메이션과 지도 배경
+   포지셔닝 등 유틸리티로 표현하기 어려운 것만 정의한다. */
+
+.wt-game-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+.wt-game-page__map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.55;
+}
+.wt-game-page__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem;
+}
+
+/* ── HUD(§4.2 HudBar) ── */
+.wt-hud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.wt-hud__lives {
+  color: var(--grade-a, #ef4444);
+  letter-spacing: 0.1em;
+}
+
+/* 콤보 배지(§13.3-3 배지 바운스). combo<=0이면 숨김. */
+.wt-combo-badge {
+  display: inline-block;
+  font-weight: 700;
+  color: var(--grade-a);
+}
+.wt-combo--hidden {
+  visibility: hidden;
+}
+.wt-combo--bounce {
+  animation: wt-combo-bounce 260ms ease-out;
+}
+@keyframes wt-combo-bounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+/* juice #3 화면 가장자리 글로우(§13.3-3 "화면 가장자리 미세 글로우"). */
+.wt-game-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  transition: box-shadow 200ms ease-out;
+}
+.wt-game-view--glow {
+  box-shadow: inset 0 0 0 3px var(--grade-a), inset 0 0 60px 10px color-mix(in srgb, var(--grade-a) 35%, transparent);
+}
+
+.wt-game-view__prompt {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* juice #2 스탬프(§13.3-2 "15° 기울어져 찍히며(150ms)"). 기본 숨김(opacity 0), 확정 시
+   is-active 토글로 팝인 후 페이드아웃. transform/opacity만 애니메이션(§3.6 성능 계약). */
+.wt-stamp {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 3.5em;
+  height: 3.5em;
+  pointer-events: none;
+  opacity: 0;
+  border: 3px solid var(--grade-s, #fbbf24);
+  border-radius: 0.5em;
+  transform: rotate(15deg) scale(1.4);
+}
+.wt-stamp--active {
+  animation: wt-stamp-pop 480ms ease-out;
+}
+@keyframes wt-stamp-pop {
+  0% { opacity: 0; transform: rotate(15deg) scale(1.6); }
+  20% { opacity: 0.9; transform: rotate(15deg) scale(1); }
+  70% { opacity: 0.9; transform: rotate(15deg) scale(1); }
+  100% { opacity: 0; transform: rotate(15deg) scale(1); }
+}
+
+/* 국가당 제한시간 게이지(티어/데일리 전용, §4.4 useGameClock.bindGaugeEl). */
+.wt-gauge {
+  width: 12rem;
+  height: 0.3rem;
+  background: var(--map-idle);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.wt-gauge__fill {
+  height: 100%;
+  background: var(--grade-b);
+  transition: none; /* rAF가 매 프레임 직접 갱신 — CSS 전이는 이중 애니메이션이라 끈다. */
+}
+
+/* 진행바(●─●─◉─○, §4.2 ProgressLine). */
+.wt-progress-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  max-width: 40rem;
+  text-align: center;
+}
+.wt-progress-line__dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  max-width: 20rem;
+}
+.wt-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--map-idle);
+}
+.wt-dot--done {
+  background: var(--grade-c);
+}
+.wt-dot--current {
+  background: var(--grade-s);
+  transform: scale(1.6);
+}
+
+/* 보딩패스(S5, §10.2 전문 — "개찰기 통과 애니메이션(200ms)"). */
+.wt-boarding {
+  display: flex;
+  justify-content: center;
+}
+.wt-boarding__card {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 20rem;
+  padding: 1.5rem 2rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--map-border);
+  background: color-mix(in srgb, var(--map-idle) 60%, transparent);
+  backdrop-filter: blur(4px);
+  transition: transform 200ms ease-out, opacity 200ms ease-out;
+}
+.wt-boarding__card--punch {
+  animation: wt-boarding-punch 200ms ease-in;
+}
+@keyframes wt-boarding-punch {
+  0% { transform: scale(1); opacity: 1; }
+  60% { transform: scale(0.94) rotate(-1deg); opacity: 0.7; }
+  100% { transform: scale(0.9); opacity: 0; }
+}
+.wt-boarding__label {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  opacity: 0.7;
+}
+.wt-boarding__cta {
+  margin-top: 0.5rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* 결과(S7). 카드 슬라이드 인(§13.3-6 "결과 카드 슬라이드 인"). */
+.wt-result-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+.wt-result-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 20rem;
+  padding: 1.5rem 2rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--map-border);
+  background: color-mix(in srgb, var(--map-idle) 70%, transparent);
+  animation: wt-result-slide-in 400ms ease-out;
+}
+@keyframes wt-result-slide-in {
+  0% { transform: translateY(24px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+.wt-result-card__grade {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.wt-grade--S { color: var(--grade-s); }
+.wt-grade--A { color: var(--grade-a); }
+.wt-grade--B { color: var(--grade-b); }
+.wt-grade--C { color: var(--grade-c); }
+.wt-grade--D { color: var(--grade-d); }
+.wt-result-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  opacity: 0.9;
+}
+.wt-result-card__pace {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 2.5rem;
+  width: 100%;
+}
+.wt-result-card__pace-bar {
+  flex: 1 1 auto;
+  min-width: 2px;
+  background: var(--grade-b);
+  border-radius: 1px;
+}
+.wt-result-view__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.wt-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--map-border);
+  background: transparent;
+}
+.wt-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.wt-btn--primary {
+  background: var(--grade-b);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* 포기 확인 모달(브라우저 뒤로가기 차단, §4.4 useBlocker). */
+.wt-confirm-leave {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+.wt-confirm-leave__box {
+  min-width: 18rem;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background: var(--map-idle);
+}
+.wt-confirm-leave__actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+/* reduced-motion: juice 애니메이션 일괄 제거(§7.3, §13.3-8 "입력 비블로킹" — 연출 자체를
+   끄는 것이지 입력 경로엔 영향 없음). */
+:root[data-reduced] .wt-combo--bounce,
+:root[data-reduced] .wt-stamp--active,
+:root[data-reduced] .wt-boarding__card--punch,
+:root[data-reduced] .wt-result-card {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-combo--bounce,
+  .wt-stamp--active,
+  .wt-boarding__card--punch,
+  .wt-result-card {
+    animation: none;
+  }
+}

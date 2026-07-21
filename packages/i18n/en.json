@@ -39,6 +39,7 @@
   "hud.streak": "×{count} STREAK",
   "hud.next": "Next: {country}",
   "hud.skipHint": "ESC to skip",
+  "hud.lives": "Lives {count}",
 
   "result.title": "Arrival complete!",
   "result.cpm": "{cpm} CPM",
@@ -56,6 +57,8 @@
   "result.action.ranking": "View / submit ranking",
   "result.action.share": "Share",
   "result.action.otherRoute": "Other routes",
+  "result.action.resume": "Resume from checkpoint",
+  "result.outcome.gameover": "Out of lives",
 
   "multi.room.create": "Create room",
   "multi.room.join": "Join by code",
@@ -122,6 +125,11 @@
   "boarding.cta": "Tap your passport to depart",
   "boarding.myBest": "My best: {grade} · {time} · {accuracy}%",
   "boarding.worldBest": "World #1: {time}",
+  "boarding.countries": "{count} countries",
+  "boarding.ruleType.continent": "Time Attack",
+  "boarding.ruleType.tier": "Survival",
+  "boarding.ruleType.worldtour": "Time Attack + Lives",
+  "boarding.ruleType.daily": "Survival Variant",
 
   "home.daily.badge": "Daily D{n}",
   "home.daily.title": "Daily Challenge",
@@ -157,6 +165,11 @@
   "nav.back.home": "← Home",
   "nav.back.mode": "← Modes",
   "nav.home": "Home",
+
+  "game.confirmLeave.title": "Abandon this run?",
+  "game.confirmLeave.body": "If you leave now, this run won't be saved.",
+  "game.confirmLeave.stay": "Keep playing",
+  "game.confirmLeave.leave": "Leave",
 
   "common.on": "ON",
   "common.off": "OFF",

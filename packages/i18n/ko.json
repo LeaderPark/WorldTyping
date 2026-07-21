@@ -39,6 +39,7 @@
   "hud.streak": "×{count} STREAK",
   "hud.next": "다음: {country}",
   "hud.skipHint": "ESC 스킵",
+  "hud.lives": "라이프 {count}",
 
   "result.title": "입국 완료!",
   "result.cpm": "타수 {cpm} CPM",
@@ -56,6 +57,8 @@
   "result.action.ranking": "랭킹 등록/보기",
   "result.action.share": "공유",
   "result.action.otherRoute": "다른 노선",
+  "result.action.resume": "체크포인트에서 이어하기",
+  "result.outcome.gameover": "라이프 소진",
 
   "multi.room.create": "방 만들기",
   "multi.room.join": "코드로 입장",
@@ -122,6 +125,11 @@
   "boarding.cta": "여권을 탭해서 출국하기",
   "boarding.myBest": "내 최고: {grade} · {time} · {accuracy}%",
   "boarding.worldBest": "세계 1위: {time}",
+  "boarding.countries": "{count}개국",
+  "boarding.ruleType.continent": "타임어택",
+  "boarding.ruleType.tier": "서바이벌",
+  "boarding.ruleType.worldtour": "타임어택+라이프",
+  "boarding.ruleType.daily": "서바이벌 변형",
 
   "home.daily.badge": "데일리 D{n}",
   "home.daily.title": "데일리 챌린지",
@@ -157,6 +165,11 @@
   "nav.back.home": "← 홈",
   "nav.back.mode": "← 모드",
   "nav.home": "홈",
+
+  "game.confirmLeave.title": "판을 포기할까요?",
+  "game.confirmLeave.body": "지금 나가면 이번 기록은 저장되지 않아요.",
+  "game.confirmLeave.stay": "계속하기",
+  "game.confirmLeave.leave": "나가기",
 
   "common.on": "ON",
   "common.off": "OFF",

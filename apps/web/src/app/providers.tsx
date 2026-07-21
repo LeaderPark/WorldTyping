@@ -19,7 +19,9 @@ if (!i18next.isInitialized) {
     },
     lng: useSettingsStore.getState().lang,
     fallbackLng: 'en',
-    interpolation: { escapeValue: false },
+    // docs/03 §8.1: 카탈로그는 ICU 스타일 단일 중괄호 플레이스홀더(`{var}`) — i18next-icu 없이
+    // 기본 interpolation의 prefix/suffix만 `{`/`}`로 맞추면 충분하다(i18next 기본값은 `{{var}}`).
+    interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
     returnNull: false,
   });
 }

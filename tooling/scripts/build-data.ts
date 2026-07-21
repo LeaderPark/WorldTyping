@@ -88,11 +88,26 @@ async function validateRoutesStep(dataset: { countries: Country[] }): Promise<vo
 async function main(): Promise<void> {
   console.log('[build-data] building deterministic country dataset…');
 
-  // Step 7-(e): i18n 키 동일성 검증은 WT-M1-07 에서 활성화. 파일 부재 시 skip+경고.
-  if (existsSync(p('packages/i18n/ko.json')) && existsSync(p('packages/i18n/en.json'))) {
-    console.warn('[build-data] i18n 카탈로그 존재 — 키 동일성 검증은 WT-M1-07에서 활성화됩니다.');
+  // Step 7-(e): i18n 키 동일성 검증(WT-M1-07 활성화). docs/02 §9 — en.json은 ko.json과 키
+  // 집합이 완전히 동일해야 한다. 카탈로그 부재 시(이전 마일스톤 스냅샷 등)만 skip+경고.
+  const koCatalogPath = p('packages/i18n/ko.json');
+  const enCatalogPath = p('packages/i18n/en.json');
+  if (existsSync(koCatalogPath) && existsSync(enCatalogPath)) {
+    const koCatalog = JSON.parse(readFileSync(koCatalogPath, 'utf8')) as Record<string, unknown>;
+    const enCatalog = JSON.parse(readFileSync(enCatalogPath, 'utf8')) as Record<string, unknown>;
+    const koKeys = new Set(Object.keys(koCatalog));
+    const enKeys = new Set(Object.keys(enCatalog));
+    const missingInEn = [...koKeys].filter((k) => !enKeys.has(k)).sort();
+    const missingInKo = [...enKeys].filter((k) => !koKeys.has(k)).sort();
+    if (missingInEn.length > 0 || missingInKo.length > 0) {
+      throw new Error(
+        `[build-data] Step 7-e i18n 키 동일성 실패 — ` +
+          `en에 없음: ${JSON.stringify(missingInEn)}, ko에 없음: ${JSON.stringify(missingInKo)}`,
+      );
+    }
+    console.log(`[build-data] Step 7-e i18n 키 동일성 OK (${koKeys.size}개 키, ko/en diff 0)`);
   } else {
-    console.warn('[build-data] i18n 카탈로그 부재 — Step 7-e 키 동일성 검증 skip (WT-M1-07 전).');
+    console.warn('[build-data] i18n 카탈로그 부재 — Step 7-e 키 동일성 검증 skip.');
   }
 
   const { dataset, countriesJson, topojsonJson, manifestJson, generatedTs, stats } = buildDataset();

@@ -1,0 +1,121 @@
+# spec: docs/06 §4.2, docs/04 §10.2, docs/00 §11-D14 — nickname/chat moderation blocklist (defensive use).
+# Loaded by packages/moderation/src/filter.ts for lowercase+leet+jamo-agnostic substring matching.
+# Curated in the style of the public "LDNOOBW" (List of Dirty, Naughty, Obscene, and Otherwise Bad
+# Words) compilation. This is a seed list for initial coverage; expand via ops review of report data
+# (docs/06 §3.6) toward the ~400-entry target. Format: one entry per line, lowercase, `#` = comment.
+
+# --- profanity ---
+fuck
+fucker
+fucking
+fucked
+motherfucker
+fucktard
+shit
+shitty
+bullshit
+horseshit
+bitch
+bitches
+bastard
+asshole
+ass
+dumbass
+jackass
+dumbfuck
+damn
+goddamn
+crap
+prick
+douche
+douchebag
+twat
+wanker
+bollocks
+bugger
+bloody
+piss
+pissed
+arse
+arsehole
+
+# --- sexual ---
+sex
+sexy
+porn
+pornography
+nude
+naked
+boobs
+tits
+titty
+nipple
+vagina
+penis
+dick
+dickhead
+cock
+pussy
+cunt
+whore
+slut
+slag
+hooker
+prostitute
+blowjob
+handjob
+rimjob
+anal
+cum
+cumming
+jizz
+semen
+orgasm
+masturbate
+masturbation
+boner
+erection
+fetish
+incest
+rape
+raping
+rapist
+molest
+molester
+pedophile
+pedo
+bestiality
+
+# --- slurs / hate speech ---
+nigger
+nigga
+chink
+spic
+kike
+wetback
+gook
+tranny
+faggot
+fag
+retard
+retarded
+nazi
+hitler
+
+# --- drugs ---
+cocaine
+heroin
+meth
+crackhead
+
+# --- self-harm / violence incitement ---
+kys
+kill yourself
+suicide
+suicidal
+
+# --- reserved-word evasion seeds (leet forms collapse to the base word via the shared pipeline) ---
+fvck
+sh1t
+b1tch
+a55hole

@@ -1,0 +1,51 @@
+# spec: docs/06 §4.2 — en-only allowlist for the "Scunthorpe problem" (substring false positives,
+# e.g. "assassin" tripping the "ass" badword). Loaded by packages/moderation/src/filter.ts: a
+# badword match fully contained inside one of these words is treated as a false positive and ignored.
+# Format: one entry per line, lowercase, `#` = comment.
+
+assassin
+assassinate
+assessment
+assess
+assist
+assistant
+assistance
+associate
+association
+class
+classic
+classroom
+classy
+glass
+glasses
+grass
+brass
+brassiere
+bass
+bassist
+mass
+massachusetts
+compass
+bypass
+surpass
+password
+cassette
+embarrass
+embarrassed
+harass
+harassment
+scunthorpe
+cockpit
+cockatoo
+cocktail
+peacock
+shuttlecock
+hancock
+therapist
+therapeutic
+cumulative
+cumulonimbus
+cucumber
+document
+circumstance
+encumber

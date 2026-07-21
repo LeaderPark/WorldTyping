@@ -94,9 +94,21 @@ importers:
 
   packages/engine: {}
 
-  packages/i18n: {}
+  packages/i18n:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 3.2.7
+        version: 3.2.7(vitest@3.2.7(@types/node@26.1.1))
 
-  packages/moderation: {}
+  packages/moderation:
+    dependencies:
+      '@wt/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 3.2.7
+        version: 3.2.7(vitest@3.2.7(@types/node@26.1.1))
 
   packages/shared:
     dependencies:

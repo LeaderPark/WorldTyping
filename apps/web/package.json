@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@wt/data": "workspace:*",
+    "@wt/engine": "workspace:*",
     "@wt/i18n": "workspace:*",
     "@wt/shared": "workspace:*",
     "i18next": "^23.16.4",

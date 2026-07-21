@@ -35,6 +35,9 @@ importers:
       '@wt/data':
         specifier: workspace:*
         version: link:../../packages/data
+      '@wt/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@wt/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n

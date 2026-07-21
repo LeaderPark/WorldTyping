@@ -23,6 +23,9 @@ export default defineConfig({
         'src/**/*.test.{ts,tsx}',
         'src/main.tsx',
         'src/vite-env.d.ts',
+        // DEV 전용 진단 라우트(프로덕션 빌드 제외 — WT-M2-03 acceptance 대체 조정). 자동 검증은
+        // prompt-renderer.test.ts / PromptArea.test.tsx가 담당한다.
+        'src/pages/dev/**',
       ],
       thresholds: {
         lines: 60,

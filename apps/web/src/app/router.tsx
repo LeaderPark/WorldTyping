@@ -29,6 +29,15 @@ export const routeChildren: RouteObject[] = [
 ];
 
 /**
+ * DEV 전용 진단 라우트. 프로덕션 빌드 제외 — main.tsx가 import.meta.env.DEV일 때만 children에
+ * 합류시킨다(routeChildren/ rootRoute.children 참조 동일성은 그대로 유지 → router-config.test 불변).
+ * lazy 모듈이라 프로덕션 청크 그래프에 들어가지 않는다(dev 페이지는 coverage/번들에서 제외).
+ */
+export const devRouteChildren: RouteObject[] = [
+  { path: 'dev/typing', lazy: () => import('../pages/dev/TypingDevPage') },
+];
+
+/**
  * 루트 라우트 정의만 export하고 createBrowserRouter(...) 호출 자체는 하지 않는다 — 그 호출은
  * router.initialize()를 즉시(모듈 평가 시점에) 실행해 실제 브라우저 history/데이터 라우터
  * 부팅을 트리거하므로, 이 파일을 import하는 순간 부작용이 발생하면 (a) 테스트에서 이 모듈을

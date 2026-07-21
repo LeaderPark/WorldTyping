@@ -430,6 +430,12 @@ flowchart LR
 | D36 | "3클릭·15초" 클릭 수 산정 | 00 §1.3·01 §11.1: 3클릭 ↔ 01 §10.1 화면 그래프(S1→S3→S4→S5)상 대륙 모드는 구조적으로 4클릭 | **최단 경로 기준으로 정정**: KPI는 "최단 경로(데일리 직행 등) 3클릭·15초". 대륙 정규 경로 4클릭은 허용(화면 그래프·보딩패스 시그니처 유지). D27과 동류의 문서 산술 착오 (M2 확정) |
 | D37 | E2E 실행 대상 빌드 | 07 WT-M2-08: vite dev 기동 ↔ dev(StrictMode)에서 useTypingEngine 입력 결함 발견 | **프로덕션 프리뷰(build+preview) 대상 확정**(실배포 등가물). 단 dev StrictMode 입력 결함은 별도 수정(WT-M2-09) — E2E 대상 결정과 무관하게 dev 플레이는 동작해야 한다 (M2 확정) |
 | D38 | users.user_id ↔ 세션 pid 관계 | 04 §5: pid=base58(HMAC("pid:"+deviceId))[0:12] 결정적 파생 ↔ 06 §1.3: users.user_id TEXT PK(출처 미명세, UUIDv7 예시 뉘앙스) | **동일값 확정**: `user_id = pid` (결정적 파생, 랜덤 UUID·매핑 테이블 없음). bootstrap 멱등(D10 정합), runToken.pid 직접 비교(04 §6.2-①) 성립. v2 소셜 로그인 계정 연동 시 별도 canonical-user 매핑 도입 여지는 남긴다 (M3 구현 확정, 2026-07-21) |
+| D39 | 제출 검증 실패 응답 형식 | 04 §6.2: 401/409 + 명명 코드(INVALID_TOKEN 등) ↔ 06 §3.1·구현: 항상 200+verdict | **06 승**: 전 케이스 HTTP 200 + `verdict`만 반환, `verdict_reason`은 DB 전용(API 비노출 — 어뷰저 탐지 신호 차단). 04 §6.2의 HTTP 코드 열은 내부 분류표로만 읽는다. verdict 어휘는 마이그레이션 CHECK 기준 `valid\|flagged\|practice\|rejected` (M3 확정) |
+| D40 | 리더보드 total 분모 | 06 §1.4-② total 예시: JOIN 없는 COUNT ↔ 같은 절 rank 쿼리: `u.status='active'` 필터 | **rank와 동일 분모로 통일**: total도 users JOIN + status='active'. "모든 경로 동일 순위" 불변식(§1.2)이 예시 SQL 자구보다 상위 (M3 확정) |
+| D41 | seasons.season_id 포맷 | 마이그레이션 주석 's:2026q3'(접두 포함) ↔ 06 §1.3 write 경로 `s:${season}` 함의 | **periodKey 원문 그대로**('s:2026q3') 저장·사용 — 이중 접두 금지. boardKeysForRun은 season_id를 그대로 periodKey로 사용. v1은 seasons 행 없음(D15)이라 실행 무영향 (M3 확정) |
+| D42 | daily_no 산식 | 문서 미정의(UNIQUE 제약만) | **MAX(daily_no)+1 순차 증가** 확정(조회 후 INSERT, date_kst PK가 레이스 흡수) (M3 확정) |
+| D43 | 신고 reason 코드·임계 스코프 | 06 §3.6: UI 문구만 존재, API 어휘 미정의 | **코드 3종 확정**: `macro_suspected\|nickname_inappropriate\|other`. 임계 5건은 target_user_id 기준 OPEN 카운트, flagged 대상은 임계 도달 신고의 target_run_id (M3 확정) |
+| D44 | 리더보드 "내 지역" 탭 v1 | 03 §1.1: Global/내 지역 2탭 ↔ 세션 응답에 geo 미노출(users.geo는 D1 전용) | **v1은 스텁 유지, M5에서 활성화**: POST /session·GET /session/me 응답에 `geo`(CF-IPCountry 저장값) 필드를 추가하고 RankPage 탭을 배선하는 소형 태스크를 M5에 편성. 클라 측 IP/타임존 추정 금지 (M3 확정) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

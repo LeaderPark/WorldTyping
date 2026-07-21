@@ -1,0 +1,78 @@
+# spec: docs/06 §8.5(D1 일일 논리 백업) + docs/00 §7.2(BUCKET = R2 `wt-{env}`, D1 백업 용도로
+#       명시 — docs/06 §8.5의 별도 `wt-backups` 버킷 명칭은 docs/00 §7.2로 대체해 읽는다,
+#       master overview가 전 문서에 우선) + docs/07 WT-M0-03
+#
+# 지금은 Cloudflare 계정이 연결되어 있지 않으므로 스텝 골격만 두고 잡 전체를 조건부
+# skip한다. 활성화 절차는 .github/workflows/README.md 참고.
+name: D1 Backup
+
+on:
+  schedule:
+    # KST 04:00 = UTC 19:00 (전날)
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "백업 대상 환경 (dev/staging/prod)"
+        required: false
+        default: "prod"
+        type: choice
+        options: ["dev", "staging", "prod"]
+
+jobs:
+  backup:
+    name: D1 export → R2
+    runs-on: ubuntu-latest
+    # Cloudflare 계정 연결 전에는 리포지토리 변수 BACKUP_ENABLED가 없으므로 항상 skip.
+    # 활성화 절차: .github/workflows/README.md 참고.
+    if: ${{ vars.BACKUP_ENABLED == 'true' }}
+    env:
+      TARGET_ENV: ${{ inputs.env || 'prod' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compute backup filename
+        id: meta
+        run: |
+          echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "sql=wt-main-${TARGET_ENV}-$(date -u +%Y%m%d).sql" >> "$GITHUB_OUTPUT"
+          echo "gz=wt-main-${TARGET_ENV}-$(date -u +%Y%m%d).sql.gz" >> "$GITHUB_OUTPUT"
+
+      # docs/06 §8.5: 일일 논리 백업. D1 export → gzip → R2 업로드(35일 보존 라이프사이클은
+      # 버킷 lifecycle 룰로 별도 구성, 06 §8.5 런북 참고).
+      - name: D1 export (${{ env.TARGET_ENV }})
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/api
+          command: >-
+            d1 export wt-main-${{ env.TARGET_ENV }} --env ${{ env.TARGET_ENV }} --remote
+            --output ${{ steps.meta.outputs.sql }}
+
+      - name: gzip export
+        run: gzip -k "workers/api/${{ steps.meta.outputs.sql }}"
+
+      # docs/00 §7.2: BUCKET 바인딩 = R2 `wt-{env}` (D1 백업 + 고스트 리플레이 blob 공용).
+      - name: Upload to R2 (wt-${{ env.TARGET_ENV }})
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/api
+          command: >-
+            r2 object put wt-${{ env.TARGET_ENV }}/d1-backups/${{ steps.meta.outputs.gz }}
+            --file=${{ steps.meta.outputs.gz }} --remote

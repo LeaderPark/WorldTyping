@@ -1,0 +1,194 @@
+# spec: docs/04 §8.1(파이프라인 요지) + docs/00 §7.1(배포 순서 불변식: migrations apply → deploy)
+#       + docs/07 WT-M0-03
+#
+# 트리거 구조:
+#   - preview        : `CI` 워크플로가 pull_request 이벤트로 성공 완료된 직후 실행
+#                       (wrangler versions upload --env staging, 프로덕션 트래픽 0%)
+#   - deploy-staging  : `CI` 워크플로가 main push 이벤트로 성공 완료된 직후 실행
+#   - deploy-prod     : GitHub Release "published" 시에만 실행 + environment: production
+#                       (GH environment protection rule로 수동 승인 게이트 — docs/00 §7.1)
+#
+# `workflow_run`을 쓰는 이유: 같은 커밋에 대해 CI 스텝(typecheck/lint/test/build)을
+# 두 번 실행하지 않고, 검증이 끝난 결과에 대해서만 배포가 뒤따르게 하기 위함이다.
+# (docs/04 §8.1 원문은 단일 워크플로 + `needs: ci` 구조이지만, WT-M0-03 산출물 목록이
+#  ci.yml/deploy.yml을 별도 파일로 요구하므로 워크플로 간 게이트는 workflow_run으로 코드화한다.)
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  release:
+    types: [published]
+
+concurrency:
+  # 같은 브랜치의 중복 실행은 큐잉으로 순서를 보장한다. migrations apply/deploy 도중의
+  # 취소는 스키마·배포를 반쪽 상태로 남길 수 있어 cancel-in-progress는 의도적으로 false —
+  # (ci.yml의 순수 검증 잡만 cancel-in-progress: true로 즉시 취소한다).
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------
+  # PR마다: 프로덕션 트래픽 0%의 버전 업로드 + PR 코멘트
+  # ---------------------------------------------------------------------
+  preview:
+    name: Preview (versions upload)
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout (CI가 검증한 커밋)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web (Worker가 서빙할 정적 자산)
+        run: pnpm --filter @wt/web build
+
+      - name: Upload preview version
+        id: preview
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/api
+          command: versions upload --env staging
+
+      - name: Comment preview URL on PR
+        if: github.event.workflow_run.pull_requests[0].number
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.workflow_run.pull_requests[0].number;
+            const output = `${{ steps.preview.outputs.command-output }}`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: [
+                "**Preview 배포 (프로덕션 트래픽 0%)**",
+                "",
+                "```",
+                output,
+                "```",
+              ].join("\n"),
+            });
+
+  # ---------------------------------------------------------------------
+  # main 머지 시: staging 자동 배포. 배포 순서 불변식(docs/00 §7.1) —
+  # migrations apply가 실패하면 다음 스텝(deploy)은 실행되지 않는다.
+  # ---------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy staging
+    if: >
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout (CI가 검증한 커밋)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web (Worker가 서빙할 정적 자산)
+        run: pnpm --filter @wt/web build
+
+      # 순서 불변식 1/2: 이 스텝이 실패하면 아래 deploy 스텝은 실행되지 않는다
+      # (GitHub Actions 기본 동작 — 스텝 실패 시 잡 중단).
+      - name: D1 migrations apply (staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/api
+          command: d1 migrations apply wt-main-staging --env staging --remote
+
+      # 순서 불변식 2/2: 신 코드가 구 스키마를 만나는 창을 없앤다.
+      - name: Deploy Worker (staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/api
+          command: deploy --env staging
+
+  # ---------------------------------------------------------------------
+  # GitHub Release 발행 시에만: prod 배포. `environment: production`에
+  # GH environment protection rule(필수 승인자)을 걸어 수동 게이트로 만든다.
+  # main push 성공(workflow_run)에 의존하지 않는다 — Release는 이미 staging을
+  # 통과한 main 커밋에서 컷하는 운영 절차를 전제한다(README 참고).
+  # ---------------------------------------------------------------------
+  deploy-prod:
+    name: Deploy production (manual gate)
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout (release 커밋)
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web (Worker가 서빙할 정적 자산)
+        run: pnpm --filter @wt/web build
+
+      # 순서 불변식 1/2
+      - name: D1 migrations apply (prod)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/api
+          command: d1 migrations apply wt-main-prod --env prod --remote
+
+      # 순서 불변식 2/2
+      - name: Deploy Worker (prod)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/api
+          command: deploy --env prod

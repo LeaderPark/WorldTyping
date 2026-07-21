@@ -10,6 +10,8 @@ import { session } from "./routes/session";
 import { config } from "./routes/config";
 import { data } from "./routes/data";
 import { runs } from "./routes/runs";
+import { lb } from "./routes/lb";
+import { runLbRefresher } from "./cron/lb-refresher";
 import { securityHeaders } from "./mw/security-headers";
 import { corsMiddleware } from "./mw/cors";
 import { apiErrorHandler } from "./lib/api-error";
@@ -34,6 +36,7 @@ app.route("/api/v1", session); // WT-M3-02: POST /session, GET /session/me
 app.route("/api/v1", config); // WT-M3-02: GET /config
 app.route("/api/v1", data); // WT-M3-02: GET /data/countries (KV 핫스왑 서빙)
 app.route("/api/v1", runs); // WT-M3-03: POST /runs/start, POST /runs/submit
+app.route("/api/v1", lb); // WT-M3-04: GET /lb, GET /lb/me
 
 // /api/v1/* 중 위에서 매칭되지 않은 경로 → docs/04 §2.1 ApiError 포맷 404
 // (health를 포함해 이후 마일스톤에서 추가되는 모든 /api/v1/* 라우트는 이 줄보다 위에 등록한다).
@@ -60,9 +63,22 @@ export default {
   async queue(_batch: Queue<unknown>, _env: Env): Promise<void> {
     throw new Error("queue consumer not implemented yet (see relevant milestone task)");
   },
-  // Cron dispatcher(daily-seed / lb-refresher / retention) — 본문은 해당 마일스톤에서 채운다.
-  async scheduled(_event: ScheduledEvent, _env: Env, _ctx: ExecutionContext): Promise<void> {
-    throw new Error("scheduled dispatcher not implemented yet (see relevant milestone task)");
+  // Cron dispatcher. event.cron으로 잡을 라우팅한다(wrangler.toml [triggers].crons).
+  //   "*/1 * * * *"  → lb-refresher(WT-M3-04, 이 태스크에서 구현)
+  //   "0 15 * * *"   → daily+티어 시드 발행(WT-M3-05 소관 — 아직 미구현, no-op)
+  //   "30 16 * * *"  → 보존 정리 + kpi_daily 스냅샷(후속 마일스톤 — no-op)
+  // 미구현 잡을 throw로 두면 그 크론이 매분/매일 에러 로그를 남기므로, 알 수 없는 cron은
+  // 조용히 무시한다(구현되는 시점에 case를 추가).
+  async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    switch (event.cron) {
+      case "*/1 * * * *":
+        // scheduled 핸들러는 반환 Promise가 곧 잡 수명 — await로 완주를 보장한다(waitUntil은
+        // fetch용이고, --test-scheduled에선 invocation이 먼저 끝나 취소될 수 있다).
+        await runLbRefresher(env, event.scheduledTime);
+        return;
+      default:
+        return;
+    }
   },
 };
 

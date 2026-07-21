@@ -29,6 +29,15 @@ import { kstDate, kstYesterday } from "../lib/kst";
 import { loadAnticheatConfig } from "../lib/anticheat-config";
 import { buildSetForStart, rebuildSet, computeSetHash, type SingleMode } from "../lib/set-builder";
 import { verifyRun, type ServerValues } from "../lib/run-verify";
+import {
+  activeSeasonPeriod,
+  allBoardKey,
+  boardKeysForRun,
+  inlineRankForRun,
+  upsertBestStmts,
+  DIRTY_TTL_SEC,
+  type InlineRank,
+} from "../lib/lb";
 
 /** run 세션 사용 플래그 TTL(docs/06 §3.1 — 2h). */
 const SESS_FLAG_TTL_SEC = 2 * 60 * 60;
@@ -117,7 +126,7 @@ interface RunSubmitRes {
   accMilli: number;
   grade: string;
   completed: boolean;
-  // 리더보드 순위 인라인은 WT-M3-04에서 채운다(verified 시 upsertBest + rank/total/isPersonalBest).
+  // 리더보드 순위 인라인(§1.4-③, WT-M3-04). 등재 대상(valid·비shadowban)이 아니면 전부 null.
   rank: number | null;
   total: number | null;
   isPersonalBest: boolean | null;
@@ -234,6 +243,7 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   const newRejectedCount = personal.rejectedCount + (finalVerdict === "rejected" ? 1 : 0);
   const shadowban = newRejectedCount >= config.rejectedShadowbanThreshold;
 
+  const geo = getGeoCountry(c);
   const stmts = [
     insertRunStmt(db, {
       runId: token.rid,
@@ -242,7 +252,7 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
       server: vr.server,
       verdict: finalVerdict,
       verdictReason: finalReason,
-      geo: getGeoCountry(c),
+      geo,
       detailJson: JSON.stringify({
         result: body.result,
         clientScore: body.clientScore,
@@ -259,9 +269,50 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   if (shadowban) {
     stmts.push(shadowbanStmt(db, pid, now));
   }
+
+  // 리더보드 등재(§1.3): verdict='valid' + 비-shadowban일 때만 lb_best UPSERT(§3.5 — shadowban은
+  // runs만 기록). daily 보드는 첫 정식 기록만이므로(practice 강등된 재도전은 여기 도달 안 함)
+  // DO NOTHING 분기로 안전하게 처리한다. UPSERT는 runs INSERT와 같은 batch에 넣어 원자 반영.
+  const doBoard = finalVerdict === "valid" && !shadowban;
+  let boardKeys: string[] = [];
+  if (doBoard) {
+    const seasonPeriod = await activeSeasonPeriod(db, now); // v1은 항상 null(§11-D15)
+    boardKeys = boardKeysForRun({
+      modeKey: token.modeKey,
+      lang: token.lang,
+      platform: token.platform,
+      now,
+      activeSeasonPeriod: seasonPeriod,
+    });
+    stmts.push(
+      ...upsertBestStmts(db, {
+        boardKeys,
+        userId: pid,
+        runId: token.rid,
+        score: vr.server.score,
+        elapsedMs: vr.server.elapsedMs,
+        accMilli: vr.server.accMilli,
+        achievedAt: now,
+        geo,
+        isDaily: token.mode === "daily",
+      }),
+    );
+  }
+
   await db.batch(stmts);
 
-  return c.json(submitRes(finalVerdict, vr.server));
+  let inline: InlineRank | undefined;
+  if (doBoard) {
+    // dirty 마킹(§1.5): cron(*/1)이 이 보드들만 top-100 재조회한다.
+    if (c.env.KV) {
+      const kv = c.env.KV;
+      await Promise.all(boardKeys.map((bk) => kv.put(KV_KEYS.dirty(bk), "1", { expirationTtl: DIRTY_TTL_SEC })));
+    }
+    // rank/total/isPersonalBest 인라인(§1.4-③) — all 보드 기준, 추가 왕복 없음.
+    inline = await inlineRankForRun(db, allBoardKey(token.modeKey, token.lang, token.platform), pid, token.rid);
+  }
+
+  return c.json(submitRes(finalVerdict, vr.server, inline));
 });
 
 // ───────────────────────── 응답/SQL 헬퍼 ─────────────────────────
@@ -279,7 +330,7 @@ const ZERO: ServerValues = {
   elapsedMs: 0,
 };
 
-function submitRes(verdict: RunVerdict, s: ServerValues): RunSubmitRes {
+function submitRes(verdict: RunVerdict, s: ServerValues, inline?: InlineRank): RunSubmitRes {
   return {
     verdict,
     score: s.score,
@@ -288,9 +339,9 @@ function submitRes(verdict: RunVerdict, s: ServerValues): RunSubmitRes {
     accMilli: s.accMilli,
     grade: s.grade,
     completed: s.completed,
-    rank: null,
-    total: null,
-    isPersonalBest: null,
+    rank: inline?.rank ?? null,
+    total: inline?.total ?? null,
+    isPersonalBest: inline ? inline.isPersonalBest : null,
   };
 }
 

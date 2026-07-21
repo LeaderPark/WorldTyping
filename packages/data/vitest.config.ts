@@ -5,13 +5,13 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'content/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary'],
       // 로직 파일만 계측. 빌드 산출 데이터(generated/**)·배럴(index.ts)은 제외.
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/index.ts', 'src/generated/**'],
+      include: ['src/**/*.ts', 'content/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'content/**/*.test.ts', 'src/index.ts', 'src/generated/**'],
       thresholds: {
         lines: 95,
         functions: 95,

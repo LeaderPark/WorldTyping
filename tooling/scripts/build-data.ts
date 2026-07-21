@@ -4,10 +4,17 @@
 // 네트워크 0. 실패는 throw 로 전파(조용히 넘기지 않음). world-countries/world-atlas 는
 // packages/data 의 의존이므로, 코어를 상대 경로로 import 해 그 위치에서 해석되게 한다.
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname } from 'node:path';
 import { buildDataset } from '../../packages/data/src/build/pipeline.ts';
+import {
+  routeDistanceReport,
+  un195ContinentIndex,
+  validateContinentRoute,
+  validateWorldTour,
+} from '../../packages/data/src/build/route.ts';
+import type { Continent, Country } from '@wt/shared';
 
 const REPO_ROOT = new URL('../../', import.meta.url);
 const p = (rel: string) => fileURLToPath(new URL(rel, REPO_ROOT));
@@ -19,22 +26,78 @@ function writeOut(rel: string, contents: string): void {
   console.log(`  wrote ${rel}`);
 }
 
-function main(): void {
+/** Step 7-(d): routes.ts 존재 시 대륙 노선 6개 + 세계일주를 검증하고 리뷰 로그를 찍는다. */
+async function validateRoutesStep(dataset: { countries: Country[] }): Promise<void> {
+  const routesPath = p('packages/data/content/routes.ts');
+  if (!existsSync(routesPath)) {
+    console.warn('[build-data] content/routes.ts 부재 — Step 7-d routes 검증 skip (WT-M1-06 전).');
+    return;
+  }
+
+  const contentSets = JSON.parse(readFileSync(p('packages/data/overrides/content-sets.json'), 'utf8')) as {
+    un195: string[];
+    extended: string[];
+  };
+  const un195 = new Set(contentSets.un195);
+  const extended = new Set(contentSets.extended);
+  const continentOf = un195ContinentIndex(dataset.countries, un195);
+  const latlngById = new Map(dataset.countries.map((c) => [c.id, c.latlng]));
+
+  const byContinent: Record<Continent, Set<string>> = {
+    asia: new Set(), europe: new Set(), africa: new Set(),
+    'north-america': new Set(), 'south-america': new Set(), oceania: new Set(),
+  };
+  for (const [id, continent] of continentOf) byContinent[continent].add(id);
+
+  const routesModule = (await import(pathToFileURL(routesPath).href)) as {
+    ROUTE_ASIA: string[];
+    ROUTE_EUROPE: string[];
+    ROUTE_AFRICA: string[];
+    ROUTE_NORTH_AMERICA: string[];
+    ROUTE_SOUTH_AMERICA: string[];
+    ROUTE_OCEANIA: string[];
+    ROUTE_WORLD_TOUR: string[];
+  };
+
+  const continentRoutes: [Continent, string[]][] = [
+    ['asia', routesModule.ROUTE_ASIA],
+    ['europe', routesModule.ROUTE_EUROPE],
+    ['africa', routesModule.ROUTE_AFRICA],
+    ['north-america', routesModule.ROUTE_NORTH_AMERICA],
+    ['south-america', routesModule.ROUTE_SOUTH_AMERICA],
+    ['oceania', routesModule.ROUTE_OCEANIA],
+  ];
+
+  console.log('\n[build-data] Step 7-d routes 검증');
+  for (const [continent, route] of continentRoutes) {
+    validateContinentRoute(continent, route, byContinent[continent], extended);
+    console.log(`  ROUTE_${continent}: ${route.length}개, 집합/중복/시작점 OK`);
+  }
+  validateWorldTour(routesModule.ROUTE_WORLD_TOUR, continentOf, extended);
+  console.log(`  ROUTE_WORLD_TOUR: ${routesModule.ROUTE_WORLD_TOUR.length}개, 50/6대륙/첫5개 OK`);
+
+  console.log('\n[build-data] routes 지리적 자연스러움 리뷰(assert 아님)');
+  for (const [name, route] of [...continentRoutes, ['world-tour', routesModule.ROUTE_WORLD_TOUR] as [string, string[]]]) {
+    const report = routeDistanceReport(route, latlngById, 5);
+    console.log(`  ROUTE_${name}: 총 ${Math.round(report.totalKm).toLocaleString()}km, 최장점프 ${report.longestJumps
+      .map((j) => `${j.from}->${j.to}(${Math.round(j.km)}km)`)
+      .join(', ')}`);
+  }
+}
+
+async function main(): Promise<void> {
   console.log('[build-data] building deterministic country dataset…');
 
-  // Step 7-(d)(e): routes.ts / i18n 키 검증은 WT-M1-06 / WT-M1-07 에서 활성화. 파일 부재 시 skip+경고.
-  if (existsSync(p('packages/data/content/routes.ts'))) {
-    console.warn('[build-data] content/routes.ts 존재 — routes 검증은 WT-M1-06에서 활성화됩니다.');
-  } else {
-    console.warn('[build-data] content/routes.ts 부재 — Step 7-d routes 검증 skip (WT-M1-06 전).');
-  }
+  // Step 7-(e): i18n 키 동일성 검증은 WT-M1-07 에서 활성화. 파일 부재 시 skip+경고.
   if (existsSync(p('packages/i18n/ko.json')) && existsSync(p('packages/i18n/en.json'))) {
     console.warn('[build-data] i18n 카탈로그 존재 — 키 동일성 검증은 WT-M1-07에서 활성화됩니다.');
   } else {
     console.warn('[build-data] i18n 카탈로그 부재 — Step 7-e 키 동일성 검증 skip (WT-M1-07 전).');
   }
 
-  const { countriesJson, topojsonJson, manifestJson, generatedTs, stats } = buildDataset();
+  const { dataset, countriesJson, topojsonJson, manifestJson, generatedTs, stats } = buildDataset();
+
+  await validateRoutesStep(dataset);
 
   writeOut('apps/web/public/data/countries.json', countriesJson);
   writeOut('apps/web/public/data/countries-110m.json', topojsonJson);
@@ -68,4 +131,8 @@ function main(): void {
   );
 }
 
-main();
+main().catch((err: unknown) => {
+  console.error(err);
+  process.exitCode = 1;
+  throw err;
+});

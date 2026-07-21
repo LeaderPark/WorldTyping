@@ -9,6 +9,8 @@
     "e2e:report": "playwright show-report"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.2"
+    "@playwright/test": "^1.48.2",
+    "@wt/data": "workspace:*",
+    "@wt/shared": "workspace:*"
   }
 }

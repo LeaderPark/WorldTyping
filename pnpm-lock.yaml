@@ -123,6 +123,12 @@ importers:
       '@playwright/test':
         specifier: ^1.48.2
         version: 1.61.1
+      '@wt/data':
+        specifier: workspace:*
+        version: link:../packages/data
+      '@wt/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
 
   packages/data:
     dependencies:

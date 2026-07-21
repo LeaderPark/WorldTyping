@@ -383,8 +383,8 @@ FinalScore/PI/등급/서바이벌 제한시간을 클라·서버 공용 순수 �
 
 [완료 조건 / acceptance]
 - `pnpm --filter @wt/shared test` 그린(골든 5세트 + 경계값), coverage 95%+.
-- time-limit 테스트: "미국"(L=4,T1) → 3.58s(±0.01), "상투메프린시페"(L=15,T5) → 7.5s,
-  첫 국가 ×2 확인.
+- time-limit 테스트: "미국"(L=5,T1) → 4.10s(±0.01), "상투메프린시페"(L=16,T5) → 7.90s
+  (docs/00 §11-D27 정정 수치), 첫 국가 ×2 확인.
 ````
 
 ### WT-M1-03 · @wt/shared protocol (메시지 + 시딩)

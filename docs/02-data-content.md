@@ -286,7 +286,7 @@ export function matchInput(
 | 과테말라 | "ㄱ"→"고"→"과"→…"과테말라" | P→P→P→…**EXACT** |
 | 대한민국(KR) | "한국" | **EXACT** (별칭) |
 | 미국(US) | "일" | **MISS** |
-| 벨기에 | "벨"→"벩"(ㄱ 오타로 받침) | P→**MISS** |
+| 벨기에 | "벨"→"벩"(ㄹㄱ 복합 종성 — 도깨비불 임시 상태) | P→**PREFIX** (자모 접두 성립, docs/00 §11-D28. 진짜 오타는 "벨키"→MISS) |
 | Côte d'Ivoire(CI) | "cote divoire" | **EXACT** (공백·아포스트로피 무시) |
 | United States(US) | "usa" / "america" | **EXACT** |
 

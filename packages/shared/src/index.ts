@@ -122,3 +122,32 @@ export {
   AUTOSTART_WAIT_MS,
   BOT_OFFER_MS,
 } from './protocol/constants';
+
+// auth (WT-M1-04): wt1 HMAC 토큰 서명/검증 + pid/device_hash 파생. Workers·테스트 공용(WebCrypto).
+export {
+  signToken,
+  verifyToken,
+  signSessionToken,
+  signRunToken,
+  signWsTicket,
+  SESSION_TTL_MS,
+  RUN_TOKEN_TTL_MS,
+  WS_TICKET_TTL_MS,
+  SessionPayloadSchema,
+  RunTokenPayloadSchema,
+  WsTicketPayloadSchema,
+  type SessionPayload,
+  type RunTokenPayload,
+  type WsTicketPayload,
+  type VerifyResult,
+  type VerifyFailReason,
+  type PayloadSchema,
+} from './auth/token';
+export { derivePlayerId, deriveDeviceHash } from './auth/derive';
+export {
+  bytesToBase64url,
+  base64urlToBytes,
+  utf8ToBytes,
+  bytesToUtf8,
+} from './auth/base64url';
+export { bytesToBase58, base58ToBytes } from './auth/base58';

@@ -34,7 +34,7 @@
 | P0 코어 (15~29세 SNS 유저) | 릴스/Threads/X에서 타이핑 챌린지 접함 | 결과 카드 공유, 랭킹, 멀티 레이스 |
 | P1 타자 연습층 | 한컴타자·monkeytype 기존 유저 | 티어 모드, 데일리, CPM 기록 추적 |
 | P2 지리 퀴즈층 | Seterra/GeoGuessr 팬 | 지도 하이라이트, 세계일주, 업적 |
-| P3 라이트 유입 | 링크 타고 온 1회성 방문자 | 로그인 없는 즉시 플레이, 3클릭·15초 내 첫 타이핑 |
+| P3 라이트 유입 | 링크 타고 온 1회성 방문자 | 로그인 없는 즉시 플레이, 최단 경로 3클릭·15초 내 첫 타이핑(§11-D36) |
 
 기기: 데스크톱 1차, 모바일 2차(단 SNS 유입 특성상 모바일 트래픽 60%+ 가정, 플랫폼 분리 랭킹). 계정: 비로그인 100% 플레이 가능.
 
@@ -421,6 +421,14 @@ flowchart LR
 | D27 | 01 §7.2 제한시간 예시 산수 오류 | 01 §7.2 예시: 미국=4타→3.58s, 상투메프린시페=15타→7.5s ↔ 01 §6.1 자모 계상 규칙(한국=6타)·toJamoSeq 실측: 미국=5자모, 상투메프린시페=16자모 | **자모 계상 규칙 승(공식·L_i 정의 불변)**: 예시만 정정 — 미국 L=5 → 4.10s, 상투메프린시페 L=16 → 7.90s. 01 §7.2·07 WT-M1-02 acceptance 수치 동기 정정 (M1 구현 확정, 2026-07-21) |
 | D28 | 02 §3.3 테스트 표 5행 기대값 | 표 5행: "벨"→"벩" = P→MISS ↔ 같은 절의 매처 코드(canonical): toJamoSeq('벩')=ㅂㅔㄹㄱ 는 ㅂㅔㄹㄱㅣㅇㅔ 의 접두 → PREFIX | **매처 코드 승**: '벩'은 도깨비불 임시 복합 종성(간→가나와 동일 부류)이므로 P→**PREFIX**가 정답. 표 5행 정정. 진짜 오타 MISS 케이스는 "벨키"→MISS로 별도 커버 (M1 구현 확정, 2026-07-21) |
 | D29 | 07 WT-M1-04 성능 스모크 판정 기준 | 07: 1,000회 루프 벽시계 100ms ↔ Node 병렬 vitest 워커 환경에서 벽시계는 스케줄링에 지배되어 비결정(60~430ms 요동) | **user CPU 기준 확정**: `process.cpuUsage().user` < 250ms로 판정(compute 회귀 가드, 전 실행 모드 비플레이키). 벽시계 100ms는 Workers 네이티브 crypto 기준 참고치로만 (M1 구현 확정, 2026-07-21) |
+| D30 | 창 블러(playing 중) 처리 | 03 §5.1 FSM: blur→aborted 암시 ↔ 01 §5.5·07 WT-M2-02: practice 강등 | **practice 강등 확정**: `degradedToPractice{reason:'blur'}` — 판 계속, 랭킹 제외. `aborted`는 명시적 `abort()` 호출로만 (M2 구현 확정, 2026-07-21) |
+| D31 | ModeRules.onSkip 책임 범위 | 03 §5.2: onSkip="라이프 차감/오타 가산 정책" ↔ 01 §5.5 공통 페널티는 모드 불변 | **분리 확정**: onSkip은 모드별 라이프 정책만(대륙/레이스 no-op, 티어/일주/데일리 −1). 공통 페널티(콤보 0·필요 타수 전량 오타·국가 점수 0)는 엔진이 일괄 적용. `MutableRunState={lives}` (M2 구현 확정) |
+| D32 | 엔진 finished.result 타입 | 03 §5.1 `RunResult` 표기 ↔ @wt/shared computeScore 반환형과 동명 충돌 | **엔진 RunResult = 확장형 확정**: `{mode, lang, outcome:'completed'\|'gameover', practice, viaCheckpoint, stats:RunStats, score:ScoreResult}` — shared RunResult는 `ScoreResult`로 별칭. 점수는 computeScore 위임(재구현 아님) (M2 구현 확정) |
+| D33 | useTypingEngine 반환 계약 | 03 §4.4: `{inputRef, focusInput}`만 ↔ §2.7/§2.8 렌더러 배선에 접점 부재 | **확장 확정**: `{inputRef, focusInput, controller, getInputValue}` (additive). 별칭 에코 원문은 표시 계층이 input 스냅샷(`getInputValue()`)에서 취득 — miss/exact 이벤트에 rawValue 미탑재 유지 (M2 구현 확정) |
+| D34 | 지도 렌더 계층 바인딩 확장 | 07 WT-M2-04 #1: "코소보는 빌드에서 바인딩됨" ↔ 실제 산출물 XK.mapFeatureId=null(canonical 테스트 고정) | **렌더 계층 해소 확정**: buildGeoIndex가 `properties.name==='Kosovo'`를 XK에 수동 바인딩(02 §7c·03 §3.1 위임 그대로). 또한 `CountryGeo.continent` 필드 추가(setTarget 대륙색 파생용, additive) (M2 구현 확정) |
+| D35 | i18n interpolation 규약 | packages/i18n 카탈로그: 단일 중괄호 `{var}` ↔ i18next 기본값 `{{var}}` | **단일 중괄호 확정**: i18next 초기화에 `interpolation.prefix='{' / suffix='}'` 지정(i18next-icu 불채택). 카탈로그는 그대로 (M2 구현 확정) |
+| D36 | "3클릭·15초" 클릭 수 산정 | 00 §1.3·01 §11.1: 3클릭 ↔ 01 §10.1 화면 그래프(S1→S3→S4→S5)상 대륙 모드는 구조적으로 4클릭 | **최단 경로 기준으로 정정**: KPI는 "최단 경로(데일리 직행 등) 3클릭·15초". 대륙 정규 경로 4클릭은 허용(화면 그래프·보딩패스 시그니처 유지). D27과 동류의 문서 산술 착오 (M2 확정) |
+| D37 | E2E 실행 대상 빌드 | 07 WT-M2-08: vite dev 기동 ↔ dev(StrictMode)에서 useTypingEngine 입력 결함 발견 | **프로덕션 프리뷰(build+preview) 대상 확정**(실배포 등가물). 단 dev StrictMode 입력 결함은 별도 수정(WT-M2-09) — E2E 대상 결정과 무관하게 dev 플레이는 동작해야 한다 (M2 확정) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

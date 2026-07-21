@@ -23,6 +23,11 @@ module.exports = {
     ".wrangler/**",
   ],
   rules: {
+    // 의도적으로 안 쓰는 파라미터(콜백 시그니처 고정 등)는 `_` 접두사로 허용 표시.
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+    ],
     // packages/* → apps|workers 참조 금지 (docs/00 §6 의존 방향 규칙)
     "import/no-restricted-paths": [
       "error",

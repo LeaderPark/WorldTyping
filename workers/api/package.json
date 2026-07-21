@@ -7,6 +7,16 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --root .",
-    "build": "tsc --noEmit -p tsconfig.json"
+    "build": "tsc --noEmit -p tsconfig.json",
+    "dev": "wrangler dev",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:prod": "wrangler deploy --env prod"
+  },
+  "dependencies": {
+    "hono": "^4.6.11"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.0.0",
+    "wrangler": "^4.0.0"
   }
 }

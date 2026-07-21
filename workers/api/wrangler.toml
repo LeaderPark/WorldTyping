@@ -1,0 +1,169 @@
+# spec: docs/04 §7(wrangler.toml 전문) + docs/00 §7(환경/바인딩/시크릿 — D18,D19,D25 반영본)
+#       + §11-D8(WS 경로 /ws/room/:code, Matchmaker DO) + WT-M0-02
+#
+# docs/04 §7 원문 대비 반영한 오버라이드(docs/00 §11 확정):
+#   - name: "worldtyping" → "typetrip" (§11-D18, 런칭명 확정)
+#   - LOBBY/LobbyDO → MATCHMAKER/MatchmakerDO (§11-D8: LobbyDO 폐기)
+#   - queue: "score-postprocess"/SCORE_QUEUE → "wt-events-{env}"/EVENTS (§11-D16)
+#   - crons: 5분 스냅샷 → 1분 dirty refresher (§11-D24)
+#   - directory: "../web/dist" → "../../apps/web/dist" (docs/00 §6 트리 경로, apps/worker→workers/api)
+#   - run_worker_first에 "/r/*","/og/*" 추가 (docs/00 §7.2)
+#
+# database_id / kv id / bucket 등 실 리소스 ID는 Cloudflare 계정 미연결 상태라 플레이스홀더로 둔다.
+# 발급 절차(리드가 계정 연결 후 1회 실행):
+#   wrangler d1 create wt-main-{env}         → database_id를 아래에 채운다
+#   wrangler kv namespace create wt-kv-{env} → id를 아래에 채운다
+#   wrangler r2 bucket create wt-{env}
+#   wrangler queues create wt-events-{env}
+
+name = "typetrip"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "../../apps/web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/ws/*", "/r/*", "/og/*"]
+
+[observability]
+enabled = true
+
+[durable_objects]
+bindings = [
+  { name = "MATCH_ROOM",  class_name = "MatchRoomDO" },
+  { name = "MATCHMAKER",  class_name = "MatchmakerDO" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MatchRoomDO", "MatchmakerDO"]
+
+[[queues.producers]]
+queue = "wt-events-dev"
+binding = "EVENTS"
+
+[[queues.consumers]]
+queue = "wt-events-dev"
+max_batch_size = 50
+max_batch_timeout = 5
+
+[triggers]
+crons = [
+  "0 15 * * *",   # KST 00:00 — 데일리+티어 시드 발행·D1 확정 저장
+  "*/1 * * * *",  # lb-refresher — dirty만 (§11-D24, 04의 5분 주기 폐기)
+  "30 16 * * *",  # KST 01:30 — 보존 정리 + kpi_daily 스냅샷
+]
+
+[[analytics_engine_datasets]]
+binding = "AE"
+dataset = "wt_telemetry"
+
+# ---------- dev (wrangler dev 기본 — 로컬 miniflare 시뮬레이션) ----------
+[[d1_databases]]
+binding = "DB"
+database_name = "wt-main-dev"
+database_id = "<dev-uuid>"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "<dev-kv-id>"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "wt-dev"
+
+[vars]
+ENVIRONMENT = "dev"
+
+# RL(Rate Limiting binding)은 자리만 — v1 초반은 KV 고정윈도(§6.5)로 방어하고,
+# 트래픽이 임계에 닿으면 아래 형태로 활성화한다(docs/04 §9.3).
+# [[unsafe.bindings]]
+# name = "RL"
+# type = "ratelimit"
+# namespace_id = "<placeholder>"
+# simple = { limit = 100, period = 60 }
+
+# ---------- staging ----------
+[env.staging]
+name = "typetrip-staging"
+routes = [{ pattern = "staging.typetrip.example", custom_domain = true }]
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "wt-main-staging"
+database_id = "<staging-uuid>"
+
+[[env.staging.kv_namespaces]]
+binding = "KV"
+id = "<staging-kv-id>"
+
+[[env.staging.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "wt-staging"
+
+[[env.staging.queues.producers]]
+queue = "wt-events-staging"
+binding = "EVENTS"
+
+[[env.staging.queues.consumers]]
+queue = "wt-events-staging"
+max_batch_size = 50
+max_batch_timeout = 5
+
+[env.staging.durable_objects]
+bindings = [
+  { name = "MATCH_ROOM",  class_name = "MatchRoomDO" },
+  { name = "MATCHMAKER",  class_name = "MatchmakerDO" },
+]
+
+[[env.staging.analytics_engine_datasets]]
+binding = "AE"
+dataset = "wt_telemetry"
+
+# ---------- prod ----------
+[env.prod]
+name = "typetrip-prod"
+# 도메인 미확정 — PUBLIC_ORIGIN 확정 후 routes를 채운다(docs/00 §7 gotcha 7, 코드에 오리진 하드코딩 금지).
+routes = [
+  { pattern = "<PUBLIC_ORIGIN placeholder>", custom_domain = true },
+]
+
+[env.prod.vars]
+ENVIRONMENT = "prod"
+
+[[env.prod.d1_databases]]
+binding = "DB"
+database_name = "wt-main-prod"
+database_id = "<prod-uuid>"
+
+[[env.prod.kv_namespaces]]
+binding = "KV"
+id = "<prod-kv-id>"
+
+[[env.prod.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "wt-prod"
+
+[[env.prod.queues.producers]]
+queue = "wt-events-prod"
+binding = "EVENTS"
+
+[[env.prod.queues.consumers]]
+queue = "wt-events-prod"
+max_batch_size = 50
+max_batch_timeout = 5
+
+[env.prod.durable_objects]
+bindings = [
+  { name = "MATCH_ROOM",  class_name = "MatchRoomDO" },
+  { name = "MATCHMAKER",  class_name = "MatchmakerDO" },
+]
+
+[[env.prod.analytics_engine_datasets]]
+binding = "AE"
+dataset = "wt_telemetry"

@@ -14,7 +14,10 @@ const LOOKUP: Int8Array = (() => {
 })();
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder('utf-8', { fatal: true });
+// ignoreBOM: false는 두 런타임의 기본값과 동일 — workers/api가 이 패키지를 @cloudflare/
+// workers-types와 함께 타입체크할 때 TextDecoderConstructorOptions가 두 필드 모두 요구해
+// 명시했다(동작 변화 없음, WT-M3-02에서 발견).
+const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
 
 /** UTF-8 문자열 → 바이트. */
 export function utf8ToBytes(s: string): Uint8Array {

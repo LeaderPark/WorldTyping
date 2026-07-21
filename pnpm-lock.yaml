@@ -193,9 +193,15 @@ importers:
 
   workers/api:
     dependencies:
+      '@wt/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       hono:
         specifier: ^4.6.11
         version: 4.12.31
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: 0.12.21

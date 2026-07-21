@@ -34,7 +34,15 @@ export default defineWorkersConfig(async () => {
           singleWorker: true,
           miniflare: {
             // 마이그레이션 목록을 테스트 바인딩으로 주입 — setupFiles에서 applyD1Migrations로 적용.
-            bindings: { TEST_MIGRATIONS: migrations },
+            // 시크릿 3종은 wrangler.toml에 절대 기재하지 않으므로(코드/toml 기재 금지) 여기서
+            // 테스트 전용 더미값으로 주입한다(WT-M3-02, 세션 환경 어댑테이션 §2 지시).
+            bindings: {
+              TEST_MIGRATIONS: migrations,
+              SESSION_HMAC_SECRET: "test-session-secret",
+              SESSION_HMAC_SECRET_PREV: "test-session-secret-prev",
+              RUN_HMAC_SECRET: "test-run-secret",
+              DAILY_SALT: "test-daily-salt",
+            },
           },
           // 실 프로덕션 wrangler.toml을 그대로 사용(D1/KV/DO/Queue/AE 바인딩 전부 동일 시뮬레이션
           // 대상 — 세션 환경 지시 §2 "통합 검증 토폴로지" 취지와 일치).

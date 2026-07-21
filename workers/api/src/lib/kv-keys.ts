@@ -1,0 +1,42 @@
+// spec: docs/00 §7.4(KV 키 카탈로그 — 문자열 하드코딩 금지) + WT-M3-02
+//
+// KV(단일 네임스페이스, 프리픽스 운용 — docs/00 §7.2)에 쓰는 모든 키를 이 카탈로그로만
+// 생성한다. 새 프리픽스가 필요하면 이 파일에 먼저 추가하고 docs/00 §7.4와 동기화할 것.
+
+/** 정적(파라미터 없는) 키. */
+export const KV_KEYS = {
+  configClient: "config:client",
+  configAnticheat: "config:anticheat",
+  configModeration: "config:moderation",
+  configBanner: "config:banner",
+  configLobbyShards: "config:lobbyShards",
+  dataCountriesOverride: "data:countries:override",
+
+  /** 데일리 세트 캐시. dateKst = 'YYYY-MM-DD'(KST). */
+  daily: (dateKst: string): string => `daily:${dateKst}`,
+
+  /** 리더보드 top100 캐시. */
+  lb: (boardKey: string): string => `lb:${boardKey}`,
+  /** 리더보드 더티 마킹(TTL 180s). */
+  dirty: (boardKey: string): string => `dirty:${boardKey}`,
+
+  /**
+   * 레이트리밋 고정윈도 카운터. scope는 mw/ratelimit.ts의 LIMITS 키(또는 세션 신규 pid
+   * 어뷰징 카운터 같은 내부 하위스코프)와 정확히 일치시킨다. subject = pid 또는 IP 해시.
+   */
+  rateLimit: (scope: string, subject: string, windowStart: number): string =>
+    `rl:${scope}:${subject}:${windowStart}`,
+
+  /** IP 해시 차단(docs/04 §10.3 — 시간당 신규 pid 생성 > 20). */
+  blockIp: (ipHash: string): string => `blk:ip:${ipHash}`,
+
+  /** run 세션(runToken) 사용 플래그 — 재사용 방지(docs/06 §3.1). */
+  session: (sid: string): string => `sess:${sid}`,
+
+  /** 공개 방 목록(TTL 60s). */
+  publicRoom: (code: string): string => `publicroom:${code}`,
+
+  /** 고스트 봇 리플레이. */
+  ghost: (lang: string, mode: string, piBucket: string): string =>
+    `ghost:${lang}:${mode}:${piBucket}`,
+} as const;

@@ -6,11 +6,19 @@
 import { Hono } from "hono";
 import type { Env } from "./env";
 import { health } from "./routes/health";
+import { session } from "./routes/session";
+import { config } from "./routes/config";
+import { data } from "./routes/data";
 import { securityHeaders } from "./mw/security-headers";
 import { corsMiddleware } from "./mw/cors";
+import { apiErrorHandler } from "./lib/api-error";
 
 // ---- 최상위 앱 ------------------------------------------------------------
 const app = new Hono<{ Bindings: Env }>();
+
+// docs/04 §2.1 ApiError 전역 통일 — 라우트/미들웨어는 ApiHttpError를 throw하고, 여기 한
+// 곳에서만 응답 포맷을 조립한다(lib/api-error.ts, WT-M3-02).
+app.onError(apiErrorHandler);
 
 app.use("*", securityHeaders);
 app.use("/api/*", corsMiddleware);
@@ -21,6 +29,9 @@ app.use("/api/*", corsMiddleware);
 // 그래서 "게임 API 라우트 자체는 M3 소관"이지만 이 파일에서 /api/v1/* 미매치 404는
 // 직접 등록해야 한다 — 그렇지 않으면 아래 SPA/ASSETS 폴백까지 흘러가 200이 나가버린다.
 app.route("/api/v1", health);
+app.route("/api/v1", session); // WT-M3-02: POST /session, GET /session/me
+app.route("/api/v1", config); // WT-M3-02: GET /config
+app.route("/api/v1", data); // WT-M3-02: GET /data/countries (KV 핫스왑 서빙)
 
 // /api/v1/* 중 위에서 매칭되지 않은 경로 → docs/04 §2.1 ApiError 포맷 404
 // (health를 포함해 이후 마일스톤에서 추가되는 모든 /api/v1/* 라우트는 이 줄보다 위에 등록한다).

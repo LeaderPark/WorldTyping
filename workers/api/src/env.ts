@@ -35,6 +35,10 @@ export interface Env {
 
   // Secrets (wrangler secret put --env 로만 주입 — 코드/toml에 값 기재 절대 금지)
   SESSION_HMAC_SECRET: string;
+  // 키 로테이션 병행 검증용 구(舊) 시크릿(docs/04 §7 "구/신 2키 7일 병행 검증", WT-M3-02).
+  // 로테이션 중이 아니면 미설정 — mw/auth.ts와 routes/session.ts의 verifyToken 호출이
+  // [SESSION_HMAC_SECRET, SESSION_HMAC_SECRET_PREV] 순으로 시도한다(둘 중 하나만 맞아도 통과).
+  SESSION_HMAC_SECRET_PREV?: string;
   RUN_HMAC_SECRET: string;
   DAILY_SALT: string;
   SENTRY_DSN?: string;

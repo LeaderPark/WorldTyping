@@ -1,0 +1,10 @@
+# spec: docs/00 §7.3(시크릿 카탈로그) + WT-M3-02 세션 환경 어댑테이션
+# 로컬 wrangler dev 전용 시크릿 템플릿. 실제 값은 이 파일을 workers/api/.dev.vars로
+# 복사해 채운다(.dev.vars는 .gitignore 대상 — 커밋 금지, 더미 값만 로컬에 둘 것).
+# 프로덕션/스테이징 시크릿은 여기 두지 않는다 — `wrangler secret put --env <env>`로만 주입.
+
+SESSION_HMAC_SECRET=dev-secret-session
+# 로테이션 중이 아니면 비워둔다(선택 필드) — 값을 채우면 구/신 2키 병행 검증이 활성화된다.
+SESSION_HMAC_SECRET_PREV=
+RUN_HMAC_SECRET=dev-secret-run
+DAILY_SALT=dev-secret-daily-salt

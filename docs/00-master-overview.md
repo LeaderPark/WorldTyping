@@ -429,6 +429,7 @@ flowchart LR
 | D35 | i18n interpolation 규약 | packages/i18n 카탈로그: 단일 중괄호 `{var}` ↔ i18next 기본값 `{{var}}` | **단일 중괄호 확정**: i18next 초기화에 `interpolation.prefix='{' / suffix='}'` 지정(i18next-icu 불채택). 카탈로그는 그대로 (M2 구현 확정) |
 | D36 | "3클릭·15초" 클릭 수 산정 | 00 §1.3·01 §11.1: 3클릭 ↔ 01 §10.1 화면 그래프(S1→S3→S4→S5)상 대륙 모드는 구조적으로 4클릭 | **최단 경로 기준으로 정정**: KPI는 "최단 경로(데일리 직행 등) 3클릭·15초". 대륙 정규 경로 4클릭은 허용(화면 그래프·보딩패스 시그니처 유지). D27과 동류의 문서 산술 착오 (M2 확정) |
 | D37 | E2E 실행 대상 빌드 | 07 WT-M2-08: vite dev 기동 ↔ dev(StrictMode)에서 useTypingEngine 입력 결함 발견 | **프로덕션 프리뷰(build+preview) 대상 확정**(실배포 등가물). 단 dev StrictMode 입력 결함은 별도 수정(WT-M2-09) — E2E 대상 결정과 무관하게 dev 플레이는 동작해야 한다 (M2 확정) |
+| D38 | users.user_id ↔ 세션 pid 관계 | 04 §5: pid=base58(HMAC("pid:"+deviceId))[0:12] 결정적 파생 ↔ 06 §1.3: users.user_id TEXT PK(출처 미명세, UUIDv7 예시 뉘앙스) | **동일값 확정**: `user_id = pid` (결정적 파생, 랜덤 UUID·매핑 테이블 없음). bootstrap 멱등(D10 정합), runToken.pid 직접 비교(04 §6.2-①) 성립. v2 소셜 로그인 계정 연동 시 별도 canonical-user 매핑 도입 여지는 남긴다 (M3 구현 확정, 2026-07-21) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

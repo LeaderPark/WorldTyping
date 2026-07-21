@@ -1,6 +1,30 @@
-// spec: docs/00 §6 (packages/shared — 클라·서버 공유 단일 원천), WT-M0-01
+// spec: docs/00 §6 (packages/shared — 클라·서버 공유 단일 원천), WT-M1-01
 //
-// M0 스캐폴드 단계 플레이스홀더. 실제 country-matcher/scoring/protocol/auth 구현은
-// WT-M1-01~04에서 채운다. 의존성 0, React/DOM import 금지(eslint로 강제).
+// 배럴 export. 판정 엔진(country-matcher)과 공용 타입을 클라·서버가 동일 번들한다.
+// scoring/protocol/auth는 WT-M1-02~04에서 이 배럴에 추가된다.
 
-export const SHARED_PACKAGE_NAME = "@wt/shared" as const;
+export type {
+  CountryId,
+  Continent,
+  DifficultyTier,
+  Country,
+  CountriesDataset,
+} from './types/country';
+export type {
+  GameMode,
+  MatchState,
+  PerCountryStat,
+  RunStats,
+  RunVerdict,
+} from './types/game';
+
+export { normalizeEn, normalizeKo } from './country-matcher/normalize';
+export { toJamoSeq } from './country-matcher/hangul';
+export {
+  compileTargets,
+  matchInput,
+  matchInputDetail,
+  commonPrefixLen,
+  type CompiledTarget,
+  type MatchDetail,
+} from './country-matcher/match';

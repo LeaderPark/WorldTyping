@@ -1,0 +1,7 @@
+# spec: docs/00 §6 (모노레포 구조), WT-M0-01
+packages:
+  - "apps/*"
+  - "workers/*"
+  - "packages/*"
+  - "tooling/*"
+  - "e2e"

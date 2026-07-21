@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WORLD TYPING — TypeTrip</title>
+    <!-- 테마 FOUC 방지 스니펫 (docs/03 §8.1): localStorage 저장 테마를 페인트 전에 적용 -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("wt:theme");
+          var theme =
+            stored || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {
+          /* localStorage 접근 불가 환경(사생활 모드 등) — 기본 라이트로 진행 */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

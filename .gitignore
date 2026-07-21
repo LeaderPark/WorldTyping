@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.wrangler/
+.turbo/
+*.log
+.DS_Store
+Thumbs.db
+coverage/
+.vite/
+.env
+.env.*
+!.env.example

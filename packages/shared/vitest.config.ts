@@ -10,9 +10,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary'],
-      // 실행 코드가 있는 판정 엔진만 계측. 타입 전용 파일(types/**)·배럴(index.ts)은 제외.
+      // 실행 코드가 있는 판정 엔진만 계측. 타입 전용 파일(types/**, protocol/messages.ts)·배럴(index.ts)은 제외.
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/index.ts', 'src/types/**'],
+      exclude: ['src/**/*.test.ts', 'src/index.ts', 'src/types/**', 'src/protocol/messages.ts'],
       thresholds: {
         lines: 95,
         functions: 95,

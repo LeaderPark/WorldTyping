@@ -11,6 +11,9 @@
     "test:coverage": "vitest run --root . --coverage",
     "build": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "3.2.7",

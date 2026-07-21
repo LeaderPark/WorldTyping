@@ -28,3 +28,26 @@ export {
   type CompiledTarget,
   type MatchDetail,
 } from './country-matcher/match';
+
+// scoring (WT-M1-02): 점수·등급·제한시간 순수 함수. 클라·서버 공용 단일 원천.
+export { requiredKeystrokes, type KeystrokeSource } from './scoring/keystrokes';
+export {
+  computePI,
+  gradeFromPI,
+  computeGrade,
+  DEFAULT_GRADE_CONFIG,
+  type Grade,
+  type GradeConfig,
+} from './scoring/grade';
+export {
+  timeLimitMs,
+  DEFAULT_TIME_LIMIT_CONFIG,
+  type TimeLimitConfig,
+  type TimeLimitSource,
+} from './scoring/time-limit';
+export {
+  computeScore,
+  type RunResult,
+  type ScoreConfig,
+  type ScoreCountry,
+} from './scoring/score';

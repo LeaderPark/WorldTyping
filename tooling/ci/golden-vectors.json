@@ -1,0 +1,204 @@
+{
+  "_spec": "docs/01 §6.1(RunStats)·§6.2(FinalScore)·§6.3(PI/등급), WT-M1-02 산출물. 각 vector의 'calculation' 필드에 수기 계산 과정을 남긴다 — 검증자는 이 과정을 재계산해 expected 값과 대조한다. countries.nameEn 값은 CPM/ACC 산술을 손으로 검증하기 쉽도록 실제 영어 국가명 중 필요 문자수(L_i)가 정확히 맞아떨어지는 것을 골라 썼다(peru=4, chile=5, canada=6, portugal=8, kazakhstan=10, kenya=5, nepal=5, monaco=6, australia=9). (e)만 L=15를 만족하는 실제 국가명이 마땅치 않아 순수 알파벳 합성 문자열을 썼다.",
+  "vectors": [
+    {
+      "id": "a-full-clear-S-grade",
+      "description": "(a) 완주 S등급 — 3개국 전부 클리어, 무오타, 빠른 페이스로 PI≥450 확인",
+      "lang": "en",
+      "countries": [
+        { "nameKo": "", "nameEn": "peru", "difficultyTier": 1 },
+        { "nameKo": "", "nameEn": "chile", "difficultyTier": 2 },
+        { "nameKo": "", "nameEn": "canada", "difficultyTier": 3 }
+      ],
+      "stats": {
+        "totalKeystrokes": 15,
+        "correctKeystrokes": 15,
+        "elapsedMs": 1800,
+        "maxCombo": 3,
+        "countriesCleared": 3,
+        "countriesSkipped": 0,
+        "perCountry": [
+          { "code": "PE", "ms": 500, "errors": 0, "skipped": false },
+          { "code": "CL", "ms": 600, "errors": 0, "skipped": false },
+          { "code": "CA", "ms": 700, "errors": 0, "skipped": false }
+        ]
+      },
+      "expected": {
+        "cpm": 500,
+        "acc": 1,
+        "pi": 500,
+        "grade": "S",
+        "completed": true,
+        "baseScore": 347.4,
+        "accFactor": 1,
+        "comboFactor": 1.03,
+        "timeBonus": 37.285714285714285,
+        "finalScore": 395
+      },
+      "calculation": "L=[4,5,6], tier=[1,2,3], w=[1.00,1.15,1.30]. BaseScore=(60+8*4)*1.00+(60+8*5)*1.15+(60+8*6)*1.30 = 92*1.00+100*1.15+108*1.30 = 92+115+140.4 = 347.4. correctKeystrokes=totalKeystrokes=sum(L)=15(무오타) -> ACC=1, AccFactor=1. maxCombo=3(3국가 전부 무오타 클리어) -> ComboFactor=1+0.01*3=1.03. CPM=floor(15*60000/1800)=floor(500.0)=500. PI=floor(500*1)=500>=450 -> S. completed: perCountry.length(3)===countries.length(3) -> true. T_par=sum(L)/3.5=15/3.5=4.285714285714286s. elapsedSec=1.8s. TimeBonus=max(0,4.285714285714286-1.8)*15=2.485714285714286*15=37.285714285714285. FinalScore=round(347.4*1*1.03+37.285714285714285)=round(357.822+37.285714285714285)=round(395.10771428571429)=395."
+    },
+    {
+      "id": "b-acc90-percent",
+      "description": "(b) ACC 90% 케이스 — AccFactor=0.81 확인",
+      "lang": "en",
+      "countries": [
+        { "nameKo": "", "nameEn": "portugal", "difficultyTier": 2 },
+        { "nameKo": "", "nameEn": "kazakhstan", "difficultyTier": 4 }
+      ],
+      "stats": {
+        "totalKeystrokes": 20,
+        "correctKeystrokes": 18,
+        "elapsedMs": 3000,
+        "maxCombo": 1,
+        "countriesCleared": 2,
+        "countriesSkipped": 0,
+        "perCountry": [
+          { "code": "PT", "ms": 1400, "errors": 2, "skipped": false },
+          { "code": "KZ", "ms": 1600, "errors": 0, "skipped": false }
+        ]
+      },
+      "expected": {
+        "cpm": 360,
+        "acc": 0.9,
+        "pi": 291,
+        "grade": "B",
+        "completed": true,
+        "baseScore": 345.6,
+        "accFactor": 0.81,
+        "comboFactor": 1.01,
+        "timeBonus": 32.142857142857146,
+        "finalScore": 315
+      },
+      "calculation": "L=[8,10], tier=[2,4], w=[1.15,1.45]. BaseScore=(60+8*8)*1.15+(60+8*10)*1.45 = 124*1.15+140*1.45 = 142.6+203.0 = 345.6. correctKeystrokes=8+10=18(두 국가 모두 최종 클리어, 오타 2회는 포르투갈 입력 중 정정). totalKeystrokes=20(오타 2 포함) -> ACC=18/20=0.9, AccFactor=0.81. 포르투갈 구간에서 오타가 나 콤보가 그 시점 0으로 리셋, 카자흐스탄은 무오타 클리어 -> maxCombo=1 -> ComboFactor=1.01. CPM=floor(18*60000/3000)=floor(360.0)=360. PI=floor(360*0.81)=floor(291.6)=291 -> 230<=291<340 -> B. completed: 2===2 -> true. T_par=(8+10)/3.5=18/3.5=5.142857142857143s. elapsedSec=3.0s. TimeBonus=max(0,5.142857142857143-3.0)*15=2.142857142857143*15=32.142857142857146. FinalScore=round(345.6*0.81*1.01+32.142857142857146)=round(279.936*1.01+32.142857142857146)=round(282.73536+32.142857142857146)=round(314.87821714285714)=315."
+    },
+    {
+      "id": "c-incomplete-time-bonus-zero-cap-B",
+      "description": "(c) 미완주(라이프 소진 조기 종료) — TimeBonus 0 지급 + PI 750(S급)이라도 상한 B로 강등",
+      "lang": "en",
+      "countries": [
+        { "nameKo": "", "nameEn": "chile", "difficultyTier": 1 },
+        { "nameKo": "", "nameEn": "kenya", "difficultyTier": 1 },
+        { "nameKo": "", "nameEn": "nepal", "difficultyTier": 1 }
+      ],
+      "stats": {
+        "totalKeystrokes": 10,
+        "correctKeystrokes": 10,
+        "elapsedMs": 800,
+        "maxCombo": 2,
+        "countriesCleared": 2,
+        "countriesSkipped": 0,
+        "perCountry": [
+          { "code": "CL", "ms": 400, "errors": 0, "skipped": false },
+          { "code": "KE", "ms": 400, "errors": 0, "skipped": false }
+        ]
+      },
+      "expected": {
+        "cpm": 750,
+        "acc": 1,
+        "pi": 750,
+        "grade": "B",
+        "completed": false,
+        "baseScore": 200,
+        "accFactor": 1,
+        "comboFactor": 1.02,
+        "timeBonus": 0,
+        "finalScore": 204
+      },
+      "calculation": "런에 배정된 국가는 3개(칠레·케냐·네팔)이지만 perCountry에는 2개(칠레·케냐)만 기록 — 네팔 진입 전 게임오버로 조기 종료. completed: perCountry.length(2) !== countries.length(3) -> false. L=[5,5](칠레·케냐), tier=1 각각. BaseScore=(60+8*5)*1.00*2 = 100*2 = 200. correctKeystrokes=totalKeystrokes=10(무오타) -> ACC=1, AccFactor=1. maxCombo=2 -> ComboFactor=1.02. CPM=floor(10*60000/800)=floor(750.0)=750. PI=floor(750*1)=750 -> PI 컷만 보면 S(>=450)이지만 completed=false이므로 computeGrade가 B로 강등(docs/01 §6.3 '미완주 시 최대 B'). completed=false -> TimeBonus=0(완주 시에만 지급, §6.2). FinalScore=round(200*1*1.02+0)=round(204)=204."
+    },
+    {
+      "id": "d-skip-penalty",
+      "description": "(d) 스킵 포함 — 스킵 국가의 필요 타수가 오타로 totalKeystrokes에 가산되고 BaseScore에서는 제외됨을 확인",
+      "lang": "en",
+      "countries": [
+        { "nameKo": "", "nameEn": "monaco", "difficultyTier": 1 },
+        { "nameKo": "", "nameEn": "australia", "difficultyTier": 2 }
+      ],
+      "stats": {
+        "totalKeystrokes": 15,
+        "correctKeystrokes": 6,
+        "elapsedMs": 2000,
+        "maxCombo": 1,
+        "countriesCleared": 1,
+        "countriesSkipped": 1,
+        "perCountry": [
+          { "code": "MC", "ms": 2000, "errors": 0, "skipped": false },
+          { "code": "AU", "ms": 0, "errors": 0, "skipped": true }
+        ]
+      },
+      "expected": {
+        "cpm": 180,
+        "acc": 0.4,
+        "pi": 28,
+        "grade": "D",
+        "completed": true,
+        "baseScore": 108,
+        "accFactor": 0.16,
+        "comboFactor": 1.01,
+        "timeBonus": 34.28571428571429,
+        "finalScore": 52
+      },
+      "calculation": "모나코(L=6,T1) 클리어 후 호주(L=9,T2) 스킵. correctKeystrokes=6(모나코만, 스킵 국가는 정타 0). totalKeystrokes=6(모나코 정타)+9(호주 스킵분, docs/01 §6.1 '스킵한 국가는 keystrokes 전량을 totalKeystrokes에 오타로 가산') = 15. ACC=6/15=0.4, AccFactor=0.16. 모나코 클리어로 콤보 1 도달, 호주 스킵으로 콤보 리셋 -> maxCombo=1 -> ComboFactor=1.01. BaseScore: 스킵한 호주는 제외, 모나코만 (60+8*6)*1.00=108. completed: perCountry.length(2)===countries.length(2) -> true(스킵을 포함해 배정된 전 국가를 끝까지 진행 — docs/01 §3.1 '완주(스킵 n)'). CPM=floor(6*60000/2000)=floor(180.0)=180. PI=floor(180*0.16)=floor(28.8)=28 -> D(<120). T_par=(6+9)/3.5=15/3.5=4.285714285714286s(스킵 국가도 '전체'에는 포함). elapsedSec=2.0s. TimeBonus=max(0,4.285714285714286-2.0)*15=2.285714285714286*15=34.28571428571429. FinalScore=round(108*0.16*1.01+34.28571428571429)=round(17.28*1.01+34.28571428571429)=round(17.4528+34.28571428571429)=round(51.73851428571429)=52."
+    },
+    {
+      "id": "e-grade-boundary",
+      "description": "(e) 등급 경계값 — PI 449→A, PI 450→S. 두 케이스 모두 L=15(1개국, 완주)에 ACC=1.0으로 고정하고 elapsedMs만 바꿔 CPM(=PI)을 정확히 449/450에 맞춘다.",
+      "cases": [
+        {
+          "id": "e1-pi449-A",
+          "lang": "en",
+          "countries": [{ "nameKo": "", "nameEn": "abcdefghijklmno", "difficultyTier": 1 }],
+          "stats": {
+            "totalKeystrokes": 15,
+            "correctKeystrokes": 15,
+            "elapsedMs": 2004,
+            "maxCombo": 1,
+            "countriesCleared": 1,
+            "countriesSkipped": 0,
+            "perCountry": [{ "code": "ZZ", "ms": 2004, "errors": 0, "skipped": false }]
+          },
+          "expected": {
+            "cpm": 449,
+            "acc": 1,
+            "pi": 449,
+            "grade": "A",
+            "completed": true,
+            "baseScore": 180,
+            "accFactor": 1,
+            "comboFactor": 1.01,
+            "timeBonus": 34.22571428571429,
+            "finalScore": 216
+          },
+          "calculation": "L=15(합성 15자 알파벳 문자열, normalizeEn 통과 후 그대로 15문자), tier=1, w=1.00. BaseScore=(60+8*15)*1.00=180. correctKeystrokes=totalKeystrokes=15(무오타) -> ACC=1, AccFactor=1. maxCombo=1 -> ComboFactor=1.01. CPM=floor(15*60000/2004)=floor(900000/2004)=floor(449.10179640...)=449. PI=floor(449*1)=449 -> 340<=449<450 -> A(경계 확인: 449는 S 미달). completed=true. T_par=15/3.5=4.285714285714286s. elapsedSec=2.004s. TimeBonus=max(0,4.285714285714286-2.004)*15=2.281714285714286*15=34.22571428571429. FinalScore=round(180*1*1.01+34.22571428571429)=round(181.8+34.22571428571429)=round(216.02571428571429)=216."
+        },
+        {
+          "id": "e2-pi450-S",
+          "lang": "en",
+          "countries": [{ "nameKo": "", "nameEn": "abcdefghijklmno", "difficultyTier": 1 }],
+          "stats": {
+            "totalKeystrokes": 15,
+            "correctKeystrokes": 15,
+            "elapsedMs": 2000,
+            "maxCombo": 1,
+            "countriesCleared": 1,
+            "countriesSkipped": 0,
+            "perCountry": [{ "code": "ZZ", "ms": 2000, "errors": 0, "skipped": false }]
+          },
+          "expected": {
+            "cpm": 450,
+            "acc": 1,
+            "pi": 450,
+            "grade": "S",
+            "completed": true,
+            "baseScore": 180,
+            "accFactor": 1,
+            "comboFactor": 1.01,
+            "timeBonus": 34.28571428571429,
+            "finalScore": 216
+          },
+          "calculation": "e1과 동일 국가/타수, elapsedMs만 2000으로 단축. CPM=floor(15*60000/2000)=floor(900000/2000)=floor(450.0)=450(정수 나눗셈, 경계 정확히 일치). PI=floor(450*1)=450 -> >=450 -> S(경계 확인: 450은 S 충족). T_par=4.285714285714286s. elapsedSec=2.0s. TimeBonus=max(0,4.285714285714286-2.0)*15=2.285714285714286*15=34.28571428571429. FinalScore=round(180*1.01+34.28571428571429)=round(181.8+34.28571428571429)=round(216.08571428571429)=216(e1과 최종 점수가 우연히 같은 216으로 반올림되나 PI/등급은 449/A vs 450/S로 정확히 갈린다)."
+        }
+      ]
+    }
+  ]
+}

@@ -196,6 +196,9 @@ importers:
       '@wt/data':
         specifier: workspace:*
         version: link:../../packages/data
+      '@wt/moderation':
+        specifier: workspace:*
+        version: link:../../packages/moderation
       '@wt/shared':
         specifier: workspace:*
         version: link:../../packages/shared

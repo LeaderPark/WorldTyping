@@ -17,6 +17,7 @@
     "hono": "^4.6.11",
     "@wt/shared": "workspace:*",
     "@wt/data": "workspace:*",
+    "@wt/moderation": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

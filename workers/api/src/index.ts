@@ -11,7 +11,12 @@ import { config } from "./routes/config";
 import { data } from "./routes/data";
 import { runs } from "./routes/runs";
 import { lb } from "./routes/lb";
+import { daily } from "./routes/daily";
+import { nickname } from "./routes/nickname";
+import { report } from "./routes/report";
 import { runLbRefresher } from "./cron/lb-refresher";
+import { ensureDailySeed } from "./cron/daily-seed";
+import { handleQueueBatch } from "./queue/consumer";
 import { securityHeaders } from "./mw/security-headers";
 import { corsMiddleware } from "./mw/cors";
 import { apiErrorHandler } from "./lib/api-error";
@@ -37,6 +42,9 @@ app.route("/api/v1", config); // WT-M3-02: GET /config
 app.route("/api/v1", data); // WT-M3-02: GET /data/countries (KV 핫스왑 서빙)
 app.route("/api/v1", runs); // WT-M3-03: POST /runs/start, POST /runs/submit
 app.route("/api/v1", lb); // WT-M3-04: GET /lb, GET /lb/me
+app.route("/api/v1", daily); // WT-M3-05: GET /daily/today, GET /daily/me
+app.route("/api/v1", nickname); // WT-M3-05: POST /nickname/check, PUT /nickname
+app.route("/api/v1", report); // WT-M3-05: POST /report
 
 // /api/v1/* 중 위에서 매칭되지 않은 경로 → docs/04 §2.1 ApiError 포맷 404
 // (health를 포함해 이후 마일스톤에서 추가되는 모든 /api/v1/* 라우트는 이 줄보다 위에 등록한다).
@@ -59,18 +67,23 @@ app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default {
   fetch: app.fetch,
-  // Queue consumer(EVENTS: AE 적재/신고/고스트 저장, §11-D16) — 본문은 해당 마일스톤에서 채운다.
-  async queue(_batch: Queue<unknown>, _env: Env): Promise<void> {
-    throw new Error("queue consumer not implemented yet (see relevant milestone task)");
+  // Queue consumer(EVENTS: AE 적재/신고/고스트 저장, §11-D16). v1은 report만 처리(WT-M3-05) —
+  // 본문은 queue/consumer.ts, AE 적재·고스트 저장은 후속 마일스톤에서 같은 컨슈머에 타입만 추가.
+  async queue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
+    await handleQueueBatch(batch, env);
   },
   // Cron dispatcher. event.cron으로 잡을 라우팅한다(wrangler.toml [triggers].crons).
-  //   "*/1 * * * *"  → lb-refresher(WT-M3-04, 이 태스크에서 구현)
-  //   "0 15 * * *"   → daily+티어 시드 발행(WT-M3-05 소관 — 아직 미구현, no-op)
+  //   "0 15 * * *"   → 데일리 시드 발행(WT-M3-05, 이 태스크에서 구현. 티어 시드는 /runs/start가
+  //                     요청 시점에 파생하므로 별도 cron 불필요 — set-builder.ts tierSeedHex 참조)
+  //   "*/1 * * * *"  → lb-refresher(WT-M3-04)
   //   "30 16 * * *"  → 보존 정리 + kpi_daily 스냅샷(후속 마일스톤 — no-op)
   // 미구현 잡을 throw로 두면 그 크론이 매분/매일 에러 로그를 남기므로, 알 수 없는 cron은
   // 조용히 무시한다(구현되는 시점에 case를 추가).
   async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
     switch (event.cron) {
+      case "0 15 * * *":
+        await ensureDailySeed(env, event.scheduledTime);
+        return;
       case "*/1 * * * *":
         // scheduled 핸들러는 반환 Promise가 곧 잡 수명 — await로 완주를 보장한다(waitUntil은
         // fetch용이고, --test-scheduled에선 invocation이 먼저 끝나 취소될 수 있다).

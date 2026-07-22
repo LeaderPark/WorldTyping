@@ -84,15 +84,14 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm --filter @wt/e2e exec playwright install --with-deps chromium
 
-      # e2e/playwright.config.ts의 webServer는 wrangler dev(--local)를 그대로 띄울 뿐 스키마를
-      # 만들지 않는다 — 신선한 CI 러너에는 .wrangler/state가 없어 이 스텝 없이는 세션/제출 경로가
-      # 전부 "no such table" 500으로 죽는다(WT-M3-07에서 실측 확인). 로컬 개발자는 이 커맨드를
-      # workers/api 디렉터리에서 최초 1회 수동 실행해 두면 이후 .wrangler/state에 영속된다
-      # (docs/00 §7.1 배포 순서 불변식과 동형 — migrations apply가 항상 기동보다 먼저).
-      - name: D1 migrations apply (local, for e2e webServer)
-        working-directory: workers/api
-        run: npx wrangler d1 migrations apply wt-main-dev --local
-
+      # [WT-M3-08 — E2E 밀폐화] e2e/playwright.config.ts의 webServer가 이제
+      # `pnpm --filter @wt/api run e2e:dev`(workers/api/scripts/e2e-dev-server.mjs)를 실행한다 —
+      # 이 스크립트 자체가 매 실행마다 전용 persist 디렉터리(.wrangler/e2e-state)를 삭제→재생성
+      # →마이그레이션 재적용→wrangler dev 기동까지 전담한다. 신선한 CI 러너든 반복 실행이든
+      # 항상 깨끗한 상태에서 시작하므로, 이 워크플로에서 별도로 마이그레이션을 선적용할 필요가
+      # 없다(예전엔 여기서 기본 .wrangler/state에 1회 적용했으나, 그 상태가 실행 간 누적되며
+      # 세션 부트스트랩 IP 어뷰즈 카운터가 쌓여 반복 실행에서 blk:ip 24h 차단이 발생했다 — 그
+      # 결함의 근본 수정이 이 스텝 제거다).
       - name: E2E (Chromium E1~E4 + cheat-suite)
         run: pnpm e2e
 

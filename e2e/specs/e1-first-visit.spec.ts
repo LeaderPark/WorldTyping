@@ -6,6 +6,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { typeHangul } from '../helpers/ime';
 import { awaitPrompt } from '../helpers/game';
+import { reserveSessionSlot } from '../helpers/session-budget';
 
 // docs/02 routes.ts ROUTE_SOUTH_AMERICA(12개국, 시작점 CO) — countries.json의 nameKo(§11-D22 canonical).
 const SOUTH_AMERICA_KO = [
@@ -14,6 +15,9 @@ const SOUTH_AMERICA_KO = [
 ];
 
 async function landingToSouthAmerica(page: Page): Promise<void> {
+  // WT-M3-08 후속: 이 페이지 로드가 bootLoader의 자동 POST /session을 유발한다 — 스위트 전체의
+  // 세션 부트스트랩 총량이 서버 레이트리밋을 넘지 않도록 자기 페이싱한다(session-budget.ts).
+  await reserveSessionSlot();
   await page.goto('/');
   // S2 언어 게이트(첫 방문, localStorage 'wt:lang' 부재) → 한국어 선택.
   await expect(page.getByTestId('language-gate')).toBeVisible();

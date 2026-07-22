@@ -21,9 +21,14 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { COUNTRIES } from '@wt/data';
 import { computeScore, requiredKeystrokes, type ScoreCountry, type RunStats } from '@wt/shared';
+import { reserveSessionSlot } from './session-budget';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WORKERS_API_DIR = path.resolve(HERE, '../../workers/api');
+// WT-M3-08: webServer(workers/api/scripts/e2e-dev-server.mjs)가 기동한 wrangler dev와 동일한
+// 전용 persist 디렉터리를 가리켜야 한다 — 그렇지 않으면 이 조회가 개발자의 기본 .wrangler/state
+// (분리 유지 대상, 밀폐화 스크립트가 건드리지 않음)를 보게 되어 항상 빈 결과가 나온다.
+const E2E_PERSIST_DIR = path.join(WORKERS_API_DIR, '.wrangler', 'e2e-state');
 
 const COUNTRY_BY_ID = new Map(COUNTRIES.map((c) => [c.id, c]));
 
@@ -40,6 +45,9 @@ export interface ForgedSession {
 
 /** 매 시나리오 독립 계정(신규 deviceId) — 섀도우밴 등 계정 상태 오염이 시나리오 간 번지지 않게 한다. */
 export async function bootstrapSession(request: APIRequestContext): Promise<ForgedSession> {
+  // WT-M3-08 후속: 스위트 전체의 세션 부트스트랩 총량이 서버 레이트리밋(session: 10회/60초/IP)을
+  // 넘지 않도록 자기 페이싱한다(session-budget.ts 주석 참조).
+  await reserveSessionSlot();
   const res = await request.post('/api/v1/session', { data: { deviceId: randomUUID() } });
   if (!res.ok()) {
     throw new Error(`bootstrapSession 실패: ${res.status()} ${await res.text()}`);
@@ -271,7 +279,7 @@ export function queryRunRow(runId: string): RunRow | undefined {
   const sql = `SELECT verdict, verdict_reason FROM runs WHERE run_id='${runId}'`;
   const out = execFileSync(
     process.execPath,
-    [bin, 'd1', 'execute', 'wt-main-dev', '--local', '--json', '--command', sql],
+    [bin, 'd1', 'execute', 'wt-main-dev', '--local', '--persist-to', E2E_PERSIST_DIR, '--json', '--command', sql],
     { cwd: WORKERS_API_DIR, encoding: 'utf-8' },
   );
   const parsed = JSON.parse(out) as Array<{ results: RunRow[] }>;
@@ -285,7 +293,7 @@ export function queryUserStatus(playerId: string): string | undefined {
   const sql = `SELECT status FROM users WHERE user_id='${playerId}'`;
   const out = execFileSync(
     process.execPath,
-    [bin, 'd1', 'execute', 'wt-main-dev', '--local', '--json', '--command', sql],
+    [bin, 'd1', 'execute', 'wt-main-dev', '--local', '--persist-to', E2E_PERSIST_DIR, '--json', '--command', sql],
     { cwd: WORKERS_API_DIR, encoding: 'utf-8' },
   );
   const parsed = JSON.parse(out) as Array<{ results: Array<{ status: string }> }>;

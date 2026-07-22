@@ -22,9 +22,24 @@
 // PW_DEV=1 로 vite dev 서버 경로를 강제할 수 있다(진단용 — 이 경로는 /api를 vite proxy로
 // wrangler dev(8787)에 넘기므로, 별도로 `pnpm --filter @wt/api run dev`가 떠 있어야 한다).
 //
-// D1 로컬 스키마 전제: `wrangler d1 migrations apply wt-main-dev --local`(workers/api 디렉터리
-// 기준)이 이 webServer 기동 전에 최소 1회 실행돼 있어야 한다(§11-D 배포 순서 불변식과 동형 —
-// migrations apply → 기동). CI/최초 실행 시 수동 1회, 이후는 .wrangler/state에 영속.
+// [WT-M3-08 — E2E 밀폐화] 반복 실행 시 wrangler dev의 로컬 영속 상태(.wrangler/state의 KV/D1)에
+// 이전 실행 잔재(세션 부트스트랩 IP 어뷰즈 카운터, 섀도우밴, 레이트리밋 키, lb 데이터)가 누적돼
+// 두 번째 이후 실행에서 blk:ip 24h 차단으로 E1/E4/치트⑥⑦이 전멸하는 결함이 실측됐다. 그래서
+// PROD_COMMAND는 개발자의 수동 `wrangler dev`(기본 .wrangler/state)와 완전히 분리된 전용 persist
+// 디렉터리(workers/api/.wrangler/e2e-state)를 매 실행 삭제→재생성→마이그레이션 재적용한 뒤 그
+// 디렉터리로 wrangler dev를 기동한다(workers/api/scripts/e2e-dev-server.mjs, "e2e:dev" 스크립트
+// — §11-D 배포 순서 불변식 "migrations apply → 기동"과 동형). 이 script 자체가 매 실행 밀폐화를
+// 보장하므로 별도의 사전 migrations apply 수동 스텝이 필요 없다(ci.yml도 동일하게 이 스텝을 뺐다).
+//
+// [후속 수정 — reuseExistingServer는 항상 false] 원래 `!process.env.CI`였던 탓에 로컬(비-CI)
+// 실행에서는 true였다. 이 밀폐화 토폴로지의 존재 이유가 "매 pnpm e2e 실행마다 항상 새로
+// 리셋된 서버"인데, 직전 실행의 wrangler dev 프로세스 트리가 (특히 Windows에서 workerd 자식
+// 프로세스까지) 완전히 종료되지 않고 8787을 붙든 채 남아 있으면 true 설정이 그 잔여 프로세스를
+// "이미 뜬 서버"로 오인해 재사용해버려 e2e:dev의 리셋 자체를 건너뛰는 경로가 있었다(리드 감사에서
+// 즉시 2연속 실행 중 1회 e4가 boarding-card 잠금 상태로 타임아웃한 사례의 근본 원인). 이제
+// e2e-dev-server.mjs가 기동 전 8787 점유 프로세스를 자체적으로 정리하므로 이중 방어가 되지만,
+// Playwright 레벨에서도 재사용 자체를 원천 차단해 "항상 이 스크립트가 새로 만든 서버로만 테스트"
+// 라는 불변식을 명시적으로 강제한다.
 import { defineConfig, devices } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,8 +53,9 @@ const REPO_ROOT = path.resolve(HERE, '..');
 const IME_SPECS = ['**/e1-first-visit.spec.ts', '**/e3-miss-skip.spec.ts'];
 
 // 통합 토폴로지: 매 실행 최신 코드로 SPA를 빌드한 뒤 wrangler dev(단일 오리진, 기본 8787)로
-// 서빙한다. dev(진단용): vite dev(/api는 vite.config.ts 프록시로 8787에 전달).
-const PROD_COMMAND = 'pnpm --filter @wt/web build && pnpm --filter @wt/api run dev';
+// 서빙한다. "e2e:dev"(위 밀폐화 스크립트)가 dev 서버를 기동한다 — 개발자의 평소 "dev" 스크립트와는
+// 다른 명령이다. dev(진단용): vite dev(/api는 vite.config.ts 프록시로 8787에 전달, 밀폐화 없음).
+const PROD_COMMAND = 'pnpm --filter @wt/web build && pnpm --filter @wt/api run e2e:dev';
 const DEV_COMMAND = 'pnpm --filter @wt/web run dev -- --port 5173 --strictPort';
 
 export default defineConfig({
@@ -79,7 +95,8 @@ export default defineConfig({
     command: USE_DEV ? DEV_COMMAND : PROD_COMMAND,
     cwd: REPO_ROOT,
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // 항상 false — 위 "후속 수정" 주석 참조(로컬 재사용이 밀폐화 리셋을 건너뛰게 하는 경로였다).
+    reuseExistingServer: false,
     timeout: 180_000,
     stdout: 'ignore',
     stderr: 'pipe',

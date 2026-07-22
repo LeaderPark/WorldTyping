@@ -6,6 +6,7 @@
 // 여기로 바로 들어간다(locale ko-KR로 settings.lang=ko 확정 — playwright.config use.locale).
 
 import { expect, type CDPSession, type Locator, type Page } from '@playwright/test';
+import { reserveSessionSlot } from './session-budget';
 
 export interface GameHandles {
   cdp: CDPSession;
@@ -14,6 +15,10 @@ export interface GameHandles {
 
 /** 게임 URL로 직접 진입해 보딩패스(phase idle)까지 대기. */
 export async function gotoBoarding(page: Page, mode: string, trackId: string): Promise<void> {
+  // WT-M3-08 후속: 이 페이지 로드가 bootLoader의 자동 POST /session을 유발한다(net/api-client.ts).
+  // 스위트 전체의 세션 부트스트랩 총량이 서버 레이트리밋(session: 10회/60초/IP)을 넘지 않도록
+  // 자기 페이싱한다(session-budget.ts 주석 참조 — 이게 E4 잔여 실패의 실제 근본 원인이었다).
+  await reserveSessionSlot();
   await page.goto(`/play/${mode}/${trackId}`);
   await expect(page.getByTestId('boarding-pass')).toBeVisible();
 }

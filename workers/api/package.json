@@ -10,6 +10,7 @@
     "test:workers": "vitest run -c vitest.workers.config.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "dev": "wrangler dev",
+    "e2e:dev": "node ./scripts/e2e-dev-server.mjs",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:prod": "wrangler deploy --env prod"
   },

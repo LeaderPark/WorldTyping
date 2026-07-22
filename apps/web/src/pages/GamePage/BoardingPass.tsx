@@ -24,6 +24,12 @@ export interface BoardingPassProps {
   /** 티어/데일리가 서버 세트(POST /runs/start) 응답을 기다리는 동안 CTA를 잠근다(WT-M3-06
    *  구현 세부 지시 1 — 서버 세트 없이는 시작 불가). 보통 수십ms 내 해제된다. */
   locked?: boolean;
+  /** 고스트 모드 언락 여부(§9.3 "아무 노선 완주 1회", WT-M5-04) — false/undefined면 토글 자체를
+   *  숨긴다(콘텐츠는 안 잠그지만 이 옵션은 도전과제성 코스메틱 성격, §9.3 "잠그는 것은 코스메틱과
+   *  도전과제성 옵션뿐"). onToggleGhost가 없으면(예: 데일리) 마찬가지로 숨긴다. */
+  ghostUnlocked?: boolean;
+  ghostEnabled?: boolean;
+  onToggleGhost?(v: boolean): void;
 }
 
 /** GDD §10.2 "카드가 개찰기 통과 애니메이션(200ms)" — 이 시간만큼 start()를 지연시켜 펀칭
@@ -41,6 +47,9 @@ export function BoardingPass({
   start,
   focusInput,
   locked = false,
+  ghostUnlocked = false,
+  ghostEnabled = false,
+  onToggleGhost,
 }: BoardingPassProps) {
   const { t } = useTranslation();
   const [punching, setPunching] = useState(false);
@@ -125,6 +134,18 @@ export function BoardingPass({
         </p>
         <p className="wt-boarding__cta">{locked ? t('boarding.connecting') : t('boarding.cta')}</p>
       </div>
+
+      {/* 카드 클릭(depart) 영역 밖에 둔다 — 토글 클릭이 출국 탭으로 오인되지 않게(§9.3). */}
+      {ghostUnlocked && onToggleGhost && (
+        <label className="wt-boarding__ghost-toggle" data-testid="ghost-mode-toggle">
+          <input
+            type="checkbox"
+            checked={ghostEnabled}
+            onChange={(e) => onToggleGhost(e.target.checked)}
+          />
+          {t('boarding.ghostMode')}
+        </label>
+      )}
     </div>
   );
 }

@@ -75,6 +75,13 @@
   "result.nickname.error": "That nickname isn't available",
   "result.newUnlock.toast": "{count} new achievement(s)/cover(s) unlocked!",
   "result.firstPassport": "Your passport has been issued",
+  "result.share.text": "{route} · Grade {grade} · {score}pts — Try WORLD TYPING!",
+  "result.share.copied": "Image copied to clipboard and downloaded",
+  "result.share.error": "Capture failed. Please try again.",
+  "result.share.x": "X",
+  "result.share.threads": "Threads",
+  "result.share.dailyCopy": "Copy share text",
+  "result.share.dailyCopied": "Copied!",
 
   "multi.room.create": "Create room",
   "multi.room.join": "Join by code",
@@ -236,6 +243,7 @@
   "boarding.longModeWarning.dismiss": "Got it",
   "boarding.blocked.title": "Online connection required",
   "boarding.blocked.body": "Tier / Daily can only start while connected to the server. Check your network and reopen this mode.",
+  "boarding.ghostMode": "Ghost mode (race your own best run)",
 
   "home.daily.badge": "Daily D{n}",
   "home.daily.title": "Daily Challenge",

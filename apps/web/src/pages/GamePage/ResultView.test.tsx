@@ -95,13 +95,15 @@ interface RenderOpts {
   runToken?: string | null;
   runTokenIssuedAt?: number | null;
   nickname?: string;
+  mode?: 'continent' | 'tier' | 'worldtour' | 'daily';
 }
 
 function renderResult(engine: GameSessionEngine, result: EngineRunResult, opts: RenderOpts = {}) {
   const retry = opts.retry ?? vi.fn();
+  const mode = opts.mode ?? 'worldtour';
   return render(
     <AppProviders>
-      <MemoryRouter initialEntries={['/play/worldtour/world']}>
+      <MemoryRouter initialEntries={[`/play/${mode}/world`]}>
         <Routes>
           <Route path="/" element={<div data-testid="home-stub" />} />
           <Route path="/play/:mode" element={<div data-testid="track-select-stub" />} />
@@ -113,7 +115,7 @@ function renderResult(engine: GameSessionEngine, result: EngineRunResult, opts: 
                 result={result}
                 countries={COUNTRIES}
                 lang="ko"
-                mode="worldtour"
+                mode={mode}
                 trackId="world"
                 platform="desktop"
                 finalLives={null}
@@ -136,7 +138,7 @@ afterEach(() => {
 });
 
 describe('ResultView', () => {
-  it('게임오버 라벨·최다 오타·공유 disabled 스텁을 렌더하고 랭킹은 /rank 링크다', () => {
+  it('게임오버 라벨·최다 오타를 렌더하고 랭킹은 /rank 링크, 공유(desktop)는 활성 상태다', () => {
     useSettingsStore.getState().setLang('ko');
     const { engine } = mkEngine(false);
     renderResult(engine, baseResult());
@@ -145,7 +147,8 @@ describe('ResultView', () => {
     expect(card.textContent).toContain('라이프 소진');
     expect(card.textContent).toContain('일본'); // 최다 오타 국가(errors=3 > 0).
     expect(screen.getByTestId('result-ranking')).toHaveAttribute('href', '/rank');
-    expect(screen.getByTestId('result-share')).toBeDisabled();
+    expect(screen.getByTestId('result-share')).not.toBeDisabled();
+    expect(screen.getByTestId('share-card-desktop')).toBeInTheDocument();
     expect(screen.queryByTestId('result-resume')).not.toBeInTheDocument();
   });
 
@@ -254,6 +257,45 @@ describe('ResultView', () => {
       await waitFor(() => expect(enqueuePendingMock).toHaveBeenCalledOnce());
       expect(screen.getByTestId('result-verdict-label').textContent).toBe('온라인 연결 시 자동 제출됩니다');
       warnSpy.mockRestore();
+    });
+  });
+
+  // ── 데일리 공유 텍스트(docs/06 §2.3, WT-M5-04) ─────────────────────────────
+  describe('데일리 공유 텍스트', () => {
+    it('daily 모드 + shareText 응답 시 복사 버튼과 텍스트를 렌더한다', async () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      const shareText = 'WORLD TYPING 데일리 #1\n🟩🟩  2/2 완주\n⚡ 200타 · 🎯 100.0% · PI 200 (S)\n/daily';
+      submitRunMock.mockResolvedValue({
+        verdict: 'valid', score: 500, pi: 400, cpm: 300, accMilli: 950, grade: 'A',
+        completed: true, rank: 5, total: 50, isPersonalBest: true, shareText,
+      });
+
+      renderResult(engine, baseResult(), { runToken: 'tok', runTokenIssuedAt: Date.now(), mode: 'daily' });
+
+      await waitFor(() => expect(screen.getByTestId('daily-share-text')).toBeInTheDocument());
+      expect(screen.getByTestId('daily-share-text').textContent).toContain('WORLD TYPING 데일리 #1');
+
+      const writeTextMock = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: writeTextMock } });
+      fireEvent.click(screen.getByTestId('daily-share-copy'));
+      await waitFor(() => expect(writeTextMock).toHaveBeenCalledWith(shareText));
+      expect(await screen.findByTestId('daily-share-copied')).toBeInTheDocument();
+      vi.unstubAllGlobals();
+    });
+
+    it('daily가 아닌 모드에서는 shareText가 와도 렌더하지 않는다', async () => {
+      useSettingsStore.getState().setLang('ko');
+      const { engine } = mkEngine(false);
+      submitRunMock.mockResolvedValue({
+        verdict: 'valid', score: 500, pi: 400, cpm: 300, accMilli: 950, grade: 'A',
+        completed: true, rank: 5, total: 50, isPersonalBest: true, shareText: 'should-not-render',
+      });
+
+      renderResult(engine, baseResult(), { runToken: 'tok', runTokenIssuedAt: Date.now(), mode: 'worldtour' });
+
+      await waitFor(() => expect(screen.getByTestId('result-rank')).toBeInTheDocument());
+      expect(screen.queryByTestId('daily-share-text')).not.toBeInTheDocument();
     });
   });
 

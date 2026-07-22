@@ -46,6 +46,10 @@ export interface Env {
 
   // 환경 식별 (wrangler.toml [vars] / [env.*.vars])
   ENVIRONMENT: "dev" | "staging" | "prod";
+
+  // 도메인 미확정(§7 gotcha 7 — 코드에 오리진 하드코딩 금지). [vars]에 아직 없으므로 선언만
+  // 해 두고 런타임엔 undefined로 취급(share-text.ts가 상대 경로로 폴백, WT-M5-04).
+  PUBLIC_ORIGIN?: string;
 }
 
 // Cloudflare Rate Limiting binding 타입은 @cloudflare/workers-types 미포함 버전 대비 최소 선언.

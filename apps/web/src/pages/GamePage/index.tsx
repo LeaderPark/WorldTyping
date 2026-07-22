@@ -24,12 +24,14 @@ import { useGameSession } from '../../features/typing/useGameSession';
 import { useTypingEngine } from '../../features/typing/useTypingEngine';
 import { useGameClock } from '../../features/typing/useGameClock';
 import { HiddenTypingInput } from '../../features/typing/HiddenTypingInput';
+import { isGhostUnlocked, loadGhost, useGhostProgress } from '../../features/typing/ghost';
 import { useSoundManager } from '../../audio/useSoundManager';
 import { WorldMap } from '../../features/map/WorldMap';
 import { useWorldGeoIndex } from '../../features/map/useWorldGeoIndex';
 import type { WorldMapHandle } from '../../features/map/map-handle';
 import { useSessionStore } from '../../stores/session';
 import { useSettingsStore } from '../../stores/settings';
+import { useMetaStore } from '../../stores/meta';
 import { SERVER_SET_MODES } from '../../net/run-session';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { BoardingBlocked, BoardingPass } from './BoardingPass';
@@ -50,6 +52,9 @@ export function GamePage() {
   const guestId = useSettingsStore((s) => s.guestId);
   const platform = useSettingsStore((s) => s.platform);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
+  const ghostModeSetting = useSettingsStore((s) => s.ghostMode);
+  const setGhostMode = useSettingsStore((s) => s.setGhostMode);
+  const trackBests = useMetaStore((s) => s.trackBests);
 
   // 라우트 mode가 이 화면이 다루는 4모드(대륙/티어/세계일주/데일리) 밖이면(예: race — 멀티
   // 전용, useMultiplayer 소관) 안전한 기본값으로 폴백해 렌더를 계속한다(RootErrorBoundary로
@@ -58,6 +63,17 @@ export function GamePage() {
   const trackId = params.trackId ?? '';
 
   const { engine, countries, runStart, start, retry, abort } = useGameSession({ mode, trackId });
+
+  // 고스트 모드(§9.3, WT-M5-04): 데일리는 매일 세트가 달라 "노선" 자기 최고 대결의 의미가 없어
+  // 대상에서 뺀다(레이스는 이 화면 대상 밖 — 상단 VALID_MODES 주석). 언락은 trackBests 스냅샷
+  // 하나로 판정(단일 원천, isGhostUnlocked가 순수 함수). loadGhost는 localStorage 동기 읽기라
+  // mode/trackId가 바뀔 때(트랙 전환)만 다시 읽으면 충분하다.
+  const ghostUnlocked = mode !== 'daily' && isGhostUnlocked(trackBests);
+  const ghost = useMemo(
+    () => (ghostUnlocked ? loadGhost(mode, trackId) : null),
+    [ghostUnlocked, mode, trackId],
+  );
+  const ghostIndex = useGhostProgress({ engine, ghost, enabled: ghostModeSetting && ghostUnlocked });
   const { inputRef, focusInput, controller, getInputValue, requestSkip } = useTypingEngine(engine);
   const { bindTimerEl, bindGaugeEl } = useGameClock(engine);
   // 사운드: 엔진(확정/체크포인트/카운트다운)+컨트롤러(정타/오타) 이벤트 구독(§13.1, 구현
@@ -223,6 +239,9 @@ export function GamePage() {
             start={start}
             focusInput={focusInput}
             locked={SERVER_SET_MODES.has(mode) && runStart.status === 'loading'}
+            ghostUnlocked={ghostUnlocked}
+            ghostEnabled={ghostModeSetting}
+            onToggleGhost={setGhostMode}
           />
         )}
         {(phase === 'countdown' || phase === 'playing') && (
@@ -240,6 +259,7 @@ export function GamePage() {
             bindGaugeEl={bindGaugeEl}
             juice={juice}
             requestSkip={requestSkip}
+            ghostIndex={ghostIndex}
           />
         )}
         {phase === 'finished' && result && (

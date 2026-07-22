@@ -17,6 +17,10 @@ const VENDOR_MOTION = /[\\/]node_modules[\\/](framer-motion)[\\/]/;
 // 등)까지 함께 묶어 vendor-react/기본 청크에 흩어지지 않게 한다.
 const VENDOR_GEO =
   /[\\/]node_modules[\\/](d3-geo|d3-array|d3-interpolate|topojson-client|topojson-server)[\\/]/;
+// §8.3/WT-M5-04: "캡처 라이브러리를 entry 청크에 포함 금지" — features/result/capture.ts가
+// html-to-image를 공유 버튼 클릭 시점에만 동적 import하므로 자연히 별도 청크가 생기지만,
+// 결정적 이름을 줘야 size-limit(tooling/ci/size-limit.json)의 제외 글롭이 안정적으로 매치된다.
+const VENDOR_CAPTURE = /[\\/]node_modules[\\/](html-to-image)[\\/]/;
 
 export default defineConfig({
   plugins: [
@@ -109,6 +113,7 @@ export default defineConfig({
           if (VENDOR_REACT.test(id)) return "vendor-react";
           if (VENDOR_MOTION.test(id)) return "vendor-motion";
           if (VENDOR_GEO.test(id)) return "vendor-geo";
+          if (VENDOR_CAPTURE.test(id)) return "share-capture";
           // lazy 라우트(§8.3: game/multi/rank/passport)는 router.tsx의 동적 import 경계가 이미
           // 청크를 분리한다 — 여기서는 그 청크들에 결정적 이름만 부여해 size-limit의 "lazy 청크
           // 제외" 글롭(tooling/ci/size-limit.json)이 안정적으로 매치되게 한다.

@@ -53,6 +53,9 @@ export interface GameViewProps {
   race?: RaceOverlay;
   /** 모바일 우하단 고정 스킵 버튼(§7.2)용 — ESC와 동일 경로(useTypingEngine.requestSkip). */
   requestSkip?(): void;
+  /** 싱글 자기 최고 기록 고스트 마커(§9.3, WT-M5-04) — GamePage의 useGhostProgress가 계산해
+   *  넘긴다. race variant에서는 항상 null/undefined(GamePage가 전달하지 않는다). */
+  ghostIndex?: number | null;
 }
 
 export function GameView({
@@ -70,6 +73,7 @@ export function GameView({
   juice = true,
   race,
   requestSkip,
+  ghostIndex = null,
 }: GameViewProps) {
   const { t } = useTranslation();
   const current = countries[currentIndex];
@@ -177,6 +181,7 @@ export function GameView({
         currentIndex={currentIndex}
         nextCountryName={nextName}
         ackIndex={race?.ackIndex ?? null}
+        ghostIndex={race ? null : ghostIndex}
       />
 
       {/* 온보딩 팁은 싱글 전용(§11.1) — 레이스 중 표시하면 상대와의 실시간 대결에 방해된다. */}

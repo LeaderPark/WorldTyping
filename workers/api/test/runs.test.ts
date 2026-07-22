@@ -24,6 +24,7 @@ interface SubmitRes {
   cpm: number;
   completed: boolean;
   rank: number | null;
+  shareText: string | null;
 }
 interface PerCountry {
   code: string;
@@ -150,6 +151,7 @@ describe("POST /runs/submit — 정상 경로", () => {
     expect(body.verdict).toBe("valid");
     expect(body.cpm).toBe(750);
     expect(body.score).toBe(built.clientScore);
+    expect(body.shareText).toBeNull(); // daily 전용 필드(WT-M5-04) — worldtour는 항상 null.
 
     const row = await env.DB.prepare("SELECT * FROM runs WHERE run_id = ?1").bind(started.runId).first<RunRow>();
     expect(row).not.toBeNull();
@@ -318,6 +320,13 @@ describe("POST /runs/submit — 데일리 1일 1회 + 스트릭", () => {
       inputDigest: HUMAN_DIGEST,
     })).json()) as SubmitRes;
     expect(r1.verdict).toBe("valid");
+    // §2.3 shareText: daily 모드에서만 채워지고(WT-M5-04), en 로케일 라벨·10칸 그리드(2완주+8미도달)·
+    // "/daily" 폴백 링크(PUBLIC_ORIGIN 미설정)를 담는다.
+    expect(r1.shareText).not.toBeNull();
+    expect(r1.shareText).toContain("WORLD TYPING Daily #");
+    expect(r1.shareText).toContain("🟩🟩🟥🟥🟥🟥🟥🟥🟥🟥  2/10 cleared");
+    expect(r1.shareText).toContain(`⚡ ${r1.cpm}cpm`);
+    expect(r1.shareText!.endsWith("/daily")).toBe(true);
 
     const afterFirst = await env.DB.prepare("SELECT streak_daily, streak_updated FROM users WHERE user_id=?1")
       .bind(pid)
@@ -335,6 +344,10 @@ describe("POST /runs/submit — 데일리 1일 1회 + 스트릭", () => {
       inputDigest: HUMAN_DIGEST,
     })).json()) as SubmitRes;
     expect(r2.verdict).toBe("practice");
+    // 재도전(practice 강등)도 daily 모드라 shareText는 계속 채워진다(§2.3 — "포맷 단일화 목적,
+    // 클라 조작 여지 제거 목적이 아니다": 개인 공유용 텍스트일 뿐 등재 여부와 무관).
+    expect(r2.shareText).not.toBeNull();
+    expect(r2.shareText).toContain("WORLD TYPING Daily #");
 
     const afterSecond = await env.DB.prepare("SELECT streak_daily FROM users WHERE user_id=?1")
       .bind(pid)

@@ -8,7 +8,8 @@
       "!../../apps/web/dist/assets/rank-*.js",
       "!../../apps/web/dist/assets/passport-*.js",
       "!../../apps/web/dist/assets/vendor-geo-*.js",
-      "!../../apps/web/dist/assets/HeroMap-*.js"
+      "!../../apps/web/dist/assets/HeroMap-*.js",
+      "!../../apps/web/dist/assets/share-capture-*.js"
     ],
     "gzip": true,
     "limit": "170 KB"

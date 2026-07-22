@@ -61,6 +61,9 @@ export interface SettingsState {
   nickname: string;
   guestId: string;
   platform: Platform;
+  /** 고스트 모드 토글(§9.3, WT-M5-04) — "아무 노선 완주 1회" 언락 후에만 BoardingPass가 노출.
+   *  언락 여부 자체는 저장하지 않는다(stores/meta.ts trackBests에서 매번 판정, 단일 원천). */
+  ghostMode: boolean;
 
   setLang(l: 'ko' | 'en'): void;
   setTheme(t: Theme): void;
@@ -70,6 +73,7 @@ export interface SettingsState {
   setVolume(v: Partial<VolumeSettings>): void;
   setFontScale(v: FontScale): void;
   setNickname(v: string): void;
+  setGhostMode(v: boolean): void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -85,6 +89,7 @@ export const useSettingsStore = create<SettingsState>()(
       nickname: '',
       guestId: readOrCreateDeviceId(),
       platform: detectPlatform(),
+      ghostMode: false,
 
       setLang: (l) => {
         safeLocalStorage()?.setItem(LANG_GATE_KEY, l);
@@ -100,6 +105,7 @@ export const useSettingsStore = create<SettingsState>()(
       setVolume: (v) => set({ volume: { ...get().volume, ...v } }),
       setFontScale: (v) => set({ fontScale: v }),
       setNickname: (v) => set({ nickname: v }),
+      setGhostMode: (v) => set({ ghostMode: v }),
     }),
     { name: 'wt:settings' },
   ),

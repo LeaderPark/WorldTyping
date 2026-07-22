@@ -14,7 +14,11 @@
 // 계산 점수를 최종 표시로 쓰지 않고 서버 값/순위로 교체, §11-D9). verdict별 라벨: valid/flagged는
 // 순위 표시(shadow — flagged를 구분 표시하지 않는다, docs/06 §3.5), practice="연습 기록",
 // rejected="기록이 검토 중입니다".
-import { useCallback, useEffect, useMemo, useState } from 'react';
+//
+// [WT-M5-04] 공유 이미지(ShareCard/capture.ts)·데일리 공유 텍스트(DailyShareText)·자기 최고
+// 기록 고스트(features/typing/ghost.ts) 배선 추가. shareId(서버 발급 공유 랜딩)는 M6-02
+// 소관이라 ShareCard는 항상 홈 URL 폴백을 쓴다(세션 조정 §3-2).
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
@@ -25,6 +29,8 @@ import { useSettingsStore } from '../../stores/settings';
 import { checkNickname, putNickname } from '../../net/api-client';
 import { useRunSubmit } from '../../net/run-session';
 import { ResultCard } from '../../features/result/ResultCard';
+import { ShareCard } from '../../features/result/ShareCard';
+import { saveGhostIfBest } from '../../features/typing/ghost';
 import { describeRouteLabel } from './route-label';
 
 /** KST 기준 "yyyy-mm-dd"(meta.recordPlay/스트릭 판정용, docs/00 §11 KST 관례). */
@@ -88,6 +94,14 @@ export function ResultView({
   useHotkeys({ r: retry, R: retry });
 
   const routeLabel = describeRouteLabel(mode, trackId, countries.length, t);
+  // ShareCard 캡처 대상(WT-M5-04) — 마운트 수명 내내 동일 노드를 가리킨다(카드 자체는 재조정되지
+  // 않는다, ResultCard가 mode/trackId 등 불변 props만 받는 것과 같은 전제).
+  const cardRef = useRef<HTMLDivElement>(null);
+  const shareTitle = t('result.share.text', {
+    route: routeLabel,
+    grade: result.score.grade,
+    score: result.score.finalScore,
+  });
 
   const mostMistyped = useMemo(() => {
     let best: { name: string; count: number } | null = null;
@@ -124,6 +138,17 @@ export function ResultView({
       score: result.score.finalScore,
       completed: result.outcome === 'completed',
     });
+    // 자기 최고 기록 고스트 저장(§9.3, WT-M5-04) — 데일리는 매일 세트가 달라 "노선" 대결 의미가
+    // 없어 제외(GamePage의 ghostUnlocked 판정과 동일 스코프). 완주 여부와 무관하게 점수가 더
+    // 높으면 갱신한다(saveGhostIfBest 자체 규칙).
+    if (mode !== 'daily') {
+      saveGhostIfBest(
+        mode,
+        trackId,
+        result.score.finalScore,
+        result.stats.perCountry.map((p) => p.ms),
+      );
+    }
     if (mode === 'worldtour') {
       const lastIndex = result.stats.perCountry.length - 1;
       const lastCountry = countries[lastIndex];
@@ -156,22 +181,27 @@ export function ResultView({
         })}
       </p>
 
-      <ResultCard
-        routeLabel={routeLabel}
-        grade={result.score.grade}
-        finalScore={result.score.finalScore}
-        pi={result.score.pi}
-        elapsedMs={result.stats.elapsedMs}
-        cpm={result.score.cpm}
-        accuracy={result.score.acc}
-        maxCombo={result.stats.maxCombo}
-        completed={result.outcome === 'completed'}
-        mostMistyped={mostMistyped}
-        paceMs={paceMs}
-      />
+      {/* cardRef: ShareCard의 캡처 대상(WT-M5-04) — wrapper를 캡처해 카드 배경(테마)까지 그대로
+          담는다(ResultCard 자체는 캡처/공유를 모른다, 그 파일 상단 주석과 동일 경계). */}
+      <div ref={cardRef} className="wt-result-view__card">
+        <ResultCard
+          routeLabel={routeLabel}
+          grade={result.score.grade}
+          finalScore={result.score.finalScore}
+          pi={result.score.pi}
+          elapsedMs={result.stats.elapsedMs}
+          cpm={result.score.cpm}
+          accuracy={result.score.acc}
+          maxCombo={result.stats.maxCombo}
+          completed={result.outcome === 'completed'}
+          mostMistyped={mostMistyped}
+          paceMs={paceMs}
+        />
+      </div>
 
       <SubmissionStatus submission={submission} />
       <UnlockToast newUnlocks={submission.newUnlocks} />
+      {mode === 'daily' && <DailyShareText shareText={submission.shareText} />}
       {!nickname && <NicknameGate />}
 
       <div className="wt-result-view__actions">
@@ -191,10 +221,7 @@ export function ResultView({
         <Link to="/rank" data-testid="result-ranking" className="wt-btn">
           {t('result.action.ranking')}
         </Link>
-        {/* 공유 이미지 캡처는 M5 소관 — 레이아웃만(ResultCard 산출물 주석과 동일 조정). */}
-        <button type="button" data-testid="result-share" className="wt-btn" disabled title="M5">
-          {t('result.action.share')}
-        </button>
+        <ShareCard cardRef={cardRef} platform={platform} shareTitle={shareTitle} />
         <button
           type="button"
           data-testid="result-other-route"
@@ -287,6 +314,46 @@ function UnlockToast({ newUnlocks }: { newUnlocks: string[] }) {
     <p className="wt-result-view__unlock-toast" role="status" data-testid="result-unlock-toast">
       {newUnlocks.includes('ach:first_flight') ? t('result.firstPassport') : t('result.newUnlock.toast', { count: newUnlocks.length })}
     </p>
+  );
+}
+
+/**
+ * 데일리 전용 공유 텍스트 복사 버튼(docs/06 §2.3·§9.3, docs/01 §9.1 이모지 그리드 포맷,
+ * WT-M5-04). 텍스트 자체는 서버가 runs/submit 응답의 shareText로 생성해 내려준다(포맷 단일화
+ * 목적 — 클라는 표시/복사만 담당하고 그리드를 재구성하지 않는다). shareText가 아직 없으면
+ * (submitting/queued, 혹은 daily가 아닌데 실수로 렌더된 경우) 아무것도 그리지 않는다.
+ */
+function DailyShareText({ shareText }: { shareText: string | null }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  if (!shareText) return null;
+
+  const copy = (): void => {
+    void navigator.clipboard
+      .writeText(shareText)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {
+        // 클립보드 미지원/권한 거부 — WaitingRoom copyInvite와 동일하게 조용히 무시(텍스트가
+        // 화면에 그대로 보이므로 사용자가 수동 선택/복사할 수 있다).
+      });
+  };
+
+  return (
+    <div className="wt-result-view__daily-share" data-testid="daily-share-text">
+      <pre>{shareText}</pre>
+      <button type="button" data-testid="daily-share-copy" className="wt-btn" onClick={copy}>
+        {t('result.share.dailyCopy')}
+      </button>
+      {copied && (
+        <span role="status" data-testid="daily-share-copied">
+          {t('result.share.dailyCopied')}
+        </span>
+      )}
+    </div>
   );
 }
 

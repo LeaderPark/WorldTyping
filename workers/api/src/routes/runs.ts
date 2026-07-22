@@ -39,6 +39,8 @@ import {
   type InlineRank,
 } from "../lib/lb";
 import { evaluateRunAchievements } from "../lib/achievements";
+import { ensureDailySeed } from "../cron/daily-seed";
+import { buildDailyShareText } from "../lib/share-text";
 
 /** run 세션 사용 플래그 TTL(docs/06 §3.1 — 2h). */
 const SESS_FLAG_TTL_SEC = 2 * 60 * 60;
@@ -134,6 +136,9 @@ interface RunSubmitRes {
   /** 이번 제출로 새로 획득한 unlock_id 목록(§9.2~9.4 — 결과 화면 토스트용). rejected/practice/
    *  shadowban은 항상 빈 배열(구현 세부 지시, achievements.ts 호출 게이트 참조). */
   newUnlocks: string[];
+  /** 데일리 전용 Wordle식 공유 텍스트(§2.3, WT-M5-04). daily 모드가 아니거나 토큰 자체가
+   *  무효(invalid_token/replay 조기 반환)면 null — 클라는 null이면 공유 텍스트 UI를 숨긴다. */
+  shareText: string | null;
 }
 
 export const runs = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -335,7 +340,27 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
     });
   }
 
-  return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks));
+  // 데일리 공유 텍스트(§2.3, WT-M5-04) — perCountry는 클라 제출값 그대로 쓴다("포맷 단일화
+  // 목적, 클라 조작 여지 제거 목적이 아니다"), 점수/등급만 서버 재계산값(vr.server). dailyNo는
+  // ensureDailySeed가 오늘 행을 그대로 읽어 돌려준다(cron/즉석발행 시점에 이미 존재 — 여기서는
+  // 순수 조회라 추가 INSERT가 없다).
+  let shareText: string | null = null;
+  if (token.mode === "daily") {
+    const dailySeed = await ensureDailySeed(c.env, now);
+    shareText = buildDailyShareText({
+      dailyNo: dailySeed.dailyNo,
+      lang: token.lang,
+      totalCountries: fullSet.length,
+      perCountry: body.result.perCountry,
+      cpm: vr.server.cpm,
+      accMilli: vr.server.accMilli,
+      pi: vr.server.pi,
+      grade: vr.server.grade,
+      publicOrigin: c.env.PUBLIC_ORIGIN,
+    });
+  }
+
+  return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks, shareText));
 });
 
 // ───────────────────────── 응답/SQL 헬퍼 ─────────────────────────
@@ -353,7 +378,13 @@ const ZERO: ServerValues = {
   elapsedMs: 0,
 };
 
-function submitRes(verdict: RunVerdict, s: ServerValues, inline?: InlineRank, newUnlocks: string[] = []): RunSubmitRes {
+function submitRes(
+  verdict: RunVerdict,
+  s: ServerValues,
+  inline?: InlineRank,
+  newUnlocks: string[] = [],
+  shareText: string | null = null,
+): RunSubmitRes {
   return {
     verdict,
     score: s.score,
@@ -366,6 +397,7 @@ function submitRes(verdict: RunVerdict, s: ServerValues, inline?: InlineRank, ne
     total: inline?.total ?? null,
     isPersonalBest: inline ? inline.isPersonalBest : null,
     newUnlocks,
+    shareText,
   };
 }
 

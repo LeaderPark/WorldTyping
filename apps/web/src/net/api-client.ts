@@ -255,6 +255,8 @@ export interface RunSubmitRes {
   isPersonalBest: boolean | null;
   /** 이번 제출로 새로 획득한 unlock_id 목록(§9.2~9.4 — 결과 화면 토스트, WT-M5-03). */
   newUnlocks: string[];
+  /** 데일리 전용 공유 텍스트(§2.3, WT-M5-04) — daily 모드가 아니면 항상 null. */
+  shareText: string | null;
 }
 
 export function submitRun(body: RunSubmitReq): Promise<RunSubmitRes> {

@@ -54,6 +54,13 @@ describe('settings store', () => {
     expect(useSettingsStore.getState().volume).toEqual({ master: 0.8, sfx: 0.3, bgm: 0.5 });
   });
 
+  it('setGhostMode toggles the self-best ghost preference (default off)', async () => {
+    const { useSettingsStore } = await import('./settings');
+    expect(useSettingsStore.getState().ghostMode).toBe(false);
+    useSettingsStore.getState().setGhostMode(true);
+    expect(useSettingsStore.getState().ghostMode).toBe(true);
+  });
+
   it('persists state under the wt:settings key', async () => {
     const { useSettingsStore } = await import('./settings');
     useSettingsStore.getState().setNickname('Traveler');

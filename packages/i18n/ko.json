@@ -75,6 +75,13 @@
   "result.nickname.error": "사용할 수 없는 닉네임이에요",
   "result.newUnlock.toast": "새 업적/커버 {count}개 획득!",
   "result.firstPassport": "여권이 발급되었습니다",
+  "result.share.text": "{route} · {grade}등급 · {score}점 — WORLD TYPING에서 나도 도전!",
+  "result.share.copied": "이미지가 복사/다운로드되었습니다",
+  "result.share.error": "캡처에 실패했어요. 다시 시도해주세요.",
+  "result.share.x": "X",
+  "result.share.threads": "Threads",
+  "result.share.dailyCopy": "공유 텍스트 복사",
+  "result.share.dailyCopied": "복사했어요!",
 
   "multi.room.create": "방 만들기",
   "multi.room.join": "코드로 입장",
@@ -236,6 +243,7 @@
   "boarding.longModeWarning.dismiss": "확인",
   "boarding.blocked.title": "온라인 연결이 필요해요",
   "boarding.blocked.body": "티어/데일리는 서버 연결 상태에서만 시작할 수 있어요. 네트워크를 확인하고 다시 열어 주세요.",
+  "boarding.ghostMode": "고스트 모드(자기 최고 기록과 대결)",
 
   "home.daily.badge": "데일리 D{n}",
   "home.daily.title": "데일리 챌린지",

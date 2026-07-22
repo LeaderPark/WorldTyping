@@ -379,6 +379,15 @@
   font-weight: 700;
   text-align: center;
 }
+.wt-boarding__ghost-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  opacity: 0.85;
+  cursor: pointer;
+}
 
 /* 결과(S7). 카드 슬라이드 인(§13.3-6 "결과 카드 슬라이드 인"). */
 .wt-result-view {
@@ -455,6 +464,33 @@
   background: color-mix(in srgb, var(--grade-b) 85%, black);
   color: #fff;
   border-color: transparent;
+}
+.wt-btn--icon {
+  padding: 0.5rem 0.75rem;
+  font-weight: 700;
+}
+
+/* 결과 공유(WT-M5-04) — 데스크톱 클립보드/다운로드 + X·Threads 인텐트. */
+.wt-share-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.wt-result-view__daily-share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 24rem;
+}
+.wt-result-view__daily-share pre {
+  white-space: pre-wrap;
+  text-align: center;
+  font-family: inherit;
+  font-size: 0.85rem;
+  opacity: 0.9;
 }
 
 /* 포기 확인 모달(브라우저 뒤로가기 차단, §4.4 useBlocker). */
@@ -860,6 +896,13 @@
 /* 진행바 서버 ack 고스트(§6.3 — 반투명 링, 정상 상태에선 현재 점과 겹쳐 보인다). */
 .wt-dot--ack-ghost {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--grade-b) 60%, transparent);
+}
+
+/* 싱글 자기 최고 기록 고스트 마커(§9.3, WT-M5-04) — ack-ghost와 시각적으로 구분되도록 점선
+   테두리로(둘 다 뜰 일은 없다 — race 모드는 ghostIndex를 쓰지 않는다). */
+.wt-dot--self-ghost {
+  outline: 2px dashed color-mix(in srgb, var(--grade-a) 70%, transparent);
+  outline-offset: 2px;
 }
 
 /* 레이스 결과(§10.2 S11 결과, 순위표는 서버 값만 — §6.6). */

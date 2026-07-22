@@ -1,7 +1,9 @@
 // spec: docs/05 §2.3(퀵매치 REST)·§2.4(방 생성/참가)·§4(hello/join/ready/chat)·§6(timesync)·
 //       §7.2(재접속 resume)·§13-F7(DATA_VERSION 리로드), docs/03 §6.1(연결 관리자)·§6.4(latency)·
 //       §6.6(서버 권위), docs/00 §11-D8(REST 퀵매치+/ws/room/:code)·D18(오리진=PUBLIC_ORIGIN,
-//       하드코딩 금지)·D38(user_id=pid), WT-M4-03
+//       하드코딩 금지)·D38(user_id=pid), WT-M4-03, WT-M4-04(로비/대기실/레이스 UI 배선 — identity
+//       자동 join·chat/rematch-state/bot-offer/room-closed/race-finished 스토어 반영·latency 배선·
+//       attachRace의 raceReplay 재생)
 //
 // 멀티 진입 오케스트레이션 훅: REST 그랜트 취득 → WsManager 접속 → hello/join → 메시지 라우팅
 // (welcome/room-state/timesync는 여기서, 레이스 메시지는 RaceClient로 위임). 고빈도 값(진행/입력)은
@@ -16,6 +18,14 @@ import { WsManager, type ClientMessageDraft } from '../../net/ws-manager';
 import { Timesync } from './timesync';
 import { RaceClient, type RaceClientDeps, type RaceStore } from './race-client';
 import type { ServerMessage, S2C_RoomState } from '@wt/shared';
+
+/** join 메시지에 실을 신원(닉네임/여권 커버) — quickMatch/createRoom/join/connectWithGrant 공통.
+ *  WT-M4-04: 방 진입 경로가 무엇이든 hello 직후 이 신원으로 join을 자동 전송해, RoomPage가
+ *  별도로 joinRoom()을 호출하지 않아도 되게 한다(서버는 재입장 시 동일 처리 — MatchRoom.onJoin). */
+export interface PlayerIdentity {
+  nickname: string;
+  passportCover: string;
+}
 
 /** WS 티켓을 붙인 절대 URL(ws/wss). 오리진은 PUBLIC_ORIGIN(미설정 시 현재 오리진, §11-D18). */
 export function toWsUrl(wsPath: string, ticket: string, origin: string): string {
@@ -58,7 +68,7 @@ function mapPhase(phase: S2C_RoomState['phase']): RoomState['phase'] {
   }
 }
 
-interface WsGrant {
+export interface WsGrant {
   roomCode: string;
   wsUrl: string;
   ticket: string;
@@ -92,6 +102,7 @@ export function useMultiplayer() {
       case 'welcome':
         playerIdRef.current = m.playerId;
         resumeKeyRef.current = m.resumeKey;
+        store.getState().setMyPlayerId(m.playerId);
         break;
       case 'room-state':
         store.getState().setRoom({
@@ -100,14 +111,42 @@ export function useMultiplayer() {
           lang: m.config.lang,
           players: m.players,
           phase: mapPhase(m.phase),
+          maxPlayers: m.config.maxPlayers,
+          isPublic: m.config.isPublic,
+          autoStartAt: m.autoStartAt,
         });
         break;
       case 'timesync':
         timesyncRef.current?.onReply(m);
+        store.getState().setLatency(timesyncRef.current?.getRttMs() ?? 0);
+        break;
+      case 'start':
+        // RaceView 엔진 구성 원천 캐시(store 주석 참조) — attachRace가 아직 안 붙었을 수 있어
+        // RaceClient 위임과 별개로 여기서 캐시해둔다.
+        store.getState().setRaceReplay(m);
+        break;
+      case 'race-sync':
+        store.getState().setRaceReplay(m);
+        break;
+      case 'chat':
+        store.getState().pushChat({ playerId: m.playerId, text: m.text, at: m.at });
+        break;
+      case 'rematch-state':
+        store.getState().setRematchState(m);
+        break;
+      case 'bot-offer':
+        store.getState().setBotOffer(m);
+        break;
+      case 'room-closed':
+        store.getState().setRoomClosedReason(m.reason);
+        break;
+      case 'race-finished':
+        store.getState().setRaceFinishedReason(m.reason);
         break;
       case 'error':
         // DATA_VERSION은 close(4426)가 뒤따르므로 onClose에서 리로드한다. 그 외는 상위 UI(M4-04)가
         // room-state/토스트로 표시한다.
+        store.getState().setLastError({ code: m.code, message: m.message });
         break;
       default:
         break;
@@ -117,7 +156,7 @@ export function useMultiplayer() {
   }, [store]);
 
   const connectWithGrant = useCallback(
-    (grant: WsGrant): void => {
+    (grant: WsGrant, identity?: PlayerIdentity): void => {
       grantRef.current = grant;
       store.getState().setRoom({
         code: grant.roomCode,
@@ -125,6 +164,9 @@ export function useMultiplayer() {
         lang: grant.lang,
         players: [],
         phase: 'waiting',
+        maxPlayers: null,
+        isPublic: false,
+        autoStartAt: null,
       });
 
       const ws = new WsManager();
@@ -154,6 +196,17 @@ export function useMultiplayer() {
                   : undefined,
             }),
           );
+          // hello 직후 즉시 join(같은 소켓 위 순차 전송이라 서버가 순서대로 처리 — 파일 상단
+          // PlayerIdentity 주석). 재접속 시에도 안전(MatchRoom.onJoin이 기존 레코드를 갱신·
+          // connState를 connected로 되돌려 grace 이탈자를 복귀시킨다).
+          if (identity) {
+            ws.send({
+              v: 1,
+              type: 'join',
+              nickname: identity.nickname,
+              passportCover: identity.passportCover,
+            });
+          }
           timesync.start();
         }
       });
@@ -171,28 +224,31 @@ export function useMultiplayer() {
   );
 
   const quickMatch = useCallback(
-    async (lang: 'ko' | 'en'): Promise<void> => {
+    async (lang: 'ko' | 'en', identity: PlayerIdentity): Promise<void> => {
       await ensureSession(useSettingsStore.getState().guestId);
       const grant = await apiClient.post<WsGrant & { mode: string }>('/match/quick', { lang });
-      connectWithGrant(grant);
+      connectWithGrant(grant, identity);
     },
     [connectWithGrant],
   );
 
   const createRoom = useCallback(
-    async (opts: { lang: 'ko' | 'en'; maxPlayers?: number; isPublic?: boolean }): Promise<void> => {
+    async (
+      opts: { lang: 'ko' | 'en'; maxPlayers?: number; isPublic?: boolean },
+      identity: PlayerIdentity,
+    ): Promise<void> => {
       await ensureSession(useSettingsStore.getState().guestId);
       const grant = await apiClient.post<WsGrant>('/rooms', { ...opts, mode: 'race-mixed' });
-      connectWithGrant(grant);
+      connectWithGrant(grant, identity);
     },
     [connectWithGrant],
   );
 
   const join = useCallback(
-    async (code: string, lang?: 'ko' | 'en'): Promise<void> => {
+    async (code: string, identity: PlayerIdentity, lang?: 'ko' | 'en'): Promise<void> => {
       await ensureSession(useSettingsStore.getState().guestId);
       const grant = await apiClient.post<WsGrant>(`/rooms/${code}/join`, lang ? { lang } : {});
-      connectWithGrant(grant);
+      connectWithGrant(grant, identity);
     },
     [connectWithGrant],
   );
@@ -210,6 +266,13 @@ export function useMultiplayer() {
   const rematch = useCallback(
     (vote: boolean) => sendDraft({ v: 1, type: 'rematch', vote }),
     [sendDraft],
+  );
+  const botAccept = useCallback(
+    (accept: boolean) => {
+      store.getState().setBotOffer(null); // 즉시 닫기(서버 응답은 room-state로 뒤따름)
+      return sendDraft({ v: 1, type: 'bot-accept', accept });
+    },
+    [sendDraft, store],
   );
   const joinRoom = useCallback(
     (nickname: string, passportCover: string, joinTicket?: string) =>
@@ -265,11 +328,21 @@ export function useMultiplayer() {
     });
     raceRef.current = race;
     race.attach();
+    // 닭-달걀 해소(store.ts RaceReplayMessage 주석): 엔진(및 이 RaceClient)은 'start'/'race-sync'가
+    // 도착한 *뒤*에야 만들어질 수 있어, 최초 수신 시점엔 아직 RaceClient가 없어 그 메시지를 놓친다.
+    // 캐시된 마지막 start/race-sync를 방금 붙은 RaceClient에 재생해 내부 상태(localStartPerf·
+    // countries·raceIdx 등)를 소급 초기화한다.
+    const cachedReplay = store.getState().raceReplay;
+    if (cachedReplay) race.handleMessage(cachedReplay);
     return () => {
       race.destroy();
       if (raceRef.current === race) raceRef.current = null;
     };
   }, [connectWithGrant, store]);
+
+  /** timesync.getOffset() 스냅샷(서버 epoch = 로컬 perf + offset) — RaceView가 countdown.startAt을
+   *  로컬 시각으로 환산해 engine.start()를 정확히 그 순간에 스케줄링하는 데 쓴다(§6.2). */
+  const getOffsetMs = useCallback(() => timesyncRef.current?.getOffset() ?? 0, []);
 
   // 언마운트 시 정리(페이지 이탈은 WsManager의 pagehide close가 별도로 처리).
   useEffect(() => {
@@ -285,12 +358,15 @@ export function useMultiplayer() {
     createRoom,
     join,
     joinRoom,
+    connectWithGrant,
     ready,
     startRace,
     chat,
     rematch,
+    botAccept,
     leave,
     attachRace,
+    getOffsetMs,
   };
 }
 

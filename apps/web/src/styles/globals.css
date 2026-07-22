@@ -543,3 +543,256 @@
   color: #fff;
   font-size: 0.9rem;
 }
+
+/* ── S9/S10/S11 멀티(WT-M4-04) ──────────────────────────────────────────
+   spec: docs/01 §10.2(S9/S10/S11 와이어프레임), docs/03 §6.5(OpponentTracks)·§6.3(ack 고스트). */
+.wt-lobby,
+.wt-room {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  max-width: 48rem;
+  margin: 0 auto;
+}
+.wt-lobby__header,
+.wt-room__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wt-lobby__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--map-border);
+  background: color-mix(in srgb, var(--map-idle) 55%, transparent);
+}
+.wt-lobby__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.wt-lobby__error {
+  color: var(--wt-prompt-error, #ef4444);
+  font-size: 0.9rem;
+}
+.wt-lobby__public-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+}
+.wt-lobby__public-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--map-border);
+}
+
+/* 대기실 슬롯(§10.2 S10). */
+.wt-waiting-room__slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+.wt-waiting-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--map-border);
+}
+.wt-waiting-slot--empty {
+  opacity: 0.5;
+  align-items: center;
+  justify-content: center;
+}
+.wt-waiting-slot--me {
+  border-color: var(--grade-b);
+}
+.wt-waiting-slot__ready {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.wt-waiting-room__chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.wt-waiting-room__chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 8rem;
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+.wt-waiting-room__chat-form {
+  display: flex;
+  gap: 0.5rem;
+}
+.wt-waiting-room__chat-form input {
+  flex: 1 1 auto;
+}
+
+/* 상대 진행 트랙(OpponentTracks, §6.5). transform/width만 rAF가 직접 갱신(§4.5와 동일 취지). */
+.wt-race-overlay {
+  width: 100%;
+  max-width: 40rem;
+}
+.wt-opponent-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.wt-opponent-track {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.wt-opponent-track__name {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt-opponent-track__crown {
+  flex: none;
+}
+.wt-opponent-track__bot-badge {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  border: 1px solid var(--map-border);
+  border-radius: 999px;
+  padding: 0 0.3rem;
+}
+.wt-opponent-track__bar {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--map-idle);
+  overflow: hidden;
+}
+.wt-opponent-track__fill {
+  height: 100%;
+  width: 0%;
+  background: var(--grade-b);
+  transition: none; /* rAF가 매 프레임 직접 갱신 — 이중 애니메이션 방지(wt-gauge__fill과 동일 취지). */
+}
+.wt-opponent-track__meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+.wt-opponent-track__combo {
+  color: var(--grade-a);
+  font-weight: 700;
+}
+.wt-opponent-track--grace {
+  opacity: 0.6;
+}
+.wt-opponent-track--left {
+  opacity: 0.45;
+  font-style: italic;
+}
+.wt-opponent-track--finished .wt-opponent-track__fill {
+  background: var(--grade-s);
+}
+.wt-opponent-track--miss {
+  animation: wt-opponent-shake 500ms ease-in-out;
+}
+@keyframes wt-opponent-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+:root[data-reduced] .wt-opponent-track--miss {
+  animation: none;
+}
+
+/* 하드캡 카운트다운(§10.2 S11 "하드캡 ⏱ 1:12 남음"). */
+.wt-race-hardcap {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 진행바 서버 ack 고스트(§6.3 — 반투명 링, 정상 상태에선 현재 점과 겹쳐 보인다). */
+.wt-dot--ack-ghost {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--grade-b) 60%, transparent);
+}
+
+/* 레이스 결과(§10.2 S11 결과, 순위표는 서버 값만 — §6.6). */
+.wt-race-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+.wt-race-result__row--me {
+  font-weight: 700;
+}
+.wt-race-result__latency {
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--map-border);
+}
+.wt-race-result__latency--good { color: var(--grade-s); }
+.wt-race-result__latency--ok { color: var(--grade-b); }
+.wt-race-result__latency--bad { color: var(--grade-d, #ef4444); }
+
+/* 봇 제안 모달(§8.2 "GHOST 라벨"). */
+.wt-bot-offer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+.wt-bot-offer__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 18rem;
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  background: var(--map-idle);
+  text-align: center;
+}
+.wt-bot-offer__badge {
+  align-self: flex-start;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--grade-a) 70%, black);
+  color: #fff;
+}
+.wt-bot-offer__actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}

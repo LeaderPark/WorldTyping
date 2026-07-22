@@ -41,7 +41,7 @@ describe('multiplayer store', () => {
     const store = useMultiplayerStore;
     store.getState().setConnection('open');
     store.getState().setLatency(42);
-    store.getState().setRoom({ code: 'ABC123', hostId: 'p1', lang: 'ko', players: [], phase: 'waiting' });
+    store.getState().setRoom({ code: 'ABC123', hostId: 'p1', lang: 'ko', players: [], phase: 'waiting', maxPlayers: 8, isPublic: false, autoStartAt: null });
     store.getState().setServerAck({ index: 3, serverTime: 1000 });
 
     const s = store.getState();
@@ -60,5 +60,47 @@ describe('multiplayer store', () => {
     expect(s.connection).toBe('idle');
     expect(s.opponents.size).toBe(0);
     expect(s.room).toBeNull();
+  });
+
+  it('setMyPlayerId/setRaceReplay/setRematchState/setBotOffer/setLastError/setRoomClosedReason/setRaceFinishedReason set the expected fields (WT-M4-04)', () => {
+    const store = useMultiplayerStore;
+    const startMsg = {
+      v: 1 as const,
+      type: 'start' as const,
+      raceId: 'r1',
+      seed: 'ab'.repeat(16),
+      countries: ['KOR', 'USA'],
+      dataVersion: 'abcd1234',
+      startAt: 1000,
+      hardCapAt: 181000,
+      perCountryLimitMs: 10000,
+    };
+    store.getState().setMyPlayerId('p1');
+    store.getState().setRaceReplay(startMsg);
+    store.getState().setRematchState({ v: 1, type: 'rematch-state', votes: [{ playerId: 'p1', vote: true }], deadline: 5000 });
+    store.getState().setBotOffer({ v: 1, type: 'bot-offer', expiresAt: 6000 });
+    store.getState().setLastError({ code: 'ROOM_FULL', message: 'full' });
+    store.getState().setRoomClosedReason('idle');
+    store.getState().setRaceFinishedReason('hardcap');
+
+    const s = store.getState();
+    expect(s.myPlayerId).toBe('p1');
+    expect(s.raceReplay).toEqual(startMsg);
+    expect(s.rematchState?.deadline).toBe(5000);
+    expect(s.botOffer?.expiresAt).toBe(6000);
+    expect(s.lastError).toEqual({ code: 'ROOM_FULL', message: 'full' });
+    expect(s.roomClosedReason).toBe('idle');
+    expect(s.raceFinishedReason).toBe('hardcap');
+  });
+
+  it('pushChat appends and caps the log at 50 entries', () => {
+    const store = useMultiplayerStore;
+    for (let i = 0; i < 55; i++) {
+      store.getState().pushChat({ playerId: 'p1', text: `msg${i}`, at: i });
+    }
+    const log = store.getState().chatLog;
+    expect(log.length).toBe(50);
+    expect(log[0]?.text).toBe('msg5');
+    expect(log[log.length - 1]?.text).toBe('msg54');
   });
 });

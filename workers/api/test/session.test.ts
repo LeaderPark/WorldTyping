@@ -30,12 +30,15 @@ describe("POST /api/v1/session", () => {
       playerId: string;
       nickname: string;
       expiresAt: string;
+      geo: string;
     };
 
     expect(body.playerId).toHaveLength(12);
     // 기본 닉네임 접미사는 base58(playerId) 마지막 4자를 대문자화한 것 — 순수 hex는 아니다.
     expect(body.nickname).toMatch(/^GUEST_[0-9A-Z]{4}$/);
     expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+    // 테스트 fetch는 cf.country를 실어 보내지 않아(§11-D44) "XX" 폴백이 관측된다.
+    expect(body.geo).toBe("XX");
 
     const verified = await verifyToken(body.token, env.SESSION_HMAC_SECRET, SessionPayloadSchema);
     expect(verified.ok).toBe(true);
@@ -177,9 +180,10 @@ describe("GET /api/v1/session/me (protected route - Bearer auth demonstration)",
       headers: { Authorization: `Bearer ${issued.token}` },
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { playerId: string; nickname: string; status: string };
+    const body = (await res.json()) as { playerId: string; nickname: string; status: string; geo: string };
     expect(body.playerId).toBe(issued.playerId);
     expect(body.nickname).toBe(issued.nickname);
     expect(body.status).toBe("active");
+    expect(body.geo).toBe("XX"); // §11-D44 — 미확보 지역은 항상 "XX"
   });
 });

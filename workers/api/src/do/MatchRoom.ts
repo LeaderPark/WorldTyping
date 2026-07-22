@@ -76,6 +76,7 @@ import {
   type AlarmSet,
 } from './alarms';
 import { assignFinalRanks, computePlayerMetrics } from './ranking';
+import { evaluateMatchAchievements, isPhotoFinishWin, type MatchAchievementInput } from '../lib/achievements';
 
 // ───────────────────────── 서버측 국가 데이터(§5 compileTargets 캐시 원천) ─────────────────────────
 
@@ -1483,6 +1484,42 @@ export class MatchRoomDO {
     }
   }
 
+  /**
+   * 멀티 업적(§9.2 멀티 카테고리) 판정 호출. persistResults/retryPersist가 D1 커밋 성공 직후에만
+   * 부른다(match_participants가 이미 반영돼야 win_streak/multi_veteran 집계가 이번 매치를
+   * 포함한다). 봇·게스트(users FK 없음)는 대상 밖 — isGuest는 join 시점의 auth.kind로 확정되는
+   * 값이라 meta에서 그대로 읽는다(§7.2, room-state.ts).
+   */
+  private async grantMultiAchievements(rows: ResultRow[]): Promise<void> {
+    if (!this.env.DB) return;
+    // photo_finish(§5.1-4 broadcastPlayerFinished와 동일 1000ms 규칙)는 "격차 승리"이므로
+    // 최종 순위 1위 한정으로만 판정한다 — 완주자만 정렬 대상(rank=0은 DNF, 오정렬 방지).
+    const finishedSorted = rows.filter((r) => r.finished).sort((a, b) => a.rank - b.rank);
+    const winner = finishedSorted[0];
+    const runnerUp = finishedSorted[1];
+    const photoFinishWinnerId =
+      winner && runnerUp && winner.elapsedMs !== null && runnerUp.elapsedMs !== null && isPhotoFinishWin(winner.elapsedMs, runnerUp.elapsedMs)
+        ? winner.playerId
+        : null;
+
+    const inputs: MatchAchievementInput[] = [];
+    for (const row of rows) {
+      if (row.isBot) continue;
+      const meta = this.metaOf(row.playerId);
+      if (meta.isGuest) continue;
+      const p = this.players.get(row.playerId);
+      inputs.push({
+        userId: row.playerId,
+        rank: row.rank,
+        finished: row.finished,
+        errorKeystrokes: p?.errorKeystrokes ?? 0,
+        photoFinishWin: row.playerId === photoFinishWinnerId,
+      });
+    }
+    if (inputs.length === 0) return;
+    await evaluateMatchAchievements(this.env.DB, inputs, this.now());
+  }
+
   private clampedKsByPlayer(): Record<string, number> {
     const out: Record<string, number> = {};
     if (!this.race || !this.config) return out;
@@ -1550,6 +1587,12 @@ export class MatchRoomDO {
       await this.env.DB.batch(stmts);
       this.pendingPersist = null;
       await this.ctx.storage.delete('pendingPersist');
+      // 업적/커버(§9.2, docs/06 §4.3) — match_participants가 이미 커밋된 뒤에만 호출(win_streak
+      // 집계가 이번 매치를 포함해야 함). best-effort: 실패해도 레이스 결과 자체는 이미 영속화됨.
+      await this.grantMultiAchievements(rows).catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error('[MatchRoom] achievement grant failed (non-fatal)', err);
+      });
     } catch {
       // 실패 → pendingPersist 저장 + persistRetry alarm(방 CLOSED 전까지 최대 5회).
       const attempts = (this.pendingPersist?.attempts ?? 0) + 1;
@@ -1778,6 +1821,10 @@ export class MatchRoomDO {
       await this.env.DB.batch(stmts);
       this.pendingPersist = null;
       await this.ctx.storage.delete('pendingPersist');
+      await this.grantMultiAchievements(rows).catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error('[MatchRoom] achievement grant failed (non-fatal)', err);
+      });
     } catch {
       const attempts = pending.attempts + 1;
       if (attempts <= MAX_PERSIST_ATTEMPTS) {

@@ -31,3 +31,15 @@ export function formatCpm(cpm: number): number {
   if (!Number.isFinite(cpm)) return 0;
   return Math.max(0, Math.round(cpm));
 }
+
+/**
+ * unlock_id(예: "ach:first_flight", "cover:continent-asia", "stamp:tier:3:A", "tier:3")를
+ * 화면에 걸 수 있는 사람이 읽는 라벨로 변환한다(WT-M5-03). 24종 업적 각각의 정식 i18n 문구
+ * 카탈로그는 이 태스크 범위 밖(최종 보고 escalations 참조) — 접두사를 떼고 스네이크/콜론을
+ * 공백으로 바꾼 최소 표시만 제공한다. 국가명이 아니므로 docs/02 §9 "국가명은 countries.json
+ * 전용" 원칙과 무관하다.
+ */
+export function humanizeUnlockId(unlockId: string): string {
+  const withoutPrefix = unlockId.replace(/^(ach|cover|stamp|tier):/, '');
+  return withoutPrefix.replace(/[_:-]+/g, ' ').trim();
+}

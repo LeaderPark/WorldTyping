@@ -110,10 +110,13 @@ export interface RunSubmitState {
   rank: number | null;
   total: number | null;
   isPersonalBest: boolean | null;
+  /** 이번 제출로 새로 획득한 unlock_id(§9.2~9.4, WT-M5-03). queued/practice는 항상 빈 배열
+   *  (오프라인 큐잉은 온라인 복귀 후 flush 시점에 판정되어 이 화면에서는 알 수 없다). */
+  newUnlocks: string[];
 }
 
 function initialRunSubmitState(): RunSubmitState {
-  return { status: 'idle', verdict: null, rank: null, total: null, isPersonalBest: null };
+  return { status: 'idle', verdict: null, rank: null, total: null, isPersonalBest: null, newUnlocks: [] };
 }
 
 /** docs/06 §1.3 세트별 초기 라이프(display-only — 서버는 livesLost를 검증하지 않는다, run-verify.ts
@@ -168,7 +171,7 @@ export function useRunSubmit(opts: UseRunSubmitOpts): RunSubmitState {
     let cancelled = false;
 
     if (opts.result.practice || opts.result.viaCheckpoint) {
-      setState({ status: 'submitted', verdict: 'practice', rank: null, total: null, isPersonalBest: null });
+      setState({ status: 'submitted', verdict: 'practice', rank: null, total: null, isPersonalBest: null, newUnlocks: [] });
       return;
     }
 
@@ -179,7 +182,7 @@ export function useRunSubmit(opts: UseRunSubmitOpts): RunSubmitState {
     const nickname = opts.nickname || undefined;
 
     const queueOffline = (runToken?: string, runTokenIssuedAt?: number): void => {
-      setState({ status: 'queued', verdict: 'practice', rank: null, total: null, isPersonalBest: null });
+      setState({ status: 'queued', verdict: 'practice', rank: null, total: null, isPersonalBest: null, newUnlocks: [] });
       // IndexedDB 자체가 없거나(사생활 모드·구형 브라우저·테스트 환경) 쿼터 초과 등으로 큐 적재가
       // 실패해도 결과 화면은 이미 "큐에 적재됨" 라벨로 안내를 마쳤다 — 조용히 로그만 남긴다
       // (throw 전파는 unhandled rejection을 남길 뿐 사용자에게 되돌릴 수단이 없다).
@@ -209,7 +212,7 @@ export function useRunSubmit(opts: UseRunSubmitOpts): RunSubmitState {
     submitRun({ runToken: opts.runToken, result: body, clientScore, inputDigest, nickname })
       .then((res) => {
         if (cancelled) return;
-        setState({ status: 'submitted', verdict: res.verdict, rank: res.rank, total: res.total, isPersonalBest: res.isPersonalBest });
+        setState({ status: 'submitted', verdict: res.verdict, rank: res.rank, total: res.total, isPersonalBest: res.isPersonalBest, newUnlocks: res.newUnlocks ?? [] });
       })
       .catch((err: unknown) => {
         if (cancelled) return;

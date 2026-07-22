@@ -54,8 +54,8 @@ function renderPage() {
 describe('RankPage', () => {
   beforeEach(() => {
     useSettingsStore.getState().setLang('ko');
-    ensureSessionMock.mockResolvedValue({ token: 't', playerId: 'p1', nickname: 'NIMBUS', expiresAt: '' });
-    fetchSessionMeMock.mockResolvedValue({ playerId: 'p1', nickname: 'NIMBUS', status: 'active' });
+    ensureSessionMock.mockResolvedValue({ token: 't', playerId: 'p1', nickname: 'NIMBUS', expiresAt: '', geo: 'XX' });
+    fetchSessionMeMock.mockResolvedValue({ playerId: 'p1', nickname: 'NIMBUS', status: 'active', geo: 'XX' });
     fetchLbMeMock.mockResolvedValue({ rank: null, total: 0, percentile: null, onBoard: false });
     fetchLbPageMock.mockResolvedValue({ entries: [mkEntry()], nextCursor: null, total: 1 });
   });
@@ -68,7 +68,7 @@ describe('RankPage', () => {
   it('마운트 시 기본 필터(전체·세계일주)로 조회한다', async () => {
     renderPage();
     await waitFor(() => expect(fetchLbPageMock).toHaveBeenCalled());
-    expect(fetchLbPageMock).toHaveBeenCalledWith('worldtour|ko|desktop|all');
+    expect(fetchLbPageMock).toHaveBeenCalledWith('worldtour|ko|desktop|all', {});
   });
 
   it('기간/모드/언어/플랫폼 필터를 바꾸면 새 board_key로 재조회한다', async () => {
@@ -150,9 +150,21 @@ describe('RankPage', () => {
     await waitFor(() => expect(screen.getByTestId('rank-error')).toBeInTheDocument());
   });
 
-  it('"내 지역" 스코프 탭은 v1에서 비활성 스텁이다(세션 응답에 geo 없음)', async () => {
+  it('"내 지역" 스코프 탭은 geo="XX"(미확보/차단국가)면 비활성이다(§11-D44)', async () => {
     renderPage();
     await waitFor(() => expect(fetchLbPageMock).toHaveBeenCalled());
-    expect(screen.getByTestId('rank-scope-mine')).toBeDisabled();
+    await waitFor(() => expect(screen.getByTestId('rank-scope-mine')).toBeDisabled());
+  });
+
+  it('"내 지역" 스코프 탭은 geo가 실제 국가면 활성화되고 geo 필터로 재조회한다(§11-D44)', async () => {
+    fetchSessionMeMock.mockResolvedValue({ playerId: 'p1', nickname: 'NIMBUS', status: 'active', geo: 'KR' });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('rank-scope-mine')).not.toBeDisabled());
+
+    fetchLbPageMock.mockClear();
+    fireEvent.click(screen.getByTestId('rank-scope-mine'));
+    await waitFor(() => {
+      expect(fetchLbPageMock).toHaveBeenCalledWith('worldtour|ko|desktop|all', { geo: 'KR' });
+    });
   });
 });

@@ -15,6 +15,7 @@ import { daily } from "./routes/daily";
 import { nickname } from "./routes/nickname";
 import { report } from "./routes/report";
 import { multi } from "./routes/multi";
+import { users } from "./routes/users";
 import { verifyToken, WsTicketPayloadSchema } from "@wt/shared";
 import { normalizeRoomCode } from "./lib/room-code";
 import { runLbRefresher } from "./cron/lb-refresher";
@@ -50,6 +51,7 @@ app.route("/api/v1", nickname); // WT-M3-05: POST /nickname/check, PUT /nickname
 app.route("/api/v1", report); // WT-M3-05: POST /report
 app.route("/api/v1", multi); // WT-M4-02: POST /match/quick, DELETE /match/quick, POST /rooms,
 //                              POST /rooms/:code/join, GET /rooms/public
+app.route("/api/v1", users); // WT-M5-03: GET /users/:id/passport, PUT /users/me/passport-cover
 
 // /api/v1/* 중 위에서 매칭되지 않은 경로 → docs/04 §2.1 ApiError 포맷 404
 // (health를 포함해 이후 마일스톤에서 추가되는 모든 /api/v1/* 라우트는 이 줄보다 위에 등록한다).

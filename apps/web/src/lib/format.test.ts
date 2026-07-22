@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCpm, formatMMSS, formatPercent, formatSeconds } from './format';
+import { formatCpm, formatMMSS, formatPercent, formatSeconds, humanizeUnlockId } from './format';
 
 describe('formatMMSS', () => {
   it('formats whole minutes/seconds', () => {
@@ -47,5 +47,14 @@ describe('formatCpm', () => {
     expect(formatCpm(450.6)).toBe(451);
     expect(formatCpm(-10)).toBe(0);
     expect(formatCpm(NaN)).toBe(0);
+  });
+});
+
+describe('humanizeUnlockId', () => {
+  it('strips the type prefix and turns separators into spaces', () => {
+    expect(humanizeUnlockId('ach:first_flight')).toBe('first flight');
+    expect(humanizeUnlockId('cover:continent-asia')).toBe('continent asia');
+    expect(humanizeUnlockId('stamp:tier:3:A')).toBe('tier 3 A');
+    expect(humanizeUnlockId('tier:3')).toBe('3');
   });
 });

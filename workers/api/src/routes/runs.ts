@@ -38,6 +38,7 @@ import {
   DIRTY_TTL_SEC,
   type InlineRank,
 } from "../lib/lb";
+import { evaluateRunAchievements } from "../lib/achievements";
 
 /** run 세션 사용 플래그 TTL(docs/06 §3.1 — 2h). */
 const SESS_FLAG_TTL_SEC = 2 * 60 * 60;
@@ -130,6 +131,9 @@ interface RunSubmitRes {
   rank: number | null;
   total: number | null;
   isPersonalBest: boolean | null;
+  /** 이번 제출로 새로 획득한 unlock_id 목록(§9.2~9.4 — 결과 화면 토스트용). rejected/practice/
+   *  shadowban은 항상 빈 배열(구현 세부 지시, achievements.ts 호출 게이트 참조). */
+  newUnlocks: string[];
 }
 
 export const runs = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -312,7 +316,26 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
     inline = await inlineRankForRun(db, allBoardKey(token.modeKey, token.lang, token.platform), pid, token.rid);
   }
 
-  return c.json(submitRes(finalVerdict, vr.server, inline));
+  // 업적/커버/스탬프(§9.2~9.4, docs/06 §4.3) — runs INSERT가 이미 커밋된 뒤에만 호출한다(집계
+  // 쿼리가 이번 판을 포함해야 함, achievements.ts 상단 주석의 호출 계약). shadowban 여부와
+  // 무관하게 valid 판이면 판정한다(랭킹 노출과 개인 업적 달성은 별개 — 최종 보고 escalations).
+  let newUnlocks: string[] = [];
+  if (finalVerdict === "valid") {
+    newUnlocks = await evaluateRunAchievements(db, {
+      userId: pid,
+      modeKey: token.modeKey,
+      lang: token.lang,
+      server: { completed: vr.server.completed, grade: vr.server.grade, cpm: vr.server.cpm, maxCombo: vr.server.maxCombo },
+      totalKeystrokes: body.result.totalKeystrokes,
+      correctKeystrokes: body.result.correctKeystrokes,
+      livesLost: body.result.livesLost,
+      perCountry: body.result.perCountry,
+      isDailyFirstValid: dailyFirstValid,
+      now,
+    });
+  }
+
+  return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks));
 });
 
 // ───────────────────────── 응답/SQL 헬퍼 ─────────────────────────
@@ -330,7 +353,7 @@ const ZERO: ServerValues = {
   elapsedMs: 0,
 };
 
-function submitRes(verdict: RunVerdict, s: ServerValues, inline?: InlineRank): RunSubmitRes {
+function submitRes(verdict: RunVerdict, s: ServerValues, inline?: InlineRank, newUnlocks: string[] = []): RunSubmitRes {
   return {
     verdict,
     score: s.score,
@@ -342,6 +365,7 @@ function submitRes(verdict: RunVerdict, s: ServerValues, inline?: InlineRank): R
     rank: inline?.rank ?? null,
     total: inline?.total ?? null,
     isPersonalBest: inline ? inline.isPersonalBest : null,
+    newUnlocks,
   };
 }
 

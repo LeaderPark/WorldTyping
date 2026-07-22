@@ -3,10 +3,10 @@
 //       WT-M2-05(스텁) → WT-M3-06(실 배선)
 //
 // [일간|주간|전체]×[모드]×[KO|EN]×[플랫폼] 필터 + keyset 커서 무한 스크롤 + 내 행 고정 표시(§8
-// wireframe "841 나 (GUEST_4821) … ← 고정 표시"). 지역(scope) 탭은 v1 UI 요구사항(docs/03 §1.1
-// "Global/내 지역(자동 감지) 두 탭")이나, 현재 세션 응답(GET /session/me)이 geo를 노출하지 않아
-// "내 지역"은 비활성 스텁으로 남긴다(최종 보고 escalations 참조 — 세션 응답에 geo 필드 추가는
-// 이 태스크의 산출물 범위(net/api-client.ts 등) 밖의 백엔드 변경이 필요하다).
+// wireframe "841 나 (GUEST_4821) … ← 고정 표시"). 지역(scope) 탭(docs/03 §1.1 "Global/내 지역
+// 두 탭")은 WT-M5-03에서 활성화(docs/00 §11-D44) — GET /session/me의 geo(§11-D44, users.geo)로
+// 판정한다. geo==="XX"(미확보/차단국가)면 "내 지역" 탭은 여전히 비활성(클라 측 IP/타임존 추정은
+// D44가 명시적으로 금지 — 서버가 준 값만 쓴다).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Continent, DifficultyTier } from '@wt/shared';
@@ -58,6 +58,8 @@ export function RankPage() {
   const [modeKey, setModeKey] = useState<string>('worldtour');
   const [lang, setLang] = useState<'ko' | 'en'>(settingsLang);
   const [platform, setPlatform] = useState<'desktop' | 'mobile'>(settingsPlatform);
+  const [scope, setScope] = useState<'global' | 'mine'>('global');
+  const [myGeo, setMyGeo] = useState<string | null>(null);
 
   const board = useMemo(() => buildBoardKey(modeKey, lang, platform, periodKeyFor(period)), [modeKey, lang, platform, period]);
 
@@ -68,23 +70,30 @@ export function RankPage() {
   const [me, setMe] = useState<LbMeRes | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
 
-  // 내 pid 자기 조회(행 하이라이트 판정용) — 마운트 1회. 세션이 아직 없으면(직접 진입 등)
-  // ensureSession으로 확보를 시도하고, 그래도 실패(오프라인)하면 조용히 하이라이트를 생략한다.
+  // 내 pid 자기 조회(행 하이라이트 판정용) + geo(§11-D44, "내 지역" 탭 활성화 판정) — 마운트 1회.
+  // 세션이 아직 없으면(직접 진입 등) ensureSession으로 확보를 시도하고, 그래도 실패(오프라인)
+  // 하면 조용히 하이라이트/지역탭을 생략한다.
   useEffect(() => {
     let cancelled = false;
     void ensureSession(guestId)
       .then(() => fetchSessionMe())
       .then((res) => {
-        if (!cancelled) setMyPlayerId(res.playerId);
+        if (cancelled) return;
+        setMyPlayerId(res.playerId);
+        setMyGeo(res.geo);
       })
       .catch(() => {
-        // 비로그인 조회(랭킹은 비인증 GET도 허용) — 하이라이트만 못 할 뿐 화면은 정상 동작.
+        // 비로그인 조회(랭킹은 비인증 GET도 허용) — 하이라이트/지역탭만 못 할 뿐 화면은 정상 동작.
       });
     return () => {
       cancelled = true;
     };
     // guestId는 세션 수명 동안 불변(설정 스토어 1회 생성값) — 마운트 시 1회만 시도.
   }, []);
+
+  // 클라 측 IP/타임존 추정 금지(§11-D44) — 서버가 확정한 geo만 쓴다. "XX"(미확보/차단국가)는
+  // 지역을 특정할 수 없어 탭 자체를 비활성으로 둔다.
+  const geoFilter = scope === 'mine' && myGeo && myGeo !== 'XX' ? myGeo : undefined;
 
   // 필터가 바뀌면 첫 페이지부터 다시 조회.
   useEffect(() => {
@@ -94,7 +103,7 @@ export function RankPage() {
     setNextCursor(null);
     setMe(null);
 
-    fetchLbPage(board)
+    fetchLbPage(board, geoFilter ? { geo: geoFilter } : {})
       .then((res) => {
         if (cancelled) return;
         setEntries(res.entries);
@@ -109,7 +118,7 @@ export function RankPage() {
     // fetchLbMe는 인증 필요(requireAuth) — 부팅의 세션 부트스트랩과의 경합을 피하려고 먼저
     // ensureSession으로 확정 짓는다(이미 성공했다면 즉시 resolve, 위 pid 자기 조회와 동일 이유).
     void ensureSession(guestId)
-      .then(() => fetchLbMe(board))
+      .then(() => fetchLbMe(board, geoFilter ? { geo: geoFilter } : {}))
       .then((res) => {
         if (!cancelled) setMe(res);
       })
@@ -120,11 +129,11 @@ export function RankPage() {
     return () => {
       cancelled = true;
     };
-  }, [board]);
+  }, [board, geoFilter]);
 
   const loadMore = useCallback(() => {
     if (!nextCursor) return;
-    fetchLbPage(board, { cursor: nextCursor })
+    fetchLbPage(board, { cursor: nextCursor, ...(geoFilter ? { geo: geoFilter } : {}) })
       .then((res) => {
         setEntries((prev) => [...prev, ...res.entries]);
         setNextCursor(res.nextCursor);
@@ -132,7 +141,7 @@ export function RankPage() {
       .catch(() => {
         // 추가 페이지 실패는 조용히 무시 — "더 보기" 버튼이 남아 재시도 가능.
       });
-  }, [board, nextCursor]);
+  }, [board, nextCursor, geoFilter]);
 
   // 무한 스크롤(§4.3): sentinel이 뷰포트에 들어오면 자동으로 다음 페이지를 당긴다.
   // IntersectionObserver 미지원 환경(구형 브라우저·일부 테스트 환경)에서는 조용히 no-op —
@@ -215,11 +224,25 @@ export function RankPage() {
         </div>
 
         <div role="group" aria-label="scope" data-testid="rank-filter-scope">
-          <button type="button" className="wt-btn wt-btn--active" aria-pressed disabled>
+          <button
+            type="button"
+            className={`wt-btn${scope === 'global' ? ' wt-btn--active' : ''}`}
+            aria-pressed={scope === 'global'}
+            data-testid="rank-scope-global"
+            onClick={() => setScope('global')}
+          >
             {t('rank.scope.global')}
           </button>
-          {/* 지역 보드는 세션 응답에 geo가 없어 v1은 비활성 — 파일 상단 주석/escalations 참조. */}
-          <button type="button" className="wt-btn" disabled title={t('rank.scope.mine')} data-testid="rank-scope-mine">
+          {/* geo==="XX"(미확보/차단국가)는 지역을 특정할 수 없어 비활성 유지(§11-D44). */}
+          <button
+            type="button"
+            className={`wt-btn${scope === 'mine' ? ' wt-btn--active' : ''}`}
+            aria-pressed={scope === 'mine'}
+            disabled={!myGeo || myGeo === 'XX'}
+            title={t('rank.scope.mine')}
+            data-testid="rank-scope-mine"
+            onClick={() => setScope('mine')}
+          >
             {t('rank.scope.mine')}
           </button>
         </div>

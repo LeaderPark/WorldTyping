@@ -43,4 +43,7 @@ export const KV_KEYS = {
   /** 고스트 봇 리플레이. */
   ghost: (lang: string, mode: string, piBucket: string): string =>
     `ghost:${lang}:${mode}:${piBucket}`,
+
+  /** GET /users/:id/passport 60초 캐시(docs/06 §4.3, WT-M5-03). */
+  passport: (userId: string): string => `passport:${userId}`,
 } as const;

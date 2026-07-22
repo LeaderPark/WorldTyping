@@ -171,6 +171,7 @@ export function ResultView({
       />
 
       <SubmissionStatus submission={submission} />
+      <UnlockToast newUnlocks={submission.newUnlocks} />
       {!nickname && <NicknameGate />}
 
       <div className="wt-result-view__actions">
@@ -260,6 +261,33 @@ function SubmissionStatus({ submission }: { submission: ReturnType<typeof useRun
     );
   }
   return null;
+}
+
+/**
+ * 신규 업적/커버/스탬프 토스트(§9.2~9.4, WT-M5-03) + 첫 완주 "여권 발급" 연출(구현 세부 지시 —
+ * ach:first_flight는 계정당 정확히 한 번만 서버가 지급하므로 이 토스트도 그 시점 1회만 뜬다).
+ * 로컬 메타 캐시(stores/meta.ts)에도 achievement 항목을 반영해 두면 다음 방문 때 서버 재조회
+ * 없이도 ModeSelectPage 등에서 즉시 참조할 수 있다(서버 값이 항상 최종 권위 — meta.ts 파일
+ * 상단 주석과 동일 원칙).
+ */
+function UnlockToast({ newUnlocks }: { newUnlocks: string[] }) {
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    // unlockAchievement는 멱등(이미 있으면 no-op)이라 newUnlocks 참조가 바뀔 때마다 재실행돼도
+    // 안전하다 — 제출 완료 시점(idle→submitted 1회 전이)에 실질적으로 한 번만 채워진다.
+    for (const id of newUnlocks) {
+      if (id.startsWith('ach:')) useMetaStore.getState().unlockAchievement(id);
+    }
+  }, [newUnlocks]);
+
+  if (newUnlocks.length === 0) return null;
+
+  return (
+    <p className="wt-result-view__unlock-toast" role="status" data-testid="result-unlock-toast">
+      {newUnlocks.includes('ach:first_flight') ? t('result.firstPassport') : t('result.newUnlock.toast', { count: newUnlocks.length })}
+    </p>
+  );
 }
 
 /** 닉네임 미설정(기본 GUEST_xxxx) 유저에게 결과 화면에서 닉네임 설정을 유도(구현 세부 지시 3). */

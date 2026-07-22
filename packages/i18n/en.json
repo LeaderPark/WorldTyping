@@ -73,6 +73,8 @@
   "result.nickname.placeholder": "Nickname (2-12 chars)",
   "result.nickname.submit": "Set",
   "result.nickname.error": "That nickname isn't available",
+  "result.newUnlock.toast": "{count} new achievement(s)/cover(s) unlocked!",
+  "result.firstPassport": "Your passport has been issued",
 
   "multi.room.create": "Create room",
   "multi.room.join": "Join by code",
@@ -183,6 +185,22 @@
   "rank.tierOption": "Tier T{tier}",
   "rank.worldtourOption": "World Tour",
 
+  "passport.title": "Passport",
+  "passport.loading": "Loading your passport…",
+  "passport.error": "Couldn't load your passport",
+  "passport.streak": "{count}-day streak",
+  "passport.bestPi": "Best PI {pi}",
+  "passport.bestPi.none": "No record yet",
+  "passport.stamps.title": "Stamps",
+  "passport.stamps.empty": "No stamps yet",
+  "passport.covers.title": "Passport covers",
+  "passport.cover.selectBtn": "Select",
+  "passport.cover.current": "In use",
+  "passport.cover.locked": "Locked",
+  "passport.achievements.title": "Achievements",
+  "passport.achievements.empty": "No achievements yet",
+  "passport.achievements.count": "{count}/24 unlocked",
+
   "lang.selectPrompt.ko": "어떤 언어로 여행할까요?",
   "lang.selectPrompt.en": "Which language?",
   "lang.selectOption.ko": "한국어로 타이핑",
@@ -247,9 +265,7 @@
   "settings.credits": "Credits",
 
   "passport.shareImage": "Share as image",
-  "passport.streak": "Streak",
   "passport.bestPI": "Best PI",
-  "passport.stamps": "Stamps",
 
   "nav.back.home": "← Home",
   "nav.back.mode": "← Modes",

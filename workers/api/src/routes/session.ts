@@ -44,6 +44,9 @@ interface SessionRes {
   playerId: string;
   nickname: string;
   expiresAt: string;
+  /** CF-IPCountry(가입 시 저장값, users.geo). 미확보/차단 국가는 "XX"(§11-D44, RankPage 내 지역
+   *  탭 활성화 판정 — 클라 측 IP/타임존 추정은 D44가 명시적으로 금지한다). */
+  geo: string;
 }
 
 export const session = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -124,6 +127,7 @@ session.post("/session", rateLimit("session"), async (c) => {
     playerId: pid,
     nickname: user.nickname,
     expiresAt: new Date(expiresAtMs).toISOString(),
+    geo: user.geo ?? "XX",
   };
   return c.json(body);
 });
@@ -136,13 +140,15 @@ session.get("/session/me", requireAuth, async (c) => {
   }
   const pid = c.get("pid");
   const row = await db
-    .prepare("SELECT user_id, nickname, status FROM users WHERE user_id = ?1")
+    .prepare("SELECT user_id, nickname, status, geo FROM users WHERE user_id = ?1")
     .bind(pid)
-    .first<Pick<UserRow, "user_id" | "nickname" | "status">>();
+    .first<Pick<UserRow, "user_id" | "nickname" | "status" | "geo">>();
   if (!row) {
     throw new ApiHttpError(404, "NOT_FOUND", "세션 pid에 해당하는 유저를 찾을 수 없습니다.");
   }
-  return c.json({ playerId: row.user_id, nickname: row.nickname, status: row.status });
+  // §11-D44: 세션 응답에 geo 노출(RankPage 내 지역 탭). users.geo는 가입 시점 1회 확정값 —
+  // 이후 IP가 바뀌어도 갱신하지 않는다(추가 재산정 로직은 이 태스크 범위 밖).
+  return c.json({ playerId: row.user_id, nickname: row.nickname, status: row.status, geo: row.geo ?? "XX" });
 });
 
 // ───────────────────────── 내부 헬퍼 ─────────────────────────

@@ -73,6 +73,8 @@
   "result.nickname.placeholder": "닉네임 (2~12자)",
   "result.nickname.submit": "설정",
   "result.nickname.error": "사용할 수 없는 닉네임이에요",
+  "result.newUnlock.toast": "새 업적/커버 {count}개 획득!",
+  "result.firstPassport": "여권이 발급되었습니다",
 
   "multi.room.create": "방 만들기",
   "multi.room.join": "코드로 입장",
@@ -183,6 +185,22 @@
   "rank.tierOption": "티어 T{tier}",
   "rank.worldtourOption": "세계일주",
 
+  "passport.title": "여권",
+  "passport.loading": "여권을 불러오는 중…",
+  "passport.error": "여권을 불러오지 못했어요",
+  "passport.streak": "연속 출석 {count}일",
+  "passport.bestPi": "최고 PI {pi}",
+  "passport.bestPi.none": "아직 기록 없음",
+  "passport.stamps.title": "스탬프",
+  "passport.stamps.empty": "아직 찍힌 스탬프가 없어요",
+  "passport.covers.title": "여권 커버",
+  "passport.cover.selectBtn": "선택",
+  "passport.cover.current": "사용 중",
+  "passport.cover.locked": "미획득",
+  "passport.achievements.title": "업적",
+  "passport.achievements.empty": "아직 달성한 업적이 없어요",
+  "passport.achievements.count": "{count}/24 달성",
+
   "lang.selectPrompt.ko": "어떤 언어로 여행할까요?",
   "lang.selectPrompt.en": "Which language?",
   "lang.selectOption.ko": "한국어로 타이핑",
@@ -247,9 +265,7 @@
   "settings.credits": "크레딧",
 
   "passport.shareImage": "이미지로 공유",
-  "passport.streak": "스트릭",
   "passport.bestPI": "PI 최고 기록",
-  "passport.stamps": "스탬프",
 
   "nav.back.home": "← 홈",
   "nav.back.mode": "← 모드",

@@ -105,6 +105,8 @@ export interface SessionInfo {
   playerId: string;
   nickname: string;
   expiresAt: string;
+  /** CF-IPCountry 저장값(가입 시 확정, 미확보는 "XX" — docs/00 §11-D44). */
+  geo: string;
 }
 
 let sessionPromise: Promise<SessionInfo | null> | null = null;
@@ -144,6 +146,8 @@ export interface SessionMeRes {
   playerId: string;
   nickname: string;
   status: string;
+  /** CF-IPCountry 저장값, 미확보는 "XX"(docs/00 §11-D44). */
+  geo: string;
 }
 
 /** GET /session/me — 현재 세션 pid 자기 조회(RankPage의 "내 행" 하이라이트 판정용). */
@@ -249,6 +253,8 @@ export interface RunSubmitRes {
   rank: number | null;
   total: number | null;
   isPersonalBest: boolean | null;
+  /** 이번 제출로 새로 획득한 unlock_id 목록(§9.2~9.4 — 결과 화면 토스트, WT-M5-03). */
+  newUnlocks: string[];
 }
 
 export function submitRun(body: RunSubmitReq): Promise<RunSubmitRes> {
@@ -333,4 +339,30 @@ export function checkNickname(nickname: string): Promise<NicknameCheckRes> {
 
 export function putNickname(nickname: string): Promise<{ nickname: string }> {
   return apiClient.put<{ nickname: string }>('/nickname', { nickname });
+}
+
+// ───────────────────────── 여권(docs/06 §4.3, WT-M5-03) ─────────────────────────
+
+export interface PassportUnlock {
+  type: 'cover' | 'stamp' | 'achievement' | 'tier';
+  id: string;
+  meta: unknown;
+  createdAt: number;
+}
+
+export interface PassportRes {
+  userId: string;
+  nickname: string;
+  passportCover: string;
+  streakDaily: number;
+  bestPi: number | null;
+  unlocks: PassportUnlock[];
+}
+
+export function fetchPassport(userId: string): Promise<PassportRes> {
+  return apiClient.get<PassportRes>(`/users/${encodeURIComponent(userId)}/passport`);
+}
+
+export function putPassportCover(coverId: string): Promise<{ passportCover: string }> {
+  return apiClient.put<{ passportCover: string }>('/users/me/passport-cover', { coverId });
 }

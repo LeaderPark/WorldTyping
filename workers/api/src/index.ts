@@ -17,6 +17,7 @@ import { report } from "./routes/report";
 import { multi } from "./routes/multi";
 import { users } from "./routes/users";
 import { me } from "./routes/me";
+import { share } from "./routes/share";
 import { verifyToken, WsTicketPayloadSchema } from "@wt/shared";
 import { normalizeRoomCode } from "./lib/room-code";
 import { runLbRefresher } from "./cron/lb-refresher";
@@ -89,9 +90,16 @@ app.get("/ws/room/:code", async (c) => {
   return stub.fetch(c.req.raw);
 });
 
+// OG 공유 인프라(WT-M6-02, §11-D18). run_worker_first의 /r/*·/og/*·/multi/*를 Worker가 먹는다.
+//   GET /r/:shareId       → OG 메타 HTML 셸 + CTA
+//   GET /og/:shareId.png  → 결과 카드 PNG(캐시 miss 시 렌더 → immutable + CF 캐시)
+//   GET /multi/:code      → SPA index.html + 방 초대 OG 메타 SSR 주입(만료 시 대체 메타)
+app.route("/", share);
+
 // wrangler `assets.run_worker_first`에 없는 경로(SPA 라우트 등)는 Cloudflare가 정적 자산
 // 핸들러로 먼저 보내므로(not_found_handling=single-page-application) 아래 라인엔 도달하지
-// 않는다. run_worker_first 안(/ws/*, /r/*, /og/*)의 미구현 경로에 대한 방어적 fallback만 둔다.
+// 않는다. run_worker_first 안(/ws/*, /r/*, /og/*, /multi/*)의 미매치 경로(예: POST /multi/:code,
+// share가 처리하지 않는 /multi/* 하위)는 SPA로 폴백한다.
 app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default {

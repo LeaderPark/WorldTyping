@@ -40,6 +40,8 @@ export default defineWorkersConfig(async () => {
         // WT-M4-05: DO 스토리지를 남기는 테스트는 vitest.do.config.ts에서만 실행(Windows EBUSY 회피).
         "test/ghost.test.ts",
         "test/reconnect.test.ts",
+        // WT-M6-02: /multi OG SSR이 MatchRoom DO를 건드린다 → do config에서만 실행.
+        "test/og-multi.test.ts",
         "**/node_modules/**",
       ],
       setupFiles: ["./test/apply-migrations.ts"],

@@ -258,6 +258,8 @@ export interface RunSubmitRes {
   newUnlocks: string[];
   /** 데일리 전용 공유 텍스트(§2.3, WT-M5-04) — daily 모드가 아니면 항상 null. */
   shareText: string | null;
+  /** OG 공유 랜딩 단축 id(§9.1, WT-M6-02) — 수리된 기록에만. `/r/{shareId}` 공유. rejected는 null. */
+  shareId: string | null;
 }
 
 export function submitRun(body: RunSubmitReq): Promise<RunSubmitRes> {

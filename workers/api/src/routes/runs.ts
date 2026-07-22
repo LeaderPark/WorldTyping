@@ -41,6 +41,7 @@ import {
 import { evaluateRunAchievements } from "../lib/achievements";
 import { ensureDailySeed } from "../cron/daily-seed";
 import { buildDailyShareText } from "../lib/share-text";
+import { generateShareId } from "../lib/share-id";
 
 /** run 세션 사용 플래그 TTL(docs/06 §3.1 — 2h). */
 const SESS_FLAG_TTL_SEC = 2 * 60 * 60;
@@ -139,6 +140,9 @@ interface RunSubmitRes {
   /** 데일리 전용 Wordle식 공유 텍스트(§2.3, WT-M5-04). daily 모드가 아니거나 토큰 자체가
    *  무효(invalid_token/replay 조기 반환)면 null — 클라는 null이면 공유 텍스트 UI를 숨긴다. */
   shareText: string | null;
+  /** OG 공유 랜딩 단축 id(§9.1, WT-M6-02). 수리된 기록(rejected 아님)에만 발급 —
+   *  `/r/{shareId}` 랜딩 + `/og/{shareId}.png` 카드. rejected/조기반환은 null. */
+  shareId: string | null;
 }
 
 export const runs = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
@@ -279,6 +283,14 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
     stmts.push(shadowbanStmt(db, pid, now));
   }
 
+  // 공유 랜딩 share_id 발급(§9.1, WT-M6-02): 수리된 기록(rejected 아님)에만. runs INSERT와 같은
+  // batch에 넣어 원자적으로 확정한다(share가 run보다 먼저 커밋되는 경합 없음). 섀도우밴 여부와
+  // 무관(카드는 개인 기록 — 랭킹 노출과 별개, achievements 게이트와 동일 논리).
+  const shareId = finalVerdict !== "rejected" ? generateShareId() : null;
+  if (shareId) {
+    stmts.push(shareInsertStmt(db, shareId, token.rid, now));
+  }
+
   // 리더보드 등재(§1.3): verdict='valid' + 비-shadowban일 때만 lb_best UPSERT(§3.5 — shadowban은
   // runs만 기록). daily 보드는 첫 정식 기록만이므로(practice 강등된 재도전은 여기 도달 안 함)
   // DO NOTHING 분기로 안전하게 처리한다. UPSERT는 runs INSERT와 같은 batch에 넣어 원자 반영.
@@ -360,7 +372,7 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
     });
   }
 
-  return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks, shareText));
+  return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks, shareText, shareId));
 });
 
 // ───────────────────────── 응답/SQL 헬퍼 ─────────────────────────
@@ -384,6 +396,7 @@ function submitRes(
   inline?: InlineRank,
   newUnlocks: string[] = [],
   shareText: string | null = null,
+  shareId: string | null = null,
 ): RunSubmitRes {
   return {
     verdict,
@@ -398,7 +411,15 @@ function submitRes(
     isPersonalBest: inline ? inline.isPersonalBest : null,
     newUnlocks,
     shareText,
+    shareId,
   };
+}
+
+/** shares INSERT(§9.1) — runs INSERT와 같은 batch에 넣어 원자 반영. */
+function shareInsertStmt(db: D1Database, shareId: string, runId: string, now: number): D1PreparedStatement {
+  return db
+    .prepare(`INSERT INTO shares (share_id, run_id, created_at) VALUES (?1, ?2, ?3)`)
+    .bind(shareId, runId, now);
 }
 
 interface PersonalStatsRow {

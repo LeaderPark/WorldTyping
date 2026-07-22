@@ -14,6 +14,7 @@ import {
   validateContinentRoute,
   validateWorldTour,
 } from '../../packages/data/src/build/route.ts';
+import { buildOgMaps } from './lib/og-maps-extract.ts';
 import type { Continent, Country } from '@wt/shared';
 
 const REPO_ROOT = new URL('../../', import.meta.url);
@@ -118,6 +119,12 @@ async function main(): Promise<void> {
   writeOut('apps/web/public/data/countries-110m.json', topojsonJson);
   writeOut('apps/web/public/data/manifest.json', manifestJson);
   writeOut('packages/data/src/generated/countries.ts', generatedTs);
+
+  // Step 7-(f): OG 공유 카드용 대륙 지도 사전 추출(WT-M6-02, docs/06 §9.1 — 런타임 topojson 파싱
+  // 금지). 게임과 동일한 960×500 geoNaturalEarth1 투영으로 대륙별 단순 SVG path + 국가 중심점을
+  // 계산해 workers/api/src/og/og-maps.json으로 확정 저장한다(결정적 → CI diff 검증 대상).
+  const ogMaps = buildOgMaps(JSON.parse(topojsonJson) as never, dataset.countries);
+  writeOut('workers/api/src/og/og-maps.json', JSON.stringify(ogMaps));
 
   // ── stats: mapFeatureId 매칭 통계 ───────────────────────────────
   console.log('\n[build-data] mapFeatureId binding');

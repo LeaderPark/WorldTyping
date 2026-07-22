@@ -8,6 +8,8 @@
 #   - crons: 5분 스냅샷 → 1분 dirty refresher (§11-D24)
 #   - directory: "../web/dist" → "../../apps/web/dist" (docs/00 §6 트리 경로, apps/worker→workers/api)
 #   - run_worker_first에 "/r/*","/og/*" 추가 (docs/00 §7.2)
+#   - run_worker_first에 "/multi/*" 추가 (WT-M6-02 — 방 초대 OG SSR 메타 주입. Worker가 SPA
+#     index.html에 <head> 메타만 덧대 반환하므로 실제 유저 SPA 부팅은 불변, docs/06 §9.2)
 #
 # database_id / kv id / bucket 등 실 리소스 ID는 Cloudflare 계정 미연결 상태라 플레이스홀더로 둔다.
 # 발급 절차(리드가 계정 연결 후 1회 실행):
@@ -25,7 +27,7 @@ compatibility_flags = ["nodejs_compat"]
 directory = "../../apps/web/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*", "/ws/*", "/r/*", "/og/*"]
+run_worker_first = ["/api/*", "/ws/*", "/r/*", "/og/*", "/multi/*"]
 
 [observability]
 enabled = true

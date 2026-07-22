@@ -25,6 +25,8 @@ export default defineWorkersConfig(async () => {
         // WT-M4-05: MatchRoom DO(bot 재생·재접속)를 구동해 DO SQLite를 남긴다 → 여기(isolatedStorage=false).
         "test/ghost.test.ts",
         "test/reconnect.test.ts",
+        // WT-M6-02: /multi OG SSR이 MatchRoom DO(internal/room-status)를 건드린다 → 여기(EBUSY 회피).
+        "test/og-multi.test.ts",
       ],
       setupFiles: ["./test/apply-migrations.ts"],
       poolOptions: {

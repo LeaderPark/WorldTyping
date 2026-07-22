@@ -153,7 +153,7 @@ export function RankPage() {
 
   return (
     <main className="wt-rank-page" data-testid="rank-page">
-      <h1 className="wt-rank-page__title">{t('rank.title')}</h1>
+      <h1 className="wt-rank-page__title" tabIndex={-1}>{t('rank.title')}</h1>
 
       <div className="wt-rank-page__filters" data-testid="rank-filters">
         <div role="group" aria-label="period" data-testid="rank-filter-period">

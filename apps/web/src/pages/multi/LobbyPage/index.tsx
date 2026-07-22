@@ -128,7 +128,7 @@ export function LobbyPage() {
     <main className="wt-lobby" data-testid="lobby-page">
       <header className="wt-lobby__header">
         <Link to="/" data-testid="lobby-back-home">{t('nav.back.home')}</Link>
-        <h1>{t('menu.multi')}</h1>
+        <h1 tabIndex={-1}>{t('menu.multi')}</h1>
       </header>
 
       {error && <p className="wt-lobby__error" data-testid="lobby-error">{error}</p>}

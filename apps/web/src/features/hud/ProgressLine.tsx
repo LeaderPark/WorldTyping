@@ -23,7 +23,16 @@ export function ProgressLine({ countryIds, currentIndex, nextCountryName, ackInd
   const total = countryIds.length;
 
   return (
-    <div className="wt-progress-line" data-testid="progress-line">
+    <div
+      className="wt-progress-line"
+      data-testid="progress-line"
+      role="progressbar"
+      aria-label={t('hud.progressLabel')}
+      aria-valuemin={1}
+      aria-valuemax={total}
+      aria-valuenow={Math.min(currentIndex + 1, total)}
+      aria-valuetext={t('game.progress', { current: Math.min(currentIndex + 1, total), total })}
+    >
       <div className="wt-progress-line__dots" aria-hidden="true">
         {countryIds.map((id, i) => (
           <span key={id} className={dotClassName(i, currentIndex, ackIndex)} data-testid={i === ackIndex ? 'progress-ack-ghost' : undefined} />

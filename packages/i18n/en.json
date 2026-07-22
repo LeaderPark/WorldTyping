@@ -38,7 +38,10 @@
   "hud.accuracy": "{accuracy}%",
   "hud.streak": "×{count} STREAK",
   "hud.next": "Next: {country}",
+  "hud.announceNext": "Next: {country}, {position} of {total}",
+  "hud.progressLabel": "Progress",
   "hud.skipHint": "ESC to skip",
+  "hud.skipButton": "Skip",
   "hud.lives": "Lives {count}",
 
   "result.title": "Arrival complete!",
@@ -49,6 +52,7 @@
   "result.routeComplete": "{route} complete",
   "result.grade": "★ {grade} ★",
   "result.score": "Score {score}",
+  "result.announce": "Result: grade {grade}, score {score}",
   "result.pi": "PI {pi}",
   "result.streak": "×{count}",
   "result.chart.label": "Pace graph",
@@ -210,6 +214,8 @@
   "boarding.ruleType.worldtour": "Time Attack + Lives",
   "boarding.ruleType.daily": "Survival Variant",
   "boarding.connecting": "Connecting to server...",
+  "boarding.longModeWarning": "World Tour can take 10+ minutes. Check your battery and time.",
+  "boarding.longModeWarning.dismiss": "Got it",
   "boarding.blocked.title": "Online connection required",
   "boarding.blocked.body": "Tier / Daily can only start while connected to the server. Check your network and reopen this mode.",
 

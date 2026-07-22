@@ -31,6 +31,7 @@ import type { WorldMapHandle } from '../../features/map/map-handle';
 import { useSessionStore } from '../../stores/session';
 import { useSettingsStore } from '../../stores/settings';
 import { SERVER_SET_MODES } from '../../net/run-session';
+import { useModalA11y } from '../../lib/useModalA11y';
 import { BoardingBlocked, BoardingPass } from './BoardingPass';
 import { GameView } from './GameView';
 import { ResultView } from './ResultView';
@@ -57,7 +58,7 @@ export function GamePage() {
   const trackId = params.trackId ?? '';
 
   const { engine, countries, runStart, start, retry, abort } = useGameSession({ mode, trackId });
-  const { inputRef, focusInput, controller, getInputValue } = useTypingEngine(engine);
+  const { inputRef, focusInput, controller, getInputValue, requestSkip } = useTypingEngine(engine);
   const { bindTimerEl, bindGaugeEl } = useGameClock(engine);
   // 사운드: 엔진(확정/체크포인트/카운트다운)+컨트롤러(정타/오타) 이벤트 구독(§13.1, 구현
   // 세부 지시 3). 고빈도 값이 아니라 이벤트 배선뿐이므로 §4.5 불변식과 무관하다.
@@ -180,6 +181,11 @@ export function GamePage() {
 
   // 브라우저 뒤로가기 = 포기 확인 모달(진행 중인 판만 차단 — idle/finished/aborted는 자유 이탈).
   const blocker = useBlocker(phase === 'countdown' || phase === 'playing');
+  const confirmLeaveRef = useRef<HTMLDivElement | null>(null);
+  // 배경 inert + 포커스 트랩 + 닫힘 시 트리거로 복귀(§7.3) — ESC는 이 모달에 아직 없다(의도적
+  // 으로 명시 선택만 받는다 — 뒤로가기 확인은 실수 방지가 목적이라 ESC로 즉시 닫히면 원래
+  // 취지가 흐려진다).
+  useModalA11y(confirmLeaveRef, blocker.state === 'blocked');
 
   // reducedMotion 'auto'는 AppShell과 동일하게 prefers-reduced-motion을 따른다(§7.3).
   const reducedActive =
@@ -213,6 +219,7 @@ export function GamePage() {
             lang={lang}
             nickname={nickname}
             guestId={guestId}
+            platform={platform}
             start={start}
             focusInput={focusInput}
             locked={SERVER_SET_MODES.has(mode) && runStart.status === 'loading'}
@@ -232,6 +239,7 @@ export function GamePage() {
             bindTimerEl={bindTimerEl}
             bindGaugeEl={bindGaugeEl}
             juice={juice}
+            requestSkip={requestSkip}
           />
         )}
         {phase === 'finished' && result && (
@@ -253,10 +261,22 @@ export function GamePage() {
       </div>
 
       {blocker.state === 'blocked' && (
-        <div role="dialog" aria-modal="true" className="wt-confirm-leave" data-testid="confirm-leave">
+        <div
+          ref={confirmLeaveRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wt-confirm-leave-title"
+          aria-describedby="wt-confirm-leave-body"
+          className="wt-confirm-leave"
+          data-testid="confirm-leave"
+        >
           <div className="wt-confirm-leave__box">
-            <p className="wt-confirm-leave__title">{t('game.confirmLeave.title')}</p>
-            <p className="wt-confirm-leave__body">{t('game.confirmLeave.body')}</p>
+            <p id="wt-confirm-leave-title" className="wt-confirm-leave__title">
+              {t('game.confirmLeave.title')}
+            </p>
+            <p id="wt-confirm-leave-body" className="wt-confirm-leave__body">
+              {t('game.confirmLeave.body')}
+            </p>
             <div className="wt-confirm-leave__actions">
               <button type="button" data-testid="confirm-leave-stay" onClick={() => blocker.reset?.()}>
                 {t('game.confirmLeave.stay')}

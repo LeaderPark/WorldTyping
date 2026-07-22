@@ -38,7 +38,10 @@
   "hud.accuracy": "{accuracy}%",
   "hud.streak": "×{count} STREAK",
   "hud.next": "다음: {country}",
+  "hud.announceNext": "다음: {country}, {position}번째, {total}개 중",
+  "hud.progressLabel": "진행률",
   "hud.skipHint": "ESC 스킵",
+  "hud.skipButton": "스킵",
   "hud.lives": "라이프 {count}",
 
   "result.title": "입국 완료!",
@@ -49,6 +52,7 @@
   "result.routeComplete": "{route} 완주",
   "result.grade": "★ {grade} ★",
   "result.score": "점수 {score}",
+  "result.announce": "결과: {grade}등급, {score}점",
   "result.pi": "PI {pi}",
   "result.streak": "×{count}",
   "result.chart.label": "구간 그래프",
@@ -210,6 +214,8 @@
   "boarding.ruleType.worldtour": "타임어택+라이프",
   "boarding.ruleType.daily": "서바이벌 변형",
   "boarding.connecting": "서버에 연결하는 중...",
+  "boarding.longModeWarning": "세계일주는 10분 이상 걸릴 수 있어요. 배터리와 시간을 확인하세요.",
+  "boarding.longModeWarning.dismiss": "확인",
   "boarding.blocked.title": "온라인 연결이 필요해요",
   "boarding.blocked.body": "티어/데일리는 서버 연결 상태에서만 시작할 수 있어요. 네트워크를 확인하고 다시 열어 주세요.",
 

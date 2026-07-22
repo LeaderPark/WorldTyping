@@ -17,6 +17,8 @@ export interface BoardingPassProps {
   lang: 'ko' | 'en';
   nickname: string;
   guestId: string;
+  /** 세계일주 장시간 모드 경고(§7.3) 노출 여부 판정용. */
+  platform: 'desktop' | 'mobile';
   start(): void;
   focusInput(): void;
   /** 티어/데일리가 서버 세트(POST /runs/start) 응답을 기다리는 동안 CTA를 잠근다(WT-M3-06
@@ -35,6 +37,7 @@ export function BoardingPass({
   lang,
   nickname,
   guestId,
+  platform,
   start,
   focusInput,
   locked = false,
@@ -42,6 +45,10 @@ export function BoardingPass({
   const { t } = useTranslation();
   const [punching, setPunching] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 세계일주(10분+) 모바일 "장시간 모드" 경고 1회(§7.3) — 보딩패스 화면 1회 노출로 충분(닫으면
+  // 이 마운트 동안은 재노출하지 않는다. 판마다 새로 마운트되므로 다음 판엔 다시 뜬다 — 매번
+  // 배터리/시간을 상기시키는 편이 안전하다는 판단, 영구 억제는 하지 않는다).
+  const [showLongModeWarning, setShowLongModeWarning] = useState(mode === 'worldtour' && platform === 'mobile');
 
   useEffect(
     () => () => {
@@ -83,6 +90,19 @@ export function BoardingPass({
 
   return (
     <div className="wt-boarding" data-testid="boarding-pass">
+      {showLongModeWarning && (
+        <p className="wt-long-mode-warning" data-testid="long-mode-warning">
+          <span>{t('boarding.longModeWarning')}</span>
+          <button
+            type="button"
+            className="wt-long-mode-warning__dismiss"
+            data-testid="long-mode-warning-dismiss"
+            onClick={() => setShowLongModeWarning(false)}
+          >
+            {t('boarding.longModeWarning.dismiss')}
+          </button>
+        </p>
+      )}
       <div
         className={`wt-boarding__card${punching ? ' wt-boarding__card--punch' : ''}${locked ? ' wt-boarding__card--locked' : ''}`}
         role="button"

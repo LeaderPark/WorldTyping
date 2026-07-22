@@ -18,6 +18,109 @@
   font-display: optional;
 }
 
+/* ── 접근성/모바일 일괄(WT-M5-02) ──────────────────────────────────────────
+   spec: docs/03 §7(브레이크포인트·모바일 입력·접근성 표), docs/01 §11.2·§11.3. */
+
+/* --vv-height/--vv-offset-top 폴백(useLayoutMode.ts가 실제 값을 갱신하기 전 초기값 — §7.1). */
+:root {
+  --vv-height: 100vh;
+  --vv-offset-top: 0px;
+}
+
+/* 키보드 온리 포커스 링(§7.3 "전 메뉴 Tab 순회(focus-visible:ring-2)"). 마우스/터치 클릭에는
+   뜨지 않고 키보드 포커스에만 뜬다(:focus-visible이 이미 그 구분을 한다) — 대비는 다크/라이트
+   배경 모두에서 WCAG AA를 만족하는 grade-b(파랑)를 쓰고, outline은 레이아웃에 영향 없다. */
+*:focus-visible {
+  outline: 2px solid var(--grade-b, #3b82f6);
+  outline-offset: 2px;
+}
+/* 고대비 모드(§7.3 "고대비 모드: 토큰 스왑")에서는 링을 더 두껍고 노란색으로 — 파란 링이
+   고대비 모드가 필요한 저시력 사용자에게 배경과 섞여 보이는 경우를 보강한다. */
+:root[data-contrast] *:focus-visible {
+  outline: 3px solid var(--grade-s, #fbbf24);
+  outline-offset: 2px;
+}
+
+/* 고대비 모드 토큰 스왑(§7.3) — 지도 경계/유휴 색의 대비를 강화하고, 카드 테두리를 또렷하게.
+   대륙색/등급색(브랜드 색)은 그대로 두고 "경계·구분"에 관여하는 중립 토큰만 조정한다(브랜드
+   색 자체를 바꾸는 건 GDD가 정한 결정이라 이 태스크 범위 밖 — 최종 보고 escalations 참조). */
+:root[data-contrast] {
+  --map-border: #f8fafc;
+  --map-idle: #33404f;
+  --map-pending: #3d4c5e;
+}
+:root[data-contrast][data-theme="light"] {
+  --map-border: #0f172a;
+  --map-idle: #cbd5e1;
+  --map-pending: #b7c3d1;
+}
+
+/* fontScale 0/1/2 → 프롬프트 clamp 배수 ×1/×1.25/×1.5(§7.3 표, AppShell이 [data-font-scale]
+   부여). 프롬프트 자체의 base clamp는 prompt-renderer.ts가 마운트하는 글리프 컨테이너에
+   적용한다. */
+:root {
+  --wt-font-scale: 1;
+}
+:root[data-font-scale="1"] {
+  --wt-font-scale: 1.25;
+}
+:root[data-font-scale="2"] {
+  --wt-font-scale: 1.5;
+}
+.wt-prompt-area__glyphs {
+  font-size: calc(clamp(2rem, 6vw, 3.5rem) * var(--wt-font-scale));
+}
+
+/* 모바일 키보드 위 프롬프트 앵커(§7.1 "top: calc(var(--vv-offset-top) + var(--vv-height)/2)").
+   mobile 브레이크포인트에서만 적용 — desktop/tablet은 기존 중앙 정렬 flex 레이아웃 그대로. */
+@media (max-width: 639px) {
+  .wt-game-page__content {
+    position: absolute;
+    inset: 0;
+    top: var(--vv-offset-top, 0px);
+    height: var(--vv-height, 100vh);
+    justify-content: flex-end;
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* 모바일 스킵 고정 버튼(§7.2 "스킵은 화면 우하단 고정 버튼(ESC 없음)"). 44px 터치 타깃(§7.1
+   tablet 규격을 모바일에도 그대로 적용). */
+.wt-mobile-skip {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--map-border);
+  background: color-mix(in srgb, var(--map-idle) 80%, transparent);
+  color: inherit;
+  font-weight: 700;
+}
+
+/* 세계일주 장시간 모드 경고(§7.3 "세계일주(10분+)는 모바일에서 '장시간 모드' 경고 1회 노출"). */
+.wt-long-mode-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--map-border);
+  background: color-mix(in srgb, var(--grade-d) 25%, transparent);
+  font-size: 0.9rem;
+}
+.wt-long-mode-warning__dismiss {
+  flex: none;
+  padding: 0.25rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--map-border);
+  background: transparent;
+  color: inherit;
+}
+
 /* ── 프롬프트 렌더러(features/typing/prompt-renderer.ts) 채색 토큰 ──
    spec: docs/03 §2.8(음절 상태 4종·오타 색각 이중 부호화), §3.6(레이아웃 프로퍼티 불변 —
    transform/opacity만). 색 토큰은 WT-M2-04 tokens.css 도입 시 그 변수로 승격한다(지금은 폴백). */
@@ -346,7 +449,10 @@
   cursor: not-allowed;
 }
 .wt-btn--primary {
-  background: var(--grade-b);
+  /* WT-M5-02 contrast-check 수정: 원색 var(--grade-b) 위 흰 텍스트는 실측 3.68:1로 WCAG AA
+     본문 텍스트 기준(4.5:1)에 못 미쳤다(tooling/ci/contrast-check.ts). 형제 요소(onboarding-tip
+     등)와 동일하게 살짝 어둡게 섞어 4.5:1 이상을 확보한다 — 시각적 델타는 미세하다. */
+  background: color-mix(in srgb, var(--grade-b) 85%, black);
   color: #fff;
   border-color: transparent;
 }

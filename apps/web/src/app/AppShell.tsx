@@ -6,16 +6,23 @@
 
 import { Outlet, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useSettingsStore } from '../stores/settings';
 import { useSessionStore } from '../stores/session';
 import { useHotkeys } from '../lib/hotkeys';
+import { useRouteFocus } from '../lib/useRouteFocus';
+import { useModalA11y } from '../lib/useModalA11y';
 
 export function AppShell() {
   const theme = useSettingsStore((s) => s.theme);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
   const highContrast = useSettingsStore((s) => s.highContrast);
+  const fontScale = useSettingsStore((s) => s.fontScale);
+
+  // 라우트 전환 시 새 화면의 h1으로 포커스 이동(§7.3) — AppShell은 Outlet을 감싸는 루트라
+  // 라우트가 바뀌어도 그 자신은 리마운트되지 않는다(useRouteFocus.ts 주석 참조).
+  useRouteFocus();
 
   // 테마: <html data-theme> 갱신 + FOUC 스니펫이 다음 로드에 읽을 원시 키 동기화(§8.1).
   useEffect(() => {
@@ -33,6 +40,12 @@ export function AppShell() {
   useEffect(() => {
     document.documentElement.toggleAttribute('data-contrast', highContrast);
   }, [highContrast]);
+
+  // fontScale 0/1/2 → 프롬프트 clamp 배수 ×1/×1.25/×1.5(§7.3, globals.css의
+  // [data-font-scale] 셀렉터가 이 값을 읽는다).
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-scale', String(fontScale));
+  }, [fontScale]);
 
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
@@ -98,6 +111,7 @@ function SettingsOverlay() {
   const isOpen = searchParams.get('modal') === 'settings';
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   const close = () => {
     const next = new URLSearchParams(searchParams);
@@ -106,11 +120,14 @@ function SettingsOverlay() {
   };
 
   useHotkeys(isOpen ? { Escape: close } : {});
+  // 배경 inert + 포커스 트랩 + 닫힘 시 트리거로 복귀(§7.3) — ESC는 위 useHotkeys가 이미 처리.
+  useModalA11y(dialogRef, isOpen);
 
   if (!isOpen) return null;
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={t('menu.settings')}

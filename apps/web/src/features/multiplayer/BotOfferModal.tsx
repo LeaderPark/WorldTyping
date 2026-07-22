@@ -3,9 +3,10 @@
 //
 // S2C_BotOffer 수신 시 대기실 위에 뜨는 확인 모달. 수락/거절은 useMultiplayer().botAccept로
 // 그대로 위임(판정 로직 없음 — 여기는 표시·입력만).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { S2C_BotOffer } from '@wt/shared';
+import { useModalA11y } from '../../lib/useModalA11y';
 
 export interface BotOfferModalProps {
   offer: S2C_BotOffer;
@@ -16,6 +17,9 @@ export interface BotOfferModalProps {
 export function BotOfferModal({ offer, onAccept, onDecline }: BotOfferModalProps) {
   const { t } = useTranslation();
   const [secondsLeft, setSecondsLeft] = useState(() => remainingSeconds(offer.expiresAt));
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  // 배경 inert + 포커스 트랩 + 닫힘(수락/거절/만료로 언마운트) 시 트리거로 복귀(§7.3).
+  useModalA11y(dialogRef, true);
 
   useEffect(() => {
     setSecondsLeft(remainingSeconds(offer.expiresAt));
@@ -26,11 +30,23 @@ export function BotOfferModal({ offer, onAccept, onDecline }: BotOfferModalProps
   }, [offer.expiresAt]);
 
   return (
-    <div role="dialog" aria-modal="true" className="wt-bot-offer" data-testid="bot-offer-modal">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="wt-bot-offer-title"
+      aria-describedby="wt-bot-offer-body"
+      className="wt-bot-offer"
+      data-testid="bot-offer-modal"
+    >
       <div className="wt-bot-offer__box">
         <span className="wt-bot-offer__badge">{t('bot.offer.badge')}</span>
-        <p className="wt-bot-offer__title">{t('bot.offer.title')}</p>
-        <p className="wt-bot-offer__body">{t('bot.offer.body')}</p>
+        <p id="wt-bot-offer-title" className="wt-bot-offer__title">
+          {t('bot.offer.title')}
+        </p>
+        <p id="wt-bot-offer-body" className="wt-bot-offer__body">
+          {t('bot.offer.body')}
+        </p>
         <p className="wt-bot-offer__countdown" data-testid="bot-offer-countdown">
           {secondsLeft}
         </p>

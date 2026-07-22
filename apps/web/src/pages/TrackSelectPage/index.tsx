@@ -40,7 +40,7 @@ export function TrackSelectPage() {
         <Link to="/play" data-testid="track-select-back" className="wt-nav-back">
           {t('nav.back.mode')}
         </Link>
-        <h1 className="wt-track-select__title">{t('route.select.title')}</h1>
+        <h1 className="wt-track-select__title" tabIndex={-1}>{t('route.select.title')}</h1>
       </div>
 
       <ul className="wt-track-select__list">

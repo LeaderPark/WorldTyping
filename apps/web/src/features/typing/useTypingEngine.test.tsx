@@ -42,14 +42,17 @@ const GHANA = mk({ id: 'GH', nameKo: '가나', nameEn: 'ghana' });
 function Harness({
   engine,
   controllerBox,
+  onRequestSkip,
 }: {
   engine: GameSessionEngine;
   controllerBox?: MutableRefObject<TypingInputController | null>;
+  onRequestSkip?: MutableRefObject<(() => void) | null>;
 }) {
-  const { inputRef, controller } = useTypingEngine(engine);
+  const { inputRef, controller, requestSkip } = useTypingEngine(engine);
   useEffect(() => {
     if (controllerBox) controllerBox.current = controller;
-  }, [controller, controllerBox]);
+    if (onRequestSkip) onRequestSkip.current = requestSkip;
+  }, [controller, controllerBox, requestSkip, onRequestSkip]);
   return <input data-testid="inp" ref={inputRef} />;
 }
 
@@ -123,5 +126,30 @@ describe('useTypingEngine — StrictMode 안전성(WT-M2-09)', () => {
     // detach된 뒤 남은 요소에 ESC를 쏴도 엔진으로 전달되지 않는다.
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(handleInput).not.toHaveBeenCalled();
+  });
+
+  it('requestSkip()이 데스크톱 ESC와 동일하게 skipRequested를 엔진에 전달한다(모바일 스킵 버튼, WT-M5-02)', () => {
+    const handleInput = vi.fn<(e: TypingEvent) => void>();
+    const skipBox: MutableRefObject<(() => void) | null> = { current: null };
+    render(
+      <StrictMode>
+        <Harness engine={mockEngine('ko', handleInput)} onRequestSkip={skipBox} />
+      </StrictMode>,
+    );
+
+    skipBox.current?.();
+
+    expect(handleInput).toHaveBeenCalledWith({ type: 'skipRequested' });
+  });
+
+  it('부착 전(요소 없음) requestSkip()은 예외 없이 no-op', () => {
+    function Bare() {
+      const { requestSkip } = useTypingEngine(mockEngine('ko', vi.fn()));
+      useEffect(() => {
+        requestSkip();
+      }, [requestSkip]);
+      return null;
+    }
+    expect(() => render(<Bare />)).not.toThrow();
   });
 });

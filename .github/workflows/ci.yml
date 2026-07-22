@@ -62,6 +62,10 @@ jobs:
       - name: Size limit (entry JS budget)
         run: pnpm --filter @wt/web run size-limit
 
+      # docs/03 §7.3 WCAG AA 4.5:1(large text 3:1) 정적 토큰 대비 검사 — WT-M5-02.
+      - name: Contrast check (tokens.css WCAG AA)
+        run: pnpm contrast-check
+
       - name: Install Playwright Chromium (Lighthouse browser)
         run: pnpm --filter @wt/e2e exec playwright install chromium
 

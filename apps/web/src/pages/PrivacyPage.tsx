@@ -3,5 +3,9 @@ import { useTranslation } from 'react-i18next';
 
 export function PrivacyPage() {
   const { t } = useTranslation();
-  return <h1 className="p-8 text-2xl font-bold">{t('settings.privacy')}</h1>;
+  return (
+    <h1 className="p-8 text-2xl font-bold" tabIndex={-1}>
+      {t('settings.privacy')}
+    </h1>
+  );
 }

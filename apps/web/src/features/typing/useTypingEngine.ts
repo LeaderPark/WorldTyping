@@ -25,6 +25,13 @@ export interface UseTypingEngineResult {
   controller: TypingInputController | null;
   /** 별칭 에코 등 표시 계층이 실입력 원문을 읽을 때 사용(고빈도 값은 state 미경유 — §4.5). */
   getInputValue(): string;
+  /**
+   * 모바일 스킵 고정 버튼(docs/03 §7.2·WT-M5-02)용 — 데스크톱 ESC와 정확히 같은 경로를
+   * 재사용한다: hidden input에 Escape keydown을 그대로 재현해 흘려보낸다(controller.attach()가
+   * 이 이벤트를 그 요소에서 직접 구독하므로 스킵 판정 로직을 이 훅에 복제하지 않는다 —
+   * shared 판정 로직 중복 금지 원칙과 동일 취지). 부착 전(요소 없음)이면 no-op.
+   */
+  requestSkip(): void;
 }
 
 export function useTypingEngine(engine: GameSessionEngine): UseTypingEngineResult {
@@ -65,5 +72,11 @@ export function useTypingEngine(engine: GameSessionEngine): UseTypingEngineResul
 
   const getInputValue = useCallback(() => inputElRef.current?.value ?? '', []);
 
-  return { inputRef, focusInput, controller, getInputValue };
+  const requestSkip = useCallback(() => {
+    inputElRef.current?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+  }, []);
+
+  return { inputRef, focusInput, controller, getInputValue, requestSkip };
 }

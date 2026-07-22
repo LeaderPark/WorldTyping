@@ -10,6 +10,7 @@
   "scripts": {
     "build:data": "tsx tooling/scripts/build-data.ts",
     "build:moderation-snapshot": "tsx tooling/scripts/build-moderation-snapshot.ts",
+    "contrast-check": "tsx tooling/ci/contrast-check.ts",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "vitest run && pnpm --filter @wt/api run test:workers",
     "build": "pnpm -r --if-present run build",

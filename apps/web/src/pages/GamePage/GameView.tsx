@@ -9,6 +9,7 @@
 // 단위 빈도의 것(콤보 ×5 글로우 on/off, 스탬프 트리거)뿐이다.
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, TypingInputController } from '@wt/engine';
 import type { Country, CountryId, GameMode } from '@wt/shared';
 import { PromptArea } from '../../features/typing/PromptArea';
@@ -16,6 +17,7 @@ import { HudBar } from '../../features/hud/HudBar';
 import { ProgressLine } from '../../features/hud/ProgressLine';
 import { TimeLimitGauge } from '../../features/hud/TimeLimitGauge';
 import { useLongTaskObserver } from '../../lib/useLongTaskObserver';
+import { useLayoutMode } from '../../lib/useLayoutMode';
 import { FirstRunTips } from '../../features/onboarding/FirstRunTips';
 
 /** GDD §13.3-3 콤보 글로우 배수. */
@@ -49,6 +51,8 @@ export interface GameViewProps {
   juice?: boolean;
   /** 지정 시 멀티 레이스 variant(docs/03 §4.2 "variant=race"). */
   race?: RaceOverlay;
+  /** 모바일 우하단 고정 스킵 버튼(§7.2)용 — ESC와 동일 경로(useTypingEngine.requestSkip). */
+  requestSkip?(): void;
 }
 
 export function GameView({
@@ -65,7 +69,9 @@ export function GameView({
   bindGaugeEl,
   juice = true,
   race,
+  requestSkip,
 }: GameViewProps) {
+  const { t } = useTranslation();
   const current = countries[currentIndex];
   const next = countries[currentIndex + 1];
   const nextName = next ? (lang === 'ko' ? next.nameKo : next.nameEn) : null;
@@ -76,9 +82,33 @@ export function GameView({
   // 인게임 long task 계측 훅(개발 모드 전용 콘솔 로그) — 실측 판정은 리드/WT-M2-08 수동·E2E.
   useLongTaskObserver(true);
 
+  // 인게임 레이아웃 모드(§7.1) — 모바일 스킵 고정 버튼 노출 여부에만 쓴다. 미디어쿼리가 아니라
+  // 이 훅(폭 기반, 소프트 키보드로 인한 높이 변화에 오판 없음)을 쓴다는 게 spec 요지다.
+  const { mode: layoutMode } = useLayoutMode();
+
   const stampRef = useRef<HTMLDivElement | null>(null);
+  const announceRef = useRef<HTMLDivElement | null>(null);
   const [edgeGlow, setEdgeGlow] = useState(false);
   const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 스크린리더 국가 전환 낭독(§7.3 "국가 전환 시 '다음: 몽골, 12번째, 45개 중' 낭독 — 매
+  // 키스트로크 낭독 금지"). textContent 직접 갱신(§4.5와 동일 취지 — 국가당 최대 1회뿐이라
+  // 고빈도는 아니지만, HudBar/ComboBadge와 같은 패턴을 그대로 따라 일관성을 유지한다).
+  useEffect(() => {
+    const unsub = engine.subscribe((e) => {
+      if (e.type !== 'countryShown') return;
+      const el = announceRef.current;
+      const c = countries[e.index];
+      if (!el || !c) return;
+      const name = lang === 'ko' ? c.nameKo : c.nameEn;
+      el.textContent = t('hud.announceNext', {
+        country: name,
+        position: e.index + 1,
+        total: countryIds.length,
+      });
+    });
+    return unsub;
+  }, [engine, countries, countryIds.length, lang, t]);
 
   // juice #2: 국가 확정(스킵 제외) 시 프롬프트 위에 스탬프가 15° 기울어져 찍힌다(§13.3-2).
   // juice #3: 콤보 ×5 배수마다 화면 가장자리 글로우(§13.3-3, ComboBadge의 배지 바운스와 별개).
@@ -151,6 +181,24 @@ export function GameView({
 
       {/* 온보딩 팁은 싱글 전용(§11.1) — 레이스 중 표시하면 상대와의 실시간 대결에 방해된다. */}
       {!race && <FirstRunTips controller={controller} currentIndex={currentIndex} />}
+
+      {/* 스크린리더 전용 낭독 영역(§7.3) — 시각 표시가 아니라 위 useEffect가 국가 전환 단위로만
+          채운다. */}
+      <div ref={announceRef} aria-live="polite" className="sr-only" data-testid="game-country-announce" />
+
+      {/* 모바일 스킵 고정 버튼(§7.2 "스킵은 화면 우하단 고정 버튼(ESC 없음)") — 데스크톱 ESC와
+          동일 경로(useTypingEngine.requestSkip, 판정 로직 복제 없음). */}
+      {layoutMode === 'mobile' && requestSkip && (
+        <button
+          type="button"
+          className="wt-mobile-skip"
+          data-testid="mobile-skip-button"
+          aria-label={t('hud.skipHint')}
+          onClick={requestSkip}
+        >
+          {t('hud.skipButton')}
+        </button>
+      )}
     </div>
   );
 }

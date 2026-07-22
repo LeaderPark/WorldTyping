@@ -45,7 +45,7 @@ export function ModeSelectPage() {
         <Link to="/" data-testid="mode-select-back" className="wt-nav-back">
           {t('nav.back.home')}
         </Link>
-        <h1 className="wt-mode-select__title">{t('mode.select.title')}</h1>
+        <h1 className="wt-mode-select__title" tabIndex={-1}>{t('mode.select.title')}</h1>
       </div>
 
       <div className="wt-mode-select__cards">

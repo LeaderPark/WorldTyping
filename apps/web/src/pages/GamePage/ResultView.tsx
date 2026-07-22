@@ -142,7 +142,19 @@ export function ResultView({
 
   return (
     <div className="wt-result-view" data-testid="result-view">
-      <h1 className="wt-result-view__title">{t('result.title')}</h1>
+      <h1 className="wt-result-view__title" tabIndex={-1}>
+        {t('result.title')}
+      </h1>
+      {/* 결과 도달 1회 assertive 낭독(§7.3 "결과: aria-live=assertive로 등급/점수 1회 낭독") —
+          h1 자체가 아니라 별도 sr-only 영역에 값을 담아, 화면표시 카드(ResultCard)의 시각
+          레이아웃과 스크린리더 낭독 문구를 분리한다(카드는 라벨+숫자를 나눠 여러 요소에
+          흩어 놓아 그대로 낭독하면 뒤죽박죽이라서). */}
+      <p role="status" aria-live="assertive" className="sr-only" data-testid="result-announce">
+        {t('result.announce', {
+          grade: result.score.grade,
+          score: result.score.finalScore,
+        })}
+      </p>
 
       <ResultCard
         routeLabel={routeLabel}

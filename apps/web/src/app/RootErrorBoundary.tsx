@@ -17,7 +17,9 @@ export function RootErrorBoundary() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-white p-8 text-center text-slate-900 dark:bg-slate-900 dark:text-white">
       <div>
-        <h1 className="text-xl font-bold">{t('error.boundary.title')}</h1>
+        <h1 className="text-xl font-bold" tabIndex={-1}>
+          {t('error.boundary.title')}
+        </h1>
         <p className="mt-2 text-sm opacity-70">{detail}</p>
       </div>
     </main>

@@ -15,12 +15,13 @@
 // 초과한다(§11-D45 실측 2.64s). Suspense fallback은 HeroMapPlaceholder — HeroMap 내부의
 // "위상 데이터 fetch 중" placeholder와 동일 마크업이라 청크 도착 시점 스왑에 레이아웃
 // 시프트가 없다. 게임 라우트(GamePage)의 WorldMap 로딩 경로는 이 변경과 무관(불변).
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
 import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
+import { useModalA11y } from '../../lib/useModalA11y';
 import { HeroMapPlaceholder } from './HeroMapPlaceholder';
 
 const HeroMap = lazy(() => import('./HeroMap'));
@@ -102,7 +103,7 @@ export function HomePage() {
   return (
     <main className="wt-home" data-testid="home-page">
       <header className="wt-home__header">
-        <h1 className="wt-home__title">{t('app.title')}</h1>
+        <h1 className="wt-home__title" tabIndex={-1}>{t('app.title')}</h1>
         <nav className="wt-home__nav">
           <Link
             to={`/play/daily/${todayDailyKey()}`}
@@ -174,8 +175,12 @@ function LanguageGateOverlay() {
   const { t } = useTranslation();
   const setLang = useSettingsStore((s) => s.setLang);
   const [dismissed, setDismissed] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const isOpen = !dismissed && !hasChosenLanguage();
+  // 닫기 버튼이 없는 필수 게이트라 ESC 처리는 없다 — 배경 inert + 포커스 트랩만(§7.3).
+  useModalA11y(dialogRef, isOpen);
 
-  if (dismissed || hasChosenLanguage()) return null;
+  if (!isOpen) return null;
 
   const choose = (l: 'ko' | 'en') => {
     setLang(l);
@@ -184,6 +189,7 @@ function LanguageGateOverlay() {
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="language-gate"

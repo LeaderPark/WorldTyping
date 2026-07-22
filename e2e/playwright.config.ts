@@ -74,6 +74,9 @@ export default defineConfig({
     locale: 'ko-KR', // settings.lang 기본값(detectDefaultLang)을 ko로 → 한글 출제/컨트롤러 ko.
     trace: 'retain-on-failure',
     video: 'off',
+    // E6/E7 mock-do-server는 자체서명 WSS(8899)로 뜬다(CSP connect-src가 ws:는 막고 wss:는 허용).
+    // 이 인증서를 수용하려면 컨텍스트가 HTTPS 오류를 무시해야 한다. E1~E4(HTTP 동일오리진)엔 무영향.
+    ignoreHTTPSErrors: true,
   },
   projects: [
     {
@@ -94,6 +97,10 @@ export default defineConfig({
   webServer: {
     command: USE_DEV ? DEV_COMMAND : PROD_COMMAND,
     cwd: REPO_ROOT,
+    // WT-M4-06: 웹 빌드에 VITE_WS_BASE를 심어 멀티 클라가 WS만 e2e mock-do-server(8899)로 붙게 한다.
+    // E1~E4는 /multi를 방문하지 않아 이 값이 무해하게 무시된다(WS 연결 자체가 없음). E6/E7 스펙이
+    // beforeAll에서 이 포트로 mock을 띄운다. 프로덕션 빌드는 이 env 없이 돌아 경로가 불변이다.
+    env: { ...process.env, VITE_WS_BASE: 'wss://localhost:8899' } as Record<string, string>,
     url: BASE_URL,
     // 항상 false — 위 "후속 수정" 주석 참조(로컬 재사용이 밀폐화 리셋을 건너뛰게 하는 경로였다).
     reuseExistingServer: false,

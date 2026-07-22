@@ -30,7 +30,9 @@ export interface PlayerIdentity {
 /** WS 티켓을 붙인 절대 URL(ws/wss). 오리진은 PUBLIC_ORIGIN(미설정 시 현재 오리진, §11-D18). */
 export function toWsUrl(wsPath: string, ticket: string, origin: string): string {
   const u = new URL(wsPath, origin);
-  u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
+  // http→ws / https→wss. 오리진이 이미 ws/wss면 그 보안 여부를 보존한다(프로덕션은 http(s)
+  // 오리진만 넘기므로 동작 불변 — VITE_WS_BASE(wss)로 붙는 E2E mock 경로에서만 wss가 유지된다).
+  u.protocol = u.protocol === 'https:' || u.protocol === 'wss:' ? 'wss:' : 'ws:';
   u.searchParams.set('ticket', ticket);
   return u.toString();
 }
@@ -97,6 +99,11 @@ export function useMultiplayer() {
     (import.meta.env.VITE_PUBLIC_ORIGIN as string | undefined) ??
     (typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
 
+  // 테스트 전용(WT-M4-06): VITE_WS_BASE가 있으면 WS만 그 오리진(e2e mock-do-server)으로 붙는다.
+  // 프로덕션 빌드엔 이 변수가 없어 ?? 좌변이 정적 undefined로 제거된다 → 오리진=publicOrigin(§11-D18)
+  // 그대로. REST/자산 오리진(publicOrigin)은 건드리지 않는다 — E2E는 mock WS만 갈아끼운다.
+  const wsOrigin = (import.meta.env.VITE_WS_BASE as string | undefined) ?? publicOrigin;
+
   const routeMessage = useCallback((m: ServerMessage): void => {
     switch (m.type) {
       case 'welcome':
@@ -142,6 +149,14 @@ export function useMultiplayer() {
         break;
       case 'race-finished':
         store.getState().setRaceFinishedReason(m.reason);
+        break;
+      case 'results':
+        // 서버 결과는 raceRef(RaceClient) 위임과 별개로 여기서 직접 스토어에 반영한다. 본인이 레이스를
+        // 완주하면 RaceView가 finish-wait로 전환되며 HiddenTypingInput→controller→attachRace가
+        // 해제돼 raceRef가 null이 된다(useTypingEngine 라이프사이클). 그 시점 이후 도착하는 results를
+        // raceRef에만 위임하면 유실돼 결과 화면이 비어버린다(E2E E6/E7에서 실측된 결함) — §6.6대로
+        // results는 항상 스토어의 유일 진실로 반영되어야 하므로 라우터에서 직접 처리한다.
+        store.getState().setRaceResult(m);
         break;
       case 'error':
         // DATA_VERSION은 close(4426)가 뒤따르므로 onClose에서 리로드한다. 그 외는 상위 UI(M4-04)가
@@ -218,9 +233,9 @@ export function useMultiplayer() {
         }
       });
 
-      ws.connect(toWsUrl(grant.wsUrl, grant.ticket, publicOrigin));
+      ws.connect(toWsUrl(grant.wsUrl, grant.ticket, wsOrigin));
     },
-    [publicOrigin, routeMessage, store],
+    [wsOrigin, routeMessage, store],
   );
 
   const quickMatch = useCallback(

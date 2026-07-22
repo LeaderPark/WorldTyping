@@ -58,8 +58,17 @@ export function RoomPage() {
       passportCover: DEFAULT_PASSPORT_COVER,
     };
     const grant = (location.state as { grant?: WsGrant } | null)?.grant;
+    const wsBase = import.meta.env.VITE_WS_BASE as string | undefined;
     if (grant && grant.roomCode === roomCode) {
       mp.connectWithGrant(grant, identity);
+    } else if (wsBase) {
+      // 테스트 전용(WT-M4-06): mock-do-server 직결. REST 그랜트/세션 부트스트랩 없이 합성 그랜트로
+      // 바로 붙어 E2E가 서버 레이트리밋/매치메이커 비결정성에 얽매이지 않게 한다. 프로덕션 빌드엔
+      // VITE_WS_BASE가 없어 이 분기가 정적 제거된다 → 딥링크는 아래 mp.join(REST) 경로 그대로.
+      mp.connectWithGrant(
+        { roomCode, wsUrl: `/ws/room/${roomCode}`, ticket: 'e2e-mock', lang: useSettingsStore.getState().lang },
+        identity,
+      );
     } else {
       void mp.join(roomCode, identity);
     }

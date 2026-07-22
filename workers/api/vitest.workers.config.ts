@@ -31,7 +31,14 @@ export default defineWorkersConfig(async () => {
       // MatchRoom DO 테스트는 isolatedStorage=false가 필요해(Windows EBUSY 회피) 별도
       // vitest.do.config.ts로 분리 실행한다 — 여기서는 제외(§0.4-7 거짓 그린 방지: 같은 파일이
       // 두 설정에서 이중 실행되지 않게 한다).
-      exclude: ["test/match-room.test.ts", "**/node_modules/**"],
+      // DO 스토리지를 남기는 테스트는 vitest.do.config.ts(isolatedStorage=false)에서만 실행한다
+      // (Windows EBUSY 회피 + 같은 파일 이중 실행 방지, §0.4-7 거짓 그린 방지).
+      exclude: [
+        "test/match-room.test.ts",
+        "test/matchmaker.test.ts",
+        "test/multi-routes.test.ts",
+        "**/node_modules/**",
+      ],
       setupFiles: ["./test/apply-migrations.ts"],
       poolOptions: {
         workers: {

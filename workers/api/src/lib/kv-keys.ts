@@ -35,6 +35,10 @@ export const KV_KEYS = {
 
   /** 공개 방 목록(TTL 60s). */
   publicRoom: (code: string): string => `publicroom:${code}`,
+  /** 공개 방 KV list 프리픽스(MatchRoom이 publicRoom(code)로 쓴 항목들). */
+  publicRoomPrefix: "publicroom:",
+  /** GET /rooms/public 조립 결과 3초 캐시(§2.4 "표시용 데이터"). publicroom: 프리픽스와 분리. */
+  publicRoomsListCache: "cache:publicrooms",
 
   /** 고스트 봇 리플레이. */
   ghost: (lang: string, mode: string, piBucket: string): string =>

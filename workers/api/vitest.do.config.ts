@@ -16,7 +16,9 @@ export default defineWorkersConfig(async () => {
 
   return {
     test: {
-      include: ["test/match-room.test.ts"],
+      // WT-M4-01: match-room / WT-M4-02: matchmaker·multi-routes. 셋 다 MatchRoom/Matchmaker DO의
+      // SQLite 파일을 남겨 isolatedStorage=true면 Windows EBUSY로 러너가 죽는다 → 여기(false)에서 실행.
+      include: ["test/match-room.test.ts", "test/matchmaker.test.ts", "test/multi-routes.test.ts"],
       setupFiles: ["./test/apply-migrations.ts"],
       poolOptions: {
         workers: {

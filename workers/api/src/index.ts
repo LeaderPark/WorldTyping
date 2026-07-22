@@ -14,6 +14,9 @@ import { lb } from "./routes/lb";
 import { daily } from "./routes/daily";
 import { nickname } from "./routes/nickname";
 import { report } from "./routes/report";
+import { multi } from "./routes/multi";
+import { verifyToken, WsTicketPayloadSchema } from "@wt/shared";
+import { normalizeRoomCode } from "./lib/room-code";
 import { runLbRefresher } from "./cron/lb-refresher";
 import { ensureDailySeed } from "./cron/daily-seed";
 import { handleQueueBatch } from "./queue/consumer";
@@ -45,6 +48,8 @@ app.route("/api/v1", lb); // WT-M3-04: GET /lb, GET /lb/me
 app.route("/api/v1", daily); // WT-M3-05: GET /daily/today, GET /daily/me
 app.route("/api/v1", nickname); // WT-M3-05: POST /nickname/check, PUT /nickname
 app.route("/api/v1", report); // WT-M3-05: POST /report
+app.route("/api/v1", multi); // WT-M4-02: POST /match/quick, DELETE /match/quick, POST /rooms,
+//                              POST /rooms/:code/join, GET /rooms/public
 
 // /api/v1/* 중 위에서 매칭되지 않은 경로 → docs/04 §2.1 ApiError 포맷 404
 // (health를 포함해 이후 마일스톤에서 추가되는 모든 /api/v1/* 라우트는 이 줄보다 위에 등록한다).
@@ -59,6 +64,26 @@ app.all("/api/*", (c) =>
     404,
   ),
 );
+
+// ── 멀티플레이 WS 업그레이드 라우팅(§11-D8: /ws/room/:code) ────────────────────────
+// run_worker_first에 /ws/*가 있어 이 경로는 Worker가 먼저 먹는다. Worker가 티켓을 1차 검증
+// (서명/exp/room, RUN_HMAC_SECRET)한 뒤 MatchRoom DO('room:'+code)로 원 요청을 그대로 프록시하고,
+// DO가 재검증 + 1회용 소비한다(§5.3 이중 방어). 검증 실패는 WS 핸드셰이크를 4xx로 끊는다.
+app.get("/ws/room/:code", async (c) => {
+  if (c.req.header("Upgrade") !== "websocket") {
+    return c.text("Expected WebSocket upgrade", 426);
+  }
+  const ns = c.env.MATCH_ROOM;
+  if (!ns) return c.text("MATCH_ROOM not configured", 503);
+  const code = normalizeRoomCode(c.req.param("code"));
+  if (!code) return c.text("invalid room code", 404);
+  const ticket = new URL(c.req.url).searchParams.get("ticket");
+  if (!ticket) return c.text("missing ticket", 401);
+  const res = await verifyToken(ticket, c.env.RUN_HMAC_SECRET, WsTicketPayloadSchema);
+  if (!res.ok || res.payload.room !== code) return c.text("invalid ticket", 401);
+  const stub = ns.get(ns.idFromName("room:" + code));
+  return stub.fetch(c.req.raw);
+});
 
 // wrangler `assets.run_worker_first`에 없는 경로(SPA 라우트 등)는 Cloudflare가 정적 자산
 // 핸들러로 먼저 보내므로(not_found_handling=single-page-application) 아래 라인엔 도달하지

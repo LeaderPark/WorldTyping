@@ -17,7 +17,12 @@ const CSP = [
 ].join("; ");
 
 export const securityHeaders: MiddlewareHandler = async (c, next) => {
+  // WebSocket 업그레이드(/ws/room/:code — WT-M4-02) 응답(101)은 헤더가 불변이라 set 시 throw한다.
+  // 응답 status가 아니라 요청 Upgrade 헤더로 판정한다(101 응답은 Hono 레이어에서 헤더 접근 자체가
+  // 불변이라 status 검사 전에 걸린다). 업그레이드 요청 경로는 보안 헤더 부착을 통째로 건너뛴다.
+  const isUpgrade = c.req.header("Upgrade")?.toLowerCase() === "websocket";
   await next();
+  if (isUpgrade) return;
   c.res.headers.set("Content-Security-Policy", CSP);
   c.res.headers.set("X-Content-Type-Options", "nosniff");
   c.res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");

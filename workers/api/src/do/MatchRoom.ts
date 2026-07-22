@@ -22,6 +22,7 @@ import {
   toJamoSeq,
   verifyToken,
   SessionPayloadSchema,
+  WsTicketPayloadSchema,
   TICK_MS,
   GRACE_MS,
   HARDCAP_MS,
@@ -349,9 +350,40 @@ export class MatchRoomDO {
     if (path.endsWith('/internal/room-status')) return this.handleRoomStatus();
     if (path.endsWith('/internal/debug')) return this.handleDebug();
 
-    if (request.headers.get('Upgrade') === 'websocket') return this.handleUpgrade();
+    if (request.headers.get('Upgrade') === 'websocket') return this.handleUpgrade(request);
 
     return new Response('Not found', { status: 404 });
+  }
+
+  /**
+   * WS 티켓 소비(§5.3, §11-D8 이중 방어): Worker가 1차 검증한 티켓을 DO가 재검증한다.
+   * ①서명/exp(RUN_HMAC_SECRET) ②room 일치 ③1회용(usedTickets) — 하나라도 실패 시 false.
+   * usedTickets는 hydration 스냅샷에 넣지 않고(연결당 1회, 핫패스 아님) storage에서 직접 읽고,
+   * 만료분은 lazy 정리한다. 티켓 없이 온 업그레이드(직접 DO 접근·테스트 경로)는 Worker 게이트가
+   * 이미 통과시킨 것으로 보고 허용한다 — 생산 트래픽은 항상 /ws/room/:code Worker를 경유한다.
+   */
+  private async consumeTicket(ticket: string): Promise<boolean> {
+    if (!this.config) return false;
+    const now = this.now();
+    const res = await verifyToken(ticket, this.env.RUN_HMAC_SECRET, WsTicketPayloadSchema, now);
+    if (!res.ok) return false;
+    if (res.payload.room !== this.config.roomCode) return false;
+    const key = ticket.split('.')[2] ?? ticket; // 서명부(고유) — 값 전체보다 짧은 맵 키
+    const used = (await this.ctx.storage.get<Record<string, number>>('usedTickets')) ?? {};
+    let dirty = false;
+    for (const [k, exp] of Object.entries(used)) {
+      if (exp <= now) {
+        delete used[k];
+        dirty = true;
+      }
+    }
+    if (used[key] !== undefined) {
+      if (dirty) await this.ctx.storage.put('usedTickets', used);
+      return false; // 재사용 거부
+    }
+    used[key] = res.payload.exp;
+    await this.ctx.storage.put('usedTickets', used);
+    return true;
   }
 
   private async handleCreate(request: Request): Promise<Response> {
@@ -400,11 +432,16 @@ export class MatchRoomDO {
 
   private handleRoomStatus(): Response {
     const active = [...this.players.values()].filter((p) => p.connState !== 'left');
+    // roomCode=null ⇔ config 미생성(빈 슬롯) — room-code.ts claimRoomCode가 이걸로 충돌을 판정한다.
+    // lang/isPublic은 rooms/:code/join 라우트가 LANG_MISMATCH·표시 판정에 쓴다(WT-M4-02, 추가 필드).
     return Response.json({
       phase: this.phase,
       players: active.length,
       maxPlayers: this.config?.maxPlayers ?? 0,
       roomCode: this.config?.roomCode ?? null,
+      lang: this.config?.lang ?? null,
+      isPublic: this.config?.isPublic ?? false,
+      quickMatch: this.config?.quickMatch ?? false,
     });
   }
 
@@ -433,8 +470,13 @@ export class MatchRoomDO {
     });
   }
 
-  private handleUpgrade(): Response {
+  private async handleUpgrade(request: Request): Promise<Response> {
     if (!this.config) return new Response('room not found', { status: 404 });
+    // 티켓이 실려 오면 재검증 + 1회용 소비. 없으면(직접 DO 접근) Worker 게이트 신뢰 — 위 주석 참조.
+    const ticket = new URL(request.url).searchParams.get('ticket');
+    if (ticket && !(await this.consumeTicket(ticket))) {
+      return new Response('invalid ticket', { status: 401 });
+    }
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];

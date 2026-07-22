@@ -11,6 +11,7 @@ test-results/
 playwright-report/
 .playwright/
 blob-report/
+e2e/artifacts/
 .env
 .env.*
 !.env.example

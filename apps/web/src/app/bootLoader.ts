@@ -106,7 +106,13 @@ async function loadDataVersion(): Promise<string> {
 }
 
 async function loadCountries(dataUrl: string, dataVersion: string): Promise<CountriesDataset> {
-  const url = dataVersion !== 'unknown' ? `${dataUrl}?v=${dataVersion}` : dataUrl;
+  // WT-M5-01 실측 수정: GET /api/v1/config가 반환하는 dataUrl은 서버가 이미 자체적으로
+  // `?v=<hash>` 캐시버스팅 쿼리를 붙여 내려줄 수 있다(workers/api/src/routes/config.ts
+  // resolveDataUrl, WT-M3 계열). dataUrl에 물음표가 있으면 여기서 또 붙이지 않는다 — 그렇지
+  // 않으면 `?v=a?v=a`처럼 이중 쿼리가 만들어져 요청 URL이 SW 프리캐시 키(§8.2, 물음표 없는
+  // 경로)와 어긋나 오프라인에서 CacheFirst가 미스 후 네트워크로 폴백하다 실패한다(offline PWA
+  // 사전 검증 스크립트 tooling/scripts/verify-pwa-offline.mjs 실측으로 발견).
+  const url = dataVersion !== 'unknown' && !dataUrl.includes('?') ? `${dataUrl}?v=${dataVersion}` : dataUrl;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`countries.json fetch failed: ${res.status} ${url}`);
   const parsed = CountriesDatasetSchema.parse(await res.json());

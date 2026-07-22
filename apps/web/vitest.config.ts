@@ -8,9 +8,22 @@
 // `// @vitest-environment jsdom`으로 개별 override한다(packages/engine의 IME 컨트롤러 테스트와
 // 동일 패턴) — 루트 vitest.config.ts의 web 프로젝트도 environment:'node'이므로 동일한 파일
 // 단위 override가 루트 `pnpm test`에서도 그대로 적용된다.
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      // WT-M5-01: vite-plugin-pwa 가상 모듈은 vitest 실행에서 해석 불가 — 스텁으로 대체
+      // (apps/web/src/test/virtual-pwa-register-react.mock.ts 주석 참조).
+      {
+        find: 'virtual:pwa-register/react',
+        replacement: fileURLToPath(
+          new URL('./src/test/virtual-pwa-register-react.mock.ts', import.meta.url),
+        ),
+      },
+    ],
+  },
   test: {
     environment: 'node',
     setupFiles: ['./src/vitest.setup.ts'],
@@ -26,6 +39,8 @@ export default defineConfig({
         // DEV 전용 진단 라우트(프로덕션 빌드 제외 — WT-M2-03 acceptance 대체 조정). 자동 검증은
         // prompt-renderer.test.ts / PromptArea.test.tsx가 담당한다.
         'src/pages/dev/**',
+        // 테스트 전용 스텁(WT-M5-01) — 프로덕션 코드 경로에서 도달 불가, 커버리지 대상 아님.
+        'src/test/**',
       ],
       thresholds: {
         lines: 60,

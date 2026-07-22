@@ -45,6 +45,25 @@ export function HomePage() {
   const [alreadyPlayed, setAlreadyPlayed] = useState(false);
   const [top1, setTop1] = useState<LbEntry | null>(null);
 
+  // §8.3 "홈 렌더 완료 후 … 수동 prefetch로 game 청크 예열(첫 판 진입 지연 0 목표)". router.tsx의
+  // lazy(() => import('../pages/GamePage'))와 동일한 모듈 지정자를 써야 Vite가 같은 청크로
+  // 식별해 중복 다운로드 없이 브라우저 캐시를 예열한다. requestIdleCallback 미지원 브라우저는
+  // setTimeout으로 폴백(첫 페인트를 막지 않는 것이 목적이라 즉시 실행은 피한다).
+  useEffect(() => {
+    const idle =
+      typeof requestIdleCallback === 'function'
+        ? requestIdleCallback
+        : (cb: () => void) => setTimeout(cb, 200);
+    const handle = idle(() => {
+      void import('../GamePage');
+    });
+    return () => {
+      if (typeof cancelIdleCallback === 'function' && typeof handle === 'number') {
+        cancelIdleCallback(handle);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     fetchDailyToday()

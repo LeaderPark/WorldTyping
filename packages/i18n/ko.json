@@ -267,5 +267,8 @@
   "notice.disputed": "국가 표기는 게임 목적의 편의상 구분이며 정치적 입장을 나타내지 않습니다.",
 
   "onboarding.followAlong": "보이는 대로 따라 치면 돼요",
-  "onboarding.autoAdvance": "Enter 없이 자동으로 넘어가요!"
+  "onboarding.autoAdvance": "Enter 없이 자동으로 넘어가요!",
+
+  "pwa.updateAvailable": "새 버전이 있어요",
+  "pwa.reload": "새로고침"
 }

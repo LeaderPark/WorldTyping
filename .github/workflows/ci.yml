@@ -56,6 +56,21 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # docs/03 §8.5 성능 예산 게이트(entry <170KB gzip) — WT-M5-01. 구성은
+      # tooling/ci/size-limit.json(경로 글롭은 그 파일 기준 상대), lazy 라우트 청크
+      # (game/multi/rank/passport)는 제외하고 초기 로드분만 잰다.
+      - name: Size limit (entry JS budget)
+        run: pnpm --filter @wt/web run size-limit
+
+      - name: Install Playwright Chromium (Lighthouse browser)
+        run: pnpm --filter @wt/e2e exec playwright install chromium
+
+      # docs/03 §8.5 LCP<2.5s 게이트 — WT-M5-01 세션 특이 조정(lhci 대신 Playwright Chromium
+      # 기반 프로그램적 Lighthouse 실행, 모바일 프리셋). 스크립트 자체가 vite preview 기동·대기·
+      # 종료를 전담한다(tooling/scripts/check-lighthouse.mjs).
+      - name: Lighthouse (mobile, LCP budget)
+        run: node tooling/scripts/check-lighthouse.mjs
+
   # docs/03 §10.2: E2E Chromium은 모든 PR에서 실행(한글 IME 재현은 CDP → Chromium 전용).
   # WebKit/Firefox 프로젝트는 e2e/playwright.config.ts에 정의돼 있으나(E1·E3 매치) 브라우저
   # 설치·실행은 후속으로 이관(WT-M2-08 세션 조정) — 여기서는 chromium만 설치·실행한다.

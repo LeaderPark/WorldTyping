@@ -1,5 +1,6 @@
 // spec: WT-M0-01 §3(세션 환경 어댑테이션) — vitest.workspace.ts가 deprecated이므로
 // 루트 vitest.config.ts의 test.projects 하나로 전 워크스페이스 테스트를 통합한다.
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const node = (
@@ -24,7 +25,22 @@ export default defineConfig({
       // 쓰이지만, 셋업 자체는 environment 무관하게 등록해도 무해하다(apps/web/vitest.config.ts와
       // 동일 셋업을 여기서도 로드해 루트 `pnpm test`와 `--filter @wt/web test`가 같은 매처
       // 집합으로 실행되게 한다 — 거짓 그린 방지, §0.4-7항).
-      node("web", "apps/web", ["src/**/*.test.{ts,tsx}"], ["./src/vitest.setup.ts"]),
+      {
+        ...node("web", "apps/web", ["src/**/*.test.{ts,tsx}"], ["./src/vitest.setup.ts"]),
+        // WT-M5-01: apps/web/vitest.config.ts와 동일한 별칭(vite-plugin-pwa 가상 모듈 스텁) —
+        // 이 프로젝트가 없으면 루트 `pnpm test`에서만 AppShell.tsx 렌더 테스트가 깨진다
+        // (거짓 그린 방지, §0.4-7항과 동일 취지를 별칭에도 적용).
+        resolve: {
+          alias: [
+            {
+              find: "virtual:pwa-register/react",
+              replacement: fileURLToPath(
+                new URL("./apps/web/src/test/virtual-pwa-register-react.mock.ts", import.meta.url),
+              ),
+            },
+          ],
+        },
+      },
       node("api", "workers/api"),
       node("shared", "packages/shared"),
       // data: content/routes.test.ts(WT-M1-06)는 src/ 밖에 있어 별도 include가 필요하다.

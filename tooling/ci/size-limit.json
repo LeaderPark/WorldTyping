@@ -1,0 +1,14 @@
+[
+  {
+    "name": "web: entry (excl. lazy route chunks) — docs/03 §8.5",
+    "path": [
+      "../../apps/web/dist/assets/*.js",
+      "!../../apps/web/dist/assets/game-*.js",
+      "!../../apps/web/dist/assets/multi-*.js",
+      "!../../apps/web/dist/assets/rank-*.js",
+      "!../../apps/web/dist/assets/passport-*.js"
+    ],
+    "gzip": true,
+    "limit": "170 KB"
+  }
+]

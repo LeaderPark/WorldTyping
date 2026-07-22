@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── 셀프호스트 폰트 (docs/03 §8.2, WT-M5-01) ──
+   JetBrains Mono만 self-host(tooling/scripts/copy-fonts.mjs가 build/dev 전에 이 파일을
+   apps/web/public/fonts/에 채워 넣는다 — 파일 부재 시에도 이 규칙 자체는 안전하다, 브라우저가
+   src 로드 실패 시 tailwind.config.ts의 폴백 스택으로 자연히 넘어간다).
+   Pretendard Variable은 이번 태스크 범위에서 제외(최종 보고 escalations) — @font-face 없이
+   기존 시스템 폰트 폴백 스택 그대로 둔다. font-display: optional — 프롬프트 렌더 중 폰트
+   스왑에 의한 레이아웃 튐을 금지하는 §8.2 원문 그대로(캐시에 없으면 이번 페인트는 폴백 폰트로
+   확정하고, 이후 방문부터 적용). */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+
 /* ── 프롬프트 렌더러(features/typing/prompt-renderer.ts) 채색 토큰 ──
    spec: docs/03 §2.8(음절 상태 4종·오타 색각 이중 부호화), §3.6(레이아웃 프로퍼티 불변 —
    transform/opacity만). 색 토큰은 WT-M2-04 tokens.css 도입 시 그 변수로 승격한다(지금은 폴백). */

@@ -19,11 +19,13 @@
       })();
     </script>
     <!-- 폰트 프리로드 (docs/03 §8.2): Pretendard Variable subset + JetBrains Mono.
-         세션 환경 어댑테이션(리드 사전 승인) — 폰트 파일이 저장소에 없어 시스템 폰트 스택
-         폴백으로 구성했다. 로컬 폰트 자산이 추가되는 M5에서 아래 주석을 해제한다.
-    <link rel="preload" href="/fonts/Pretendard-Variable.subset.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/JetBrainsMono-Variable.woff2" as="font" type="font/woff2" crossorigin />
-    -->
+         WT-M5-01 세션 특이 조정 결과 — Pretendard는 npm 후보 두 종 모두 예산/한글 서브셋
+         요건을 만족하지 못해(tooling/scripts/copy-fonts.mjs 상단 주석, 최종 보고 escalations)
+         이번 태스크에서 제외하고 시스템 폰트 스택 폴백을 유지한다. JetBrains Mono만
+         self-host(tooling/scripts/copy-fonts.mjs가 build/dev 전에 apps/web/public/fonts/에
+         복사) — font-display: optional(globals.css @font-face)이라 늦게 도착해도 레이아웃
+         튐이 없다. -->
+    <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
     <div id="root"></div>

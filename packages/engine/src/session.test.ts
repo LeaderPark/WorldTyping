@@ -713,6 +713,98 @@ describe('RunLog ring buffer + inputDigest', () => {
   });
 });
 
+// ── rollbackTo (멀티 레이스 서버 권위 롤백, docs/05 §5·§6.3, WT-M4-03) ─────────────
+describe('rollbackTo (낙관 진행 되감기)', () => {
+  const countryShownIdx = (events: EngineEvent[]): number[] =>
+    events.filter((e) => e.type === 'countryShown').map((e) => (e as { index: number }).index);
+
+  it('nextIdx 이후 낙관 커밋 폐기 + 통계·콤보 재계산 + 프롬프트 되감기', () => {
+    const h = makeEngine(raceRules(), countries(5));
+    startPlaying(h);
+    h.eng.handleInput(exact(4)); // C0 확정 (idx0)
+    h.eng.handleInput(exact(4)); // C1 확정 (idx1)
+    h.eng.handleInput(exact(4)); // C2 확정 (idx2) → currentIndex=3
+    expect(h.eng.getSnapshot().currentIndex).toBe(3);
+    expect(h.eng.getSnapshot().totalKeystrokes).toBe(12);
+    expect(h.eng.getSnapshot().combo).toBe(3);
+
+    h.eng.rollbackTo(1); // 서버 권위: C1부터 다시
+    const s = h.eng.getSnapshot();
+    expect(s.currentIndex).toBe(1);
+    expect(s.currentCountryId).toBe('C1');
+    expect(s.countriesCleared).toBe(1);
+    expect(s.totalKeystrokes).toBe(4); // C0만 남음
+    expect(s.correctKeystrokes).toBe(4);
+    expect(s.combo).toBe(1); // 말미 무오타 커밋 1개
+    // 프롬프트 되감기: 마지막 countryShown이 index 1
+    expect(countryShownIdx(h.events).at(-1)).toBe(1);
+  });
+
+  it('롤백 후 재타이핑이 서버 권위 인덱스와 정합(엔진 인덱스·프롬프트 일치)', () => {
+    const h = makeEngine(raceRules(), countries(3));
+    startPlaying(h);
+    h.eng.handleInput(exact(4)); // C0
+    h.eng.handleInput(exact(4)); // C1 → currentIndex=2
+    h.eng.rollbackTo(1); // C1 재제시
+    expect(h.eng.getSnapshot().currentIndex).toBe(1);
+    h.eng.handleInput(exact(4)); // C1 재확정 → currentIndex=2
+    expect(h.eng.getSnapshot().currentIndex).toBe(2);
+    h.eng.handleInput(exact(4)); // C2 확정 → 완주
+    const r = finishedEvent(h.events);
+    expect(r.stats.countriesCleared).toBe(3);
+    expect(h.eng.getSnapshot().phase).toBe('finished');
+  });
+
+  it('콤보 재구성: 오타 커밋 이후 구간은 0으로 되감긴다', () => {
+    const h = makeEngine(raceRules(), countries(5));
+    startPlaying(h);
+    h.eng.handleInput(exact(4)); // C0 무오타 (combo1)
+    h.eng.handleInput(miss(1, 0)); // C1 오타
+    h.eng.handleInput(exact(4)); // C1 확정(오타 있음 → combo0)
+    h.eng.handleInput(exact(4)); // C2 무오타 (combo1) → currentIndex=3
+    expect(h.eng.getSnapshot().combo).toBe(1);
+
+    h.eng.rollbackTo(2); // committed=[C0,C1(오타)] → 말미 커밋 오타 → combo0
+    expect(h.eng.getSnapshot().combo).toBe(0);
+
+    h.eng.rollbackTo(1); // committed=[C0(무오타)] → combo1
+    expect(h.eng.getSnapshot().combo).toBe(1);
+    expect(h.eng.getSnapshot().currentIndex).toBe(1);
+  });
+
+  it('말미 커밋이 스킵이면 콤보 0으로 되감긴다(skip 브랜치)', () => {
+    const h = makeEngine(raceRules(), countries(5));
+    startPlaying(h);
+    h.eng.handleInput(exact(4)); // C0 무오타
+    h.eng.handleInput({ type: 'skipRequested' }); // C1 스킵(skipped 커밋) → currentIndex=2
+    expect(h.eng.getSnapshot().currentIndex).toBe(2);
+    h.eng.rollbackTo(2); // committed=[C0, C1(skip)] 유지 → 말미 스킵 → combo0
+    expect(h.eng.getSnapshot().combo).toBe(0);
+    h.eng.rollbackTo(1); // committed=[C0] → combo1
+    expect(h.eng.getSnapshot().combo).toBe(1);
+    expect(h.eng.getSnapshot().countriesSkipped).toBe(0);
+    expect(h.eng.getSnapshot().countriesCleared).toBe(1);
+  });
+
+  it('playing 이외 phase에서는 no-op', () => {
+    const h = makeEngine(raceRules(), countries(3));
+    h.eng.rollbackTo(0); // idle
+    expect(h.eng.getSnapshot().phase).toBe('idle');
+    expect(h.eng.getSnapshot().currentIndex).toBe(-1);
+    expect(countryShownIdx(h.events)).toEqual([]);
+  });
+
+  it('범위 밖 index는 no-op', () => {
+    const h = makeEngine(raceRules(), countries(3));
+    startPlaying(h);
+    const before = h.eng.getSnapshot().currentIndex;
+    h.eng.rollbackTo(-1);
+    h.eng.rollbackTo(3);
+    h.eng.rollbackTo(999);
+    expect(h.eng.getSnapshot().currentIndex).toBe(before);
+  });
+});
+
 // ── 생성자 계약 ─────────────────────────────────────────────────────────────
 describe('생성자', () => {
   it('빈 countries는 throw', () => {

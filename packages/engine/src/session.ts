@@ -212,6 +212,36 @@ export class GameSessionEngine {
     return true;
   }
 
+  /**
+   * 멀티 레이스 서버 권위 롤백(docs/05 §5·§6.3, docs/00 §11-D7). 서버가 country-rejected로
+   * authoritative.nextIdx를 통지하면 클라 엔진을 그 인덱스로 되감는다: nextIdx 이후의 낙관 커밋을
+   * 폐기하고 통계·콤보를 재계산한 뒤 해당 국가를 다시 제시한다(프롬프트 되감기). 입력 버퍼 flush는
+   * 호출측(race-client)이 TypingInputController.clear()로 수행한다 — 엔진은 DOM을 모른다.
+   *
+   * playing phase에서만 유효(그 외 no-op). index가 [0, countryCount) 밖이면 no-op.
+   * 콤보는 committed 말미의 무오타·비스킵 커밋 연속 개수로 재구성한다(GDD §6.1 국가 단위 콤보).
+   * additive — 싱글 경로(start/retry/commit)는 이 메서드를 호출하지 않으므로 영향이 없다.
+   */
+  rollbackTo(index: number): void {
+    if (this.phase !== 'playing') return;
+    if (index < 0 || index >= this.countries.length) return;
+    this.cancelCountryTimer();
+    if (index < this.committed.length) {
+      this.committed = this.committed.slice(0, index);
+    }
+    this.recomputeTotals();
+    this.countriesCleared = this.committed.filter((p) => !p.skipped).length;
+    this.countriesSkipped = this.committed.filter((p) => p.skipped).length;
+    let combo = 0;
+    for (let i = this.committed.length - 1; i >= 0; i--) {
+      const p = this.committed[i]!;
+      if (p.skipped || p.errors > 0) break;
+      combo++;
+    }
+    this.setCombo(combo);
+    this.showCountry(index);
+  }
+
   /** TypingInputController.subscribe를 그대로 연결한다. playing 이외 phase의 이벤트는 무시. */
   handleInput(e: TypingEvent): void {
     if (this.phase !== 'playing') return;

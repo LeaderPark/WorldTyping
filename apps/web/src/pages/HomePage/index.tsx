@@ -8,13 +8,22 @@
 // [WT-M3-06] 데일리 뱃지 실데이터(alreadyPlayed·dailyNo)와 티커(전체 1위)를 서버에서 채운다.
 // 조회 실패(오프라인 등)는 화면을 깨뜨리지 않고 조용히 placeholder/미표시로 폴백한다 — 이
 // 페이지는 "3클릭·15초" 여정의 첫 화면이라 네트워크 대기로 렌더를 막지 않는다(§11.1).
-import { useEffect, useState } from 'react';
+//
+// [WT-M5-01b, docs/00 §11-D45] HeroMap(d3-geo/topojson/geo-index, vendor-geo 청크)을
+// React.lazy로 분리한다 — entry 정적 import 그래프에 vendor-geo가 남아있으면 그 청크의
+// fetch·parse가 끝날 때까지 첫 페인트(제목/모드 카드 포함) 자체가 지연돼 LCP 예산(§8.5)을
+// 초과한다(§11-D45 실측 2.64s). Suspense fallback은 HeroMapPlaceholder — HeroMap 내부의
+// "위상 데이터 fetch 중" placeholder와 동일 마크업이라 청크 도착 시점 스왑에 레이아웃
+// 시프트가 없다. 게임 라우트(GamePage)의 WorldMap 로딩 경로는 이 변경과 무관(불변).
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
 import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
-import { HeroMap } from './HeroMap';
+import { HeroMapPlaceholder } from './HeroMapPlaceholder';
+
+const HeroMap = lazy(() => import('./HeroMap'));
 
 /** useCountries.ts의 데일리 세트 키 계산과 동일 규약(UTC 자정 기준 ISO 날짜) — 이 페이지는
  *  링크만 구성하므로 국가 데이터셋 없이도 같은 키를 재현할 수 있어야 한다(중복 최소화를 위해
@@ -118,7 +127,9 @@ export function HomePage() {
         </nav>
       </header>
 
-      <HeroMap />
+      <Suspense fallback={<HeroMapPlaceholder />}>
+        <HeroMap />
+      </Suspense>
 
       <div className="wt-home__cards">
         <Link

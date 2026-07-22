@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { ApiHttpError } from "../lib/api-error";
 import { requireAuth, type AuthVariables } from "../mw/auth";
+import { rateLimit } from "../mw/ratelimit";
 import {
   LB_PAGE_SIZE,
   decodeCursor,
@@ -27,7 +28,7 @@ export const lb = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 // ───────────────────────── GET /lb ─────────────────────────
 
-lb.get("/lb", async (c) => {
+lb.get("/lb", rateLimit("leaderboard"), async (c) => {
   const db = c.env.DB;
   if (!db) throw new ApiHttpError(503, "SERVICE_UNAVAILABLE", "DB binding not configured");
 
@@ -90,7 +91,7 @@ function pageFromCacheEntries(entries: LbEntry[], total: number): PageResult {
 
 // ───────────────────────── GET /lb/me ─────────────────────────
 
-lb.get("/lb/me", requireAuth, async (c) => {
+lb.get("/lb/me", requireAuth, rateLimit("leaderboard"), async (c) => {
   const db = c.env.DB;
   if (!db) throw new ApiHttpError(503, "SERVICE_UNAVAILABLE", "DB binding not configured");
   const pid = c.get("pid");

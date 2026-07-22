@@ -12,6 +12,11 @@ export const KV_KEYS = {
   /** 운영 알림 설정(Slack webhook URL 등) — WT-M6-04. 부재 시 알림 전송을 skip 로그로 대체한다. */
   configOps: "config:ops",
   configLobbyShards: "config:lobbyShards",
+  /** WT-M6-05: staging k6 부하 테스트 동안만 수동 세팅하는 레이트리밋 완화 플래그(値 존재 시
+   *  스코프 무관 전체 우회). 값은 만료 시각(epoch ms, TTL 세이프가드 겸용) 문자열 — 잊고 안
+   *  지워도 자동 소멸한다. `wrangler kv key put config:loadtest "1" --ttl 7200`으로만 조작하고
+   *  종료 후 `wrangler kv key delete config:loadtest`로 원복한다(ops/loadtest-report.md 절차). */
+  configLoadtest: "config:loadtest",
   dataCountriesOverride: "data:countries:override",
 
   /** 데일리 세트 캐시. dateKst = 'YYYY-MM-DD'(KST). */

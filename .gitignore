@@ -18,3 +18,7 @@ e2e/artifacts/
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
+
+# WT-M6-05: k6 부하 테스트가 매 실행마다 로컬 wrangler dev 대상으로 새로 발급하는 세션/runToken
+# 픽스처(ephemeral, 30분 TTL) — 커밋 대상 아님(tooling/ops/loadtest-report.md에 결과만 남긴다).
+tooling/ops/loadtest/.out/

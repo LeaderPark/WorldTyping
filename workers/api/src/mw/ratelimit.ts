@@ -37,6 +37,13 @@ export type RateLimitScope = keyof typeof LIMITS;
  * scope에 해당하는 KV 고정윈도 미들웨어. per:'pid'는 requireAuth 이후에 붙여야
  * `c.get('pid')`가 채워져 있다 — 아직 pid가 없으면(비인증 라우트에 pid 스코프를 잘못 붙인 경우)
  * 방어적으로 'anon' 서브젝트로 묶는다(버그를 숨기지 않도록 별도 감지는 상위 라우트 리뷰 소관).
+ *
+ * [WT-M6-05] KV `config:loadtest`가 존재하는 동안은 스코프 무관 전체 우회한다. staging k6
+ * 부하 테스트(docs/06 §10-#5)에서 세션/runToken 사전 워밍이 `session`(10/60s/IP) 상한과
+ * 충돌하는 문제 대응 — 로컬은 signSessionToken 직접 서명으로 우회 가능(rooms-sim 선례)하지만
+ * staging은 배포된 비밀값에 접근할 수 없어 이 방법이 불가하다. 켜져 있는 동안은 서버가
+ * 자신의 안티치트 임계를 스스로 낮추는 것이므로 **부하 테스트 시간·환경에 한정**해야 한다
+ * (tooling/ops/loadtest-report.md의 set/원복 절차 참조 — 절대 prod에 남겨두지 말 것).
  */
 export function rateLimit(
   scope: RateLimitScope,
@@ -47,6 +54,11 @@ export function rateLimit(
     const kv = c.env.KV;
     // 로컬 개발 등 KV 미바인딩 시 관대하게 skip(health.ts와 동일한 톤 — WT-M0-02 패턴 계승).
     if (!kv) {
+      await next();
+      return;
+    }
+
+    if ((await kv.get(KV_KEYS.configLoadtest)) !== null) {
       await next();
       return;
     }

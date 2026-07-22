@@ -95,8 +95,13 @@ async function main() {
     const lcp = runnerResult.lhr.audits['largest-contentful-paint'];
     const lcpMs = lcp.numericValue;
     const perfScore = runnerResult.lhr.categories.performance.score;
+    // WT-M5-01c(docs/00 §11-D47): CLS는 assert 게이트는 아니지만("Lighthouse CLS 악화 없음"은
+    // 회귀 비교로 보고) 정적 크리티컬 셸 도입 전후 비교를 위해 항상 함께 출력한다.
+    const cls = runnerResult.lhr.audits['cumulative-layout-shift'];
+    const clsValue = cls.numericValue;
 
     console.log(`[lighthouse] LCP = ${lcpMs.toFixed(0)}ms (budget < ${LCP_BUDGET_MS}ms)`);
+    console.log(`[lighthouse] CLS = ${clsValue.toFixed(3)}`);
     console.log(`[lighthouse] performance score = ${(perfScore * 100).toFixed(0)}/100`);
 
     if (lcpMs >= LCP_BUDGET_MS) {

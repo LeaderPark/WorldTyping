@@ -18,6 +18,89 @@
         }
       })();
     </script>
+    <!-- 정적 크리티컬 셸 스타일 (docs/00 §11-D47, WT-M5-01c).
+         D47 실측: 지도 lazy 분리(D45) 후에도 홈 LCP가 2640ms로 불변 — LCP 요소는 CSR 첫
+         페인트 자체가 아니라 S2 언어 게이트 문구였고, 게이트를 통째로 지워도 동일했다(=
+         "React가 부팅해 뭔가를 그리기까지"의 JS 총비용이 상한). 그래서 #root 안에 게이트+
+         히어로 타이틀을 정적 HTML/CSS로 박아 넣어 JS 실행을 기다리지 않고 즉시 페인트되게
+         한다. 이 <style> 블록은 빌드 산출물이 <head>에 주입하는 컴파일된 스타일시트
+         (Tailwind 등, dist/index.html 참고)의 도착도 기다리지 않도록 일부러 자체 완결시켰다
+         — 색만 tokens.css 팔레트·AppShell.tsx의 bg-white/dark:bg-slate-900 배색에 맞추고
+         그 변수를 참조하지는 않는다. 셀렉터는 #wt-shell-* 전용 id/class로 스코프해 실제 앱
+         클래스(.wt-home 등)와 절대 충돌하지 않는다 — React가 createRoot로 마운트되면(아래
+         본문 주석) 이 스타일이 적용되던 DOM 자체가 통째로 사라지므로 핸드오프 후엔 그냥 죽은
+         CSS다. -->
+    <style>
+      #wt-shell-hero,
+      #wt-shell-gate {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #ffffff;
+        color: #0f172a;
+      }
+      :root[data-theme="dark"] body {
+        background: #0f172a;
+        color: #ffffff;
+      }
+      #wt-shell-hero {
+        padding: 1.5rem;
+      }
+      #wt-shell-hero .wt-shell-hero__title {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+      #wt-shell-hero .wt-shell-hero__tagline {
+        margin: 0.25rem 0 0;
+        font-size: 0.9rem;
+        opacity: 0.75;
+      }
+      #wt-shell-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      #wt-shell-gate .wt-shell-gate__dialog {
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        text-align: center;
+        background: #ffffff;
+        color: #0f172a;
+      }
+      :root[data-theme="dark"] #wt-shell-gate .wt-shell-gate__dialog {
+        background: #1e293b;
+        color: #ffffff;
+      }
+      #wt-shell-gate .wt-shell-gate__actions {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.75rem;
+        justify-content: center;
+      }
+      #wt-shell-gate .wt-shell-gate__btn {
+        border-radius: 0.25rem;
+        border: 1px solid #cbd5e1;
+        padding: 0.25rem 0.75rem;
+        font: inherit;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+      :root[data-theme="dark"] #wt-shell-gate .wt-shell-gate__btn {
+        border-color: #475569;
+      }
+      #wt-shell-gate .wt-shell-gate__hint {
+        margin-top: 0.75rem;
+        font-size: 0.75rem;
+        opacity: 0.7;
+      }
+    </style>
     <!-- 폰트 프리로드 (docs/03 §8.2): Pretendard Variable subset + JetBrains Mono.
          WT-M5-01 세션 특이 조정 결과 — Pretendard는 npm 후보 두 종 모두 예산/한글 서브셋
          요건을 만족하지 못해(tooling/scripts/copy-fonts.mjs 상단 주석, 최종 보고 escalations)
@@ -28,7 +111,104 @@
     <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- 정적 크리티컬 셸 본문 (docs/00 §11-D47, WT-M5-01c).
+           (a) 게이트: HomePage.tsx의 LanguageGateOverlay와 동일한 role/aria-label/
+           data-testid(language-gate, lang-ko, lang-en) — e2e/specs/e1-first-visit.spec.ts가
+           그대로 재사용한다. 문구도 packages/i18n의 lang.selectPrompt.ko/en·
+           lang.selectOption.ko/en·lang.select.hint(ko+en 병기)를 그대로 복제했다 — 이
+           게이트는 언어 선택 "이전" 화면이라 i18next가 아직 붙지 않은 상태이므로 두 언어
+           모두 하드코딩하는 것이 유일한 선택지다(§4 "UI 문자열 하드코딩 금지" 규칙의 명시적
+           예외, 이 파일 자체가 그 근거 문서다).
+           (b) 히어로 타이틀: app.title/app.tagline.ko/app.tagline.en 그대로.
+           React가 createRoot(rootEl).render(...)로 마운트되면(main.tsx) 기존 자식을 전부
+           지우고 새로 그리므로 이 서브트리는 통째로 교체된다 — 핸드오프는 그 자연 대체가
+           전부이고 별도 배선이 필요 없다. -->
+      <div id="wt-shell-hero">
+        <h1 class="wt-shell-hero__title">TypeTrip</h1>
+        <p class="wt-shell-hero__tagline">세계를 타이핑하다 · Type the world</p>
+      </div>
+      <div
+        id="wt-shell-gate"
+        role="dialog"
+        aria-modal="true"
+        aria-label="language-gate"
+        data-testid="language-gate"
+      >
+        <div class="wt-shell-gate__dialog">
+          <p>어떤 언어로 여행할까요?</p>
+          <p>Which language?</p>
+          <div class="wt-shell-gate__actions">
+            <button type="button" data-testid="lang-ko" data-wt-lang="ko" class="wt-shell-gate__btn">
+              한국어로 타이핑
+            </button>
+            <button type="button" data-testid="lang-en" data-wt-lang="en" class="wt-shell-gate__btn">
+              Type in English
+            </button>
+          </div>
+          <p class="wt-shell-gate__hint">나중에 언제든 바꿀 수 있어요 · You can always change this later</p>
+        </div>
+      </div>
+    </div>
+    <script>
+      // 정적 게이트 배선 (docs/00 §11-D47, WT-M5-01c).
+      // stores/settings.ts의 hasChosenLanguage()/setLang()과 정확히 같은 localStorage 상태를
+      // 기록·조회한다:
+      //  1) 'wt:lang' 원시 키(hasChosenLanguage가 존재 여부만 검사) — setLang 1단계 그대로.
+      //  2) 'wt:settings' — zustand persist({name:'wt:settings'}) 기본 storage(JSON
+      //     localStorage) 기록 포맷 {state, version}(node_modules/zustand
+      //     esm/middleware.mjs newImpl, version 미지정 시 0, merge는 {...currentState,
+      //     ...persistedState} 얕은 병합). 이걸 안 쓰면 React 마운트 시 zustand 스토어가
+      //     initializer의 detectDefaultLang()(navigator.language)로 lang을 다시 정해버려,
+      //     여기서 고른 언어와 실제 화면 언어가 어긋난다.
+      // React 마운트보다 클릭이 먼저 오면 이 스크립트가 게이트를 직접 숨긴다(자연 대체를
+      // 기다릴 필요 없음) — hasChosenLanguage()가 이미 true라 React가 나중에 마운트돼도
+      // LanguageGateOverlay는 처음부터 null을 반환한다(이중 게이트 없음).
+      (function () {
+        var gate = document.getElementById("wt-shell-gate");
+        var hasChosen = false;
+        try {
+          hasChosen = localStorage.getItem("wt:lang") != null;
+        } catch (e) {
+          hasChosen = false; // 사생활 모드 등 — React 마운트 후 실제 게이트가 정상 표시된다
+        }
+        if (!gate) return;
+        if (hasChosen) {
+          gate.style.display = "none";
+          return;
+        }
+        var buttons = gate.querySelectorAll("button[data-wt-lang]");
+        for (var i = 0; i < buttons.length; i++) {
+          buttons[i].addEventListener("click", function (ev) {
+            var lang = ev.currentTarget.getAttribute("data-wt-lang");
+            try {
+              localStorage.setItem("wt:lang", lang);
+              var raw = null;
+              try {
+                raw = localStorage.getItem("wt:settings");
+              } catch (e2) {
+                raw = null;
+              }
+              var parsed = null;
+              try {
+                parsed = raw ? JSON.parse(raw) : null;
+              } catch (e3) {
+                parsed = null;
+              }
+              if (!parsed || typeof parsed !== "object") {
+                parsed = { state: {}, version: 0 };
+              }
+              parsed.state = Object.assign({}, parsed.state, { lang: lang });
+              if (typeof parsed.version !== "number") parsed.version = 0;
+              localStorage.setItem("wt:settings", JSON.stringify(parsed));
+            } catch (e) {
+              /* localStorage 접근 불가 환경 — React 마운트 후 게이트가 정상 재표시되어 복구된다 */
+            }
+            gate.style.display = "none";
+          });
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

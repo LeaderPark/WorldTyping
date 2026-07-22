@@ -11,6 +11,9 @@ import { HomePage } from '../pages/HomePage';
 import { ModeSelectPage } from '../pages/ModeSelectPage';
 import { TrackSelectPage } from '../pages/TrackSelectPage';
 import { PrivacyPage } from '../pages/PrivacyPage';
+import { CreditsPage } from '../pages/CreditsPage';
+import { DailyPage } from '../pages/DailyPage';
+import { NotFoundPage } from '../pages/NotFoundPage';
 
 /**
  * GamePage/RankPage/멀티/PassportPage는 lazy(§4.1 원문) — 각 모듈은 React Router v6.4+ lazy
@@ -26,6 +29,13 @@ export const routeChildren: RouteObject[] = [
   { path: 'multi/:roomCode', lazy: () => import('../pages/multi/RoomPage') }, // S10→S11
   { path: 'passport', lazy: () => import('../pages/PassportPage') }, // S13
   { path: 'privacy', element: <PrivacyPage /> },
+  { path: 'credits', element: <CreditsPage /> }, // WT-M6-06: docs/06 §10-8 라이선스 고지
+  // WT-M6-06: docs/06 §10-2 SEO 체크리스트가 전제하는 "/daily" 랜딩(실제 플레이 진입은 여전히
+  // play/daily/:trackId, router.tsx 상단 세션 조정 주석 + DailyPage 파일 상단 주석 참조).
+  { path: 'daily', element: <DailyPage /> },
+  // catch-all(WT-M6-06, docs/06 §10-4 "404 항로 이탈 콘셉트") — react-router는 순서가 아니라
+  // 정적>동적>splat 매칭 우선순위로 라우팅하므로 배열 어디에 있어도 다른 라우트를 가리지 않는다.
+  { path: '*', element: <NotFoundPage /> },
 ];
 
 /**

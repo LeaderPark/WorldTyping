@@ -4,6 +4,7 @@
 // 병기로 렌더, 11항 전부 존재".
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
 import { PrivacyPage } from './index';
 
@@ -12,7 +13,10 @@ afterEach(() => cleanup());
 function renderPage() {
   return render(
     <AppProviders>
-      <PrivacyPage />
+      {/* WT-M6-06: 크레딧 섹션이 <Link to="/credits">를 렌더하므로 Router 컨텍스트가 필요하다. */}
+      <MemoryRouter>
+        <PrivacyPage />
+      </MemoryRouter>
     </AppProviders>,
   );
 }
@@ -76,6 +80,11 @@ describe('PrivacyPage', () => {
     expect(credits.textContent).toContain('Natural Earth');
     expect(credits.textContent).toContain('flag-icons');
     expect(credits.textContent).toMatch(/정치적 입장을 나타내지 않습니다|do not reflect any political position/);
+  });
+
+  it('links to the full /credits page (WT-M6-06)', () => {
+    renderPage();
+    expect(screen.getByTestId('privacy-credits-link')).toHaveAttribute('href', '/credits');
   });
 
   it('describes the self-service export/delete rights in both languages (§6.3)', () => {

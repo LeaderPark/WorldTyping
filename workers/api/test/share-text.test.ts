@@ -27,7 +27,7 @@ describe("buildDailyShareText", () => {
       grade: "A",
     });
     const lines = text.split("\n");
-    expect(lines[0]).toBe("WORLD TYPING 데일리 #187");
+    expect(lines[0]).toBe("TypeTrip 데일리 #187");
     expect(lines[1]).toBe("🟩🟩🟩🟩🟩🟩🟩🟩🟨🟩  10/10 완주");
     expect(lines[2]).toBe("⚡ 412타 · 🎯 96.2% · PI 381 (A)");
     expect(lines[3]).toBe("/daily");
@@ -49,7 +49,7 @@ describe("buildDailyShareText", () => {
       grade: "B",
     });
     const lines = text.split("\n");
-    expect(lines[0]).toBe("WORLD TYPING Daily #3");
+    expect(lines[0]).toBe("TypeTrip Daily #3");
     expect(lines[1]).toBe("🟩🟨🟥  2/3 cleared");
     expect(lines[2]).toBe("⚡ 300cpm · 🎯 90.0% · PI 270 (B)");
   });
@@ -84,8 +84,11 @@ describe("buildDailyShareText", () => {
       grade: "S",
     };
     expect(buildDailyShareText(base).split("\n").at(-1)).toBe("/daily");
-    expect(buildDailyShareText({ ...base, publicOrigin: "https://worldtyping.gg/" }).split("\n").at(-1)).toBe(
-      "https://worldtyping.gg/daily",
+    // typetrip.example — RFC 2606 예약 TLD, 실 도메인 미확정 상태의 non-resolvable 플레이스홀더
+    // (§11-D18, wrangler.toml의 staging.typetrip.example과 동일 관례). 실제 코드는 이 값을 전혀
+    // 하드코딩하지 않는다 — 호출자가 넘겨준 publicOrigin을 그대로 반영하는지만 검증하는 테스트다.
+    expect(buildDailyShareText({ ...base, publicOrigin: "https://typetrip.example/" }).split("\n").at(-1)).toBe(
+      "https://typetrip.example/daily",
     );
   });
 });

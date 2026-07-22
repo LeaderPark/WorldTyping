@@ -75,7 +75,7 @@
   "result.nickname.error": "사용할 수 없는 닉네임이에요",
   "result.newUnlock.toast": "새 업적/커버 {count}개 획득!",
   "result.firstPassport": "여권이 발급되었습니다",
-  "result.share.text": "{route} · {grade}등급 · {score}점 — WORLD TYPING에서 나도 도전!",
+  "result.share.text": "{route} · {grade}등급 · {score}점 — TypeTrip에서 나도 도전!",
   "result.share.copied": "이미지가 복사/다운로드되었습니다",
   "result.share.error": "캡처에 실패했어요. 다시 시도해주세요.",
   "result.share.x": "X",
@@ -310,11 +310,31 @@
 
   "error.network": "연결이 끊겼어요. 다시 시도해 주세요.",
   "error.boundary.title": "문제가 발생했어요",
+  "error.boundary.cta": "홈으로 돌아가기",
+  "error.notFound.title": "항로를 이탈했어요",
+  "error.notFound.body": "요청하신 페이지를 찾을 수 없어요. 지도로 돌아가 새 여행을 시작해 보세요.",
+  "error.notFound.cta": "홈으로 돌아가기",
   "notice.disputed": "국가 표기는 게임 목적의 편의상 구분이며 정치적 입장을 나타내지 않습니다.",
 
   "onboarding.followAlong": "보이는 대로 따라 치면 돼요",
   "onboarding.autoAdvance": "Enter 없이 자동으로 넘어가요!",
 
   "pwa.updateAvailable": "새 버전이 있어요",
-  "pwa.reload": "새로고침"
+  "pwa.reload": "새로고침",
+
+  "seo.home.description": "세계 지도 위 국가 이름을 타이핑하는 웹 게임. 로그인 없이 바로 플레이하세요.",
+  "seo.rank.description": "대륙 노선·티어 서바이벌·세계일주 랭킹을 확인하세요.",
+  "seo.daily.description": "매일 자정 갱신되는 데일리 챌린지에 도전하고 기록을 공유하세요.",
+  "seo.play.description": "대륙 노선, 티어 서바이벌, 세계일주 중 원하는 모드를 골라 플레이하세요.",
+  "seo.passport.description": "완주한 노선과 업적을 여권에서 확인하세요.",
+  "seo.multi.description": "실시간으로 다른 플레이어와 타이핑 대결을 펼치세요.",
+  "seo.privacy.description": "TypeTrip의 개인정보처리방침입니다.",
+  "seo.credits.description": "TypeTrip이 사용하는 데이터와 라이선스 고지입니다.",
+
+  "credits.title": "크레딧 및 라이선스",
+  "credits.intro": "TypeTrip은 다음 오픈 데이터와 오픈소스를 사용합니다.",
+
+  "daily.play.cta": "오늘의 챌린지 시작",
+
+  "banner.ariaLabel": "서비스 공지"
 }

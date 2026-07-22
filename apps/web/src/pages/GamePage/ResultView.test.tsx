@@ -265,7 +265,7 @@ describe('ResultView', () => {
     it('daily 모드 + shareText 응답 시 복사 버튼과 텍스트를 렌더한다', async () => {
       useSettingsStore.getState().setLang('ko');
       const { engine } = mkEngine(false);
-      const shareText = 'WORLD TYPING 데일리 #1\n🟩🟩  2/2 완주\n⚡ 200타 · 🎯 100.0% · PI 200 (S)\n/daily';
+      const shareText = 'TypeTrip 데일리 #1\n🟩🟩  2/2 완주\n⚡ 200타 · 🎯 100.0% · PI 200 (S)\n/daily';
       submitRunMock.mockResolvedValue({
         verdict: 'valid', score: 500, pi: 400, cpm: 300, accMilli: 950, grade: 'A',
         completed: true, rank: 5, total: 50, isPersonalBest: true, shareText,
@@ -274,7 +274,7 @@ describe('ResultView', () => {
       renderResult(engine, baseResult(), { runToken: 'tok', runTokenIssuedAt: Date.now(), mode: 'daily' });
 
       await waitFor(() => expect(screen.getByTestId('daily-share-text')).toBeInTheDocument());
-      expect(screen.getByTestId('daily-share-text').textContent).toContain('WORLD TYPING 데일리 #1');
+      expect(screen.getByTestId('daily-share-text').textContent).toContain('TypeTrip 데일리 #1');
 
       const writeTextMock = vi.fn().mockResolvedValue(undefined);
       vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: writeTextMock } });

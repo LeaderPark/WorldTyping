@@ -24,10 +24,16 @@ describe('RootErrorBoundary', () => {
   it('renders the boundary title and the thrown error message', async () => {
     const { RootErrorBoundary } = await import('./RootErrorBoundary');
     const { AppProviders } = await import('./providers');
+    // WT-M6-06: RootErrorBoundary now delegates non-404 errors to <ErrorPage>, which renders a
+    // react-router <Link> home — needs a Router context (MemoryRouter, since react-router-dom
+    // itself is only partially mocked above and Router components are untouched).
+    const { MemoryRouter } = await import('react-router-dom');
 
     render(
       <AppProviders>
-        <RootErrorBoundary />
+        <MemoryRouter>
+          <RootErrorBoundary />
+        </MemoryRouter>
       </AppProviders>,
     );
 

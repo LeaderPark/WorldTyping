@@ -22,7 +22,7 @@ describe('router.tsx wiring (§4.1 원문 대조)', () => {
     expect(rootRoute.children).toBe(routeChildren);
   });
 
-  it('exposes exactly the S1~S13 route paths from docs/01 §10.1 in order', () => {
+  it('exposes exactly the S1~S13 route paths from docs/01 §10.1 in order, plus WT-M6-06 launch pages', () => {
     expect(pathsOf(routeChildren)).toEqual([
       '(index)',
       'play',
@@ -33,11 +33,14 @@ describe('router.tsx wiring (§4.1 원문 대조)', () => {
       'multi/:roomCode',
       'passport',
       'privacy',
+      'credits',
+      'daily',
+      '*',
     ]);
   });
 
-  it('uses eager `element` for Home/ModeSelect/TrackSelect/Privacy and `lazy` for the rest', () => {
-    const eagerPaths = new Set(['(index)', 'play', 'play/:mode', 'privacy']);
+  it('uses eager `element` for Home/ModeSelect/TrackSelect/Privacy/Credits/Daily/NotFound and `lazy` for the rest', () => {
+    const eagerPaths = new Set(['(index)', 'play', 'play/:mode', 'privacy', 'credits', 'daily', '*']);
     for (const route of routeChildren) {
       const key = route.path ?? '(index)';
       if (eagerPaths.has(key)) {

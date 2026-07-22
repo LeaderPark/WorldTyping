@@ -20,6 +20,12 @@ import { flushPendingQueue, registerPendingQueueAutoFlush } from '../net/pending
 import { registerGlobalErrorReporter } from '../net/telemetry';
 import { useSettingsStore } from '../stores/settings';
 
+// WT-M6-06: KV config:banner 장애 배너(docs/06 §10-4 "API 장애 시 배너 동작 확인"). config:client와는
+// 별도의 KV 키가 원천이라(workers/api/src/lib/kv-keys.ts configBanner) 서버가 GET /config 응답에
+// 사후 병합해 내려준다 — 여기서는 그 병합 결과 필드 하나만 옵션으로 더 받는다. `.optional()`이라
+// 이 필드가 아직 없는 기존 서버 응답/테스트 픽스처와도 하위 호환된다(누락 시 undefined → null 취급).
+const BannerConfigSchema = z.object({ message: z.string(), level: z.enum(['info', 'warning']) }).strict();
+
 const ClientConfigSchema = z
   .object({
     schemaVersion: z.literal(2),
@@ -44,10 +50,12 @@ const ClientConfigSchema = z
       })
       .strict(),
     featureFlags: z.record(z.boolean()),
+    banner: BannerConfigSchema.nullable().optional(),
   })
   .strict();
 
 export type ClientConfig = z.infer<typeof ClientConfigSchema>;
+export type BannerConfig = z.infer<typeof BannerConfigSchema>;
 
 // 번들 기본값 — GET /config 미구현/실패 시 폴백(docs/03 §8.2 표 마지막 행, docs/00 §11-D12).
 const DEFAULT_CONFIG: ClientConfig = {
@@ -65,6 +73,7 @@ const DEFAULT_CONFIG: ClientConfig = {
   },
   anticheat: { cpmHardCapKo: 1100, cpmHardCapEn: 1000, minMsPerKeystroke: 35 },
   featureFlags: {},
+  banner: null,
 };
 
 export interface BootData {

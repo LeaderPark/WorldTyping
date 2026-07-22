@@ -75,7 +75,7 @@
   "result.nickname.error": "That nickname isn't available",
   "result.newUnlock.toast": "{count} new achievement(s)/cover(s) unlocked!",
   "result.firstPassport": "Your passport has been issued",
-  "result.share.text": "{route} · Grade {grade} · {score}pts — Try WORLD TYPING!",
+  "result.share.text": "{route} · Grade {grade} · {score}pts — Try TypeTrip!",
   "result.share.copied": "Image copied to clipboard and downloaded",
   "result.share.error": "Capture failed. Please try again.",
   "result.share.x": "X",
@@ -310,11 +310,31 @@
 
   "error.network": "Connection lost. Please try again.",
   "error.boundary.title": "Something went wrong",
+  "error.boundary.cta": "Back to home",
+  "error.notFound.title": "You've gone off course",
+  "error.notFound.body": "We couldn't find that page. Head back to the map and start a new trip.",
+  "error.notFound.cta": "Back to home",
   "notice.disputed": "Country labels are for gameplay convenience only and do not reflect any political position.",
 
   "onboarding.followAlong": "Just type what you see",
   "onboarding.autoAdvance": "No need to press Enter — it advances automatically!",
 
   "pwa.updateAvailable": "A new version is available",
-  "pwa.reload": "Refresh"
+  "pwa.reload": "Refresh",
+
+  "seo.home.description": "Type country names on a world map. Play instantly — no login required.",
+  "seo.rank.description": "Check leaderboards across Continent Route, Tier Survival, and World Tour.",
+  "seo.daily.description": "Take on today's Daily Challenge, refreshed every midnight, and share your result.",
+  "seo.play.description": "Choose Continent Route, Tier Survival, or World Tour and start playing.",
+  "seo.passport.description": "See your completed routes and achievements in your passport.",
+  "seo.multi.description": "Race other players in real time.",
+  "seo.privacy.description": "TypeTrip's privacy policy.",
+  "seo.credits.description": "Data sources and license notices used by TypeTrip.",
+
+  "credits.title": "Credits & Licenses",
+  "credits.intro": "TypeTrip uses the following open data and open-source projects.",
+
+  "daily.play.cta": "Start today's challenge",
+
+  "banner.ariaLabel": "Service notice"
 }

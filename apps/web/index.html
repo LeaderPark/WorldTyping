@@ -4,7 +4,25 @@
     <meta charset="UTF-8" />
     <!-- interactive-widget: Android Chrome 108+ 소프트 키보드가 뷰포트를 리사이즈하도록 (docs/03 §7.1) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
-    <title>WORLD TYPING — TypeTrip</title>
+    <title>TypeTrip — 세계를 타이핑하다 · Type the world</title>
+    <!-- SEO/OG 정적 기본값(docs/06 §10-2, docs/00 §11-D18, WT-M6-06). 노출명은 전부 TypeTrip
+         (코드네임 WORLD TYPING은 저장소/문서 전용). 이 블록은 홈("/") 및 JS 미실행 크롤러를
+         위한 기본값이고, apps/web/src/app/RouteMeta.tsx가 SPA 라우트 전환마다 이 태그들을
+         갱신한다(id 없이 셀렉터로 upsert하므로 아래 태그와 정확히 같은 것을 덮어쓴다). 도메인은
+         하드코딩하지 않는다(§7 gotcha 7) — og:url 등 절대 URL이 필요한 태그는 RouteMeta가
+         `location.origin`으로 런타임에 채운다(정적 HTML에는 넣지 않는다). -->
+    <meta name="description" content="세계 지도 위 국가 이름을 타이핑하는 웹 게임. 로그인 없이 바로 플레이하세요." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TypeTrip" />
+    <meta property="og:title" content="TypeTrip — 세계를 타이핑하다 · Type the world" />
+    <meta property="og:description" content="세계 지도 위 국가 이름을 타이핑하는 웹 게임. 로그인 없이 바로 플레이하세요." />
+    <meta property="og:image" content="/og/default.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TypeTrip — 세계를 타이핑하다 · Type the world" />
+    <meta name="twitter:description" content="세계 지도 위 국가 이름을 타이핑하는 웹 게임. 로그인 없이 바로 플레이하세요." />
+    <meta name="twitter:image" content="/og/default.png" />
     <!-- 테마 FOUC 방지 스니펫 (docs/03 §8.1): localStorage 저장 테마를 페인트 전에 적용.
          기본값은 시스템 설정이 아니라 다크 고정(docs/01 §13.2 "다크 모드 기본, 라이트는 옵션"). -->
     <script>

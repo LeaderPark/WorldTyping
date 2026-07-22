@@ -84,6 +84,37 @@ describe("GET /api/v1/config", () => {
   });
 });
 
+// WT-M6-06: config:banner(장애 배너, docs/06 §10-4) — config:client와 독립된 KV 키라 별도로
+// 검증한다. "absent" 케이스를 먼저 둬 이후 테스트의 KV 쓰기가 순서를 오염시키지 않게 한다.
+describe("GET /api/v1/config — banner (WT-M6-06)", () => {
+  it("banner is null when config:banner is absent", async () => {
+    const res = await SELF.fetch(`${BASE}/config`);
+    const body = (await res.json()) as { banner: unknown };
+    expect(body.banner).toBeNull();
+  });
+
+  it("reflects config:banner when present and valid", async () => {
+    await env.KV.put(KV_KEYS.configBanner, JSON.stringify({ message: "일시 장애 안내", level: "warning" }));
+    const res = await SELF.fetch(`${BASE}/config`);
+    const body = (await res.json()) as { banner: { message: string; level: string } };
+    expect(body.banner).toEqual({ message: "일시 장애 안내", level: "warning" });
+  });
+
+  it("falls back to a null banner when config:banner fails schema validation", async () => {
+    await env.KV.put(KV_KEYS.configBanner, JSON.stringify({ message: "", level: "nope" }));
+    const res = await SELF.fetch(`${BASE}/config`);
+    const body = (await res.json()) as { banner: unknown };
+    expect(body.banner).toBeNull();
+  });
+
+  it("falls back to a null banner when config:banner is not valid JSON", async () => {
+    await env.KV.put(KV_KEYS.configBanner, "{not json");
+    const res = await SELF.fetch(`${BASE}/config`);
+    const body = (await res.json()) as { banner: unknown };
+    expect(body.banner).toBeNull();
+  });
+});
+
 describe("GET /api/v1/data/countries", () => {
   it("404s when no override is active", async () => {
     const res = await SELF.fetch(`${BASE}/data/countries`);

@@ -63,14 +63,14 @@ export function buildDailyShareText(o: DailyShareTextOpts): string {
 
   if (o.lang === "en") {
     return [
-      `WORLD TYPING Daily #${o.dailyNo}`,
+      `TypeTrip Daily #${o.dailyNo}`,
       `${grid}  ${cleared}/${o.totalCountries} cleared`,
       `⚡ ${cpmInt}cpm · 🎯 ${accuracyPct}% · PI ${piInt} (${o.grade})`,
       link,
     ].join("\n");
   }
   return [
-    `WORLD TYPING 데일리 #${o.dailyNo}`,
+    `TypeTrip 데일리 #${o.dailyNo}`,
     `${grid}  ${cleared}/${o.totalCountries} 완주`,
     `⚡ ${cpmInt}타 · 🎯 ${accuracyPct}% · PI ${piInt} (${o.grade})`,
     link,

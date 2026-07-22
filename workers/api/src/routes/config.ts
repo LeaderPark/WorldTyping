@@ -26,6 +26,10 @@ interface ConfigRes {
   };
   anticheat: { cpmHardCapKo: number; cpmHardCapEn: number; minMsPerKeystroke: number };
   featureFlags: Record<string, boolean>;
+  /** WT-M6-06: KV config:banner(운영자 장애 공지, docs/06 §10-4). config:client와는 별도 키가
+   *  원천이라(kv-keys.ts configBanner) ConfigResSchema 검증 대상이 아니다 — 아래에서 이 필드만
+   *  독립적으로 조회·검증해 응답에 사후 병합한다. */
+  banner: { message: string; level: "info" | "warning" } | null;
 }
 
 // docs/00 §11-D12 확정값(핫스왑 전 폴백). KV config:anticheat가 이 라우트의 원천은 아니다
@@ -59,8 +63,14 @@ function defaultConfig(dataUrl: string): ConfigRes {
     },
     anticheat: { ...DEFAULT_ANTICHEAT },
     featureFlags: { ...DEFAULT_FEATURE_FLAGS },
+    banner: null,
   };
 }
+
+// config:banner는 config:client와 별개 KV 키다(kv-keys.ts) — ConfigResSchema(config:client 검증)에
+// 섞지 않고 독립적으로 검증한다. 실패해도 배너 없음으로 조용히 폴백할 뿐 나머지 config 응답을
+// 막지 않는다(핫스왑 채널의 방어적 파싱 원칙, ConfigResSchema와 동일 취지).
+const BannerConfigSchema = z.object({ message: z.string().min(1), level: z.enum(["info", "warning"]) }).strict();
 
 // KV config:client는 운영자 입력(런북 경유)이지만 핫스왑 채널이라 방어적으로 검증한다 —
 // 잘못된 값이 배포 없이 즉시 전 클라에 퍼지는 사고를 막는다. 실패 시 번들 기본값 전체로 폴백.
@@ -98,13 +108,34 @@ config.get("/config", async (c) => {
       try {
         const parsed = ConfigResSchema.safeParse(JSON.parse(raw));
         if (parsed.success) {
-          cfg = { ...parsed.data, dataUrl }; // dataUrl은 override 여부에 따라 항상 이 라우트가 결정
+          // dataUrl은 override 여부에 따라 항상 이 라우트가 결정. banner는 ConfigResSchema(config:client
+          // 전용) 밖의 별도 KV 키가 원천이라 여기서는 일단 null로 채우고, 아래 banner 병합 블록이
+          // 필요하면 덮어쓴다.
+          cfg = { ...parsed.data, dataUrl, banner: null };
         } else {
           // 운영자가 핫스왑한 값이 스키마를 깼다는 신호.
           logError("config_client_schema_invalid", { message: parsed.error.message });
         }
       } catch (err) {
         logError("config_client_json_invalid", { message: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+
+  // WT-M6-06: config:banner 병합(장애 공지 배너, docs/06 §10-4) — config:client 검증 결과와
+  // 무관하게 항상 시도한다(둘은 독립 KV 키).
+  if (kv) {
+    const bannerRaw = await kv.get(KV_KEYS.configBanner);
+    if (bannerRaw) {
+      try {
+        const parsedBanner = BannerConfigSchema.safeParse(JSON.parse(bannerRaw));
+        if (parsedBanner.success) {
+          cfg.banner = parsedBanner.data;
+        } else {
+          logError("config_banner_schema_invalid", { message: parsedBanner.error.message });
+        }
+      } catch (err) {
+        logError("config_banner_json_invalid", { message: err instanceof Error ? err.message : String(err) });
       }
     }
   }

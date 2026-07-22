@@ -23,6 +23,9 @@ import { TrackSelectPage } from '../pages/TrackSelectPage';
 import { RankPage } from '../pages/RankPage';
 import { PassportPage } from '../pages/PassportPage';
 import { PrivacyPage } from '../pages/PrivacyPage';
+import { CreditsPage } from '../pages/CreditsPage';
+import { DailyPage } from '../pages/DailyPage';
+import { NotFoundPage } from '../pages/NotFoundPage';
 import { LobbyPage } from '../pages/multi/LobbyPage';
 
 function renderAt(path: string) {
@@ -38,6 +41,9 @@ function renderAt(path: string) {
             <Route path="multi" element={<LobbyPage />} />
             <Route path="passport" element={<PassportPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="credits" element={<CreditsPage />} />
+            <Route path="daily" element={<DailyPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -69,7 +75,17 @@ describe('app routing/shell (WT-M2-05 smoke)', () => {
 
   it('navigates to each top-level route and renders a non-empty heading', async () => {
     localStorage.setItem('wt:lang', 'en'); // 게이트가 다른 시나리오를 방해하지 않도록 선택 완료 상태로.
-    for (const path of ['/play', '/play/continent', '/rank', '/multi', '/passport', '/privacy']) {
+    for (const path of [
+      '/play',
+      '/play/continent',
+      '/rank',
+      '/multi',
+      '/passport',
+      '/privacy',
+      '/credits',
+      '/daily',
+      '/this-route-does-not-exist', // WT-M6-06: catch-all → NotFoundPage
+    ]) {
       const { unmount } = renderAt(path);
       const heading = await screen.findByRole('heading', { level: 1 });
       expect(heading.textContent).not.toBe('');

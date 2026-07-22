@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  spec: docs/06 §10-3(sitemap.xml — 정적 라우트만, /r/:id·/multi/:code 등 동적 라우트 미포함),
+        docs/00 §7 gotcha 7(오리진 하드코딩 금지), WT-M6-06
+
+  도메인 미확정(§11 오픈퀘스천 Q1) 상태다. sitemap 프로토콜은 <loc>에 절대 URL을 요구하지만
+  이 코드베이스는 실 도메인을 어디에도 굽지 않는다(§11-D18) — 그래서 아래 <loc>은 RFC 2606
+  예약 TLD를 쓴 non-resolvable 플레이스홀더 오리진(typetrip.example)이다. wrangler.toml의
+  staging 라우트(staging.typetrip.example)와 동일한 관례다. 도메인 확정 후 리드가 배포 직전에
+  이 오리진만 실제 PUBLIC_ORIGIN으로 일괄 치환한다(tooling/ops/launch-checklist.md 절차 참조).
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://typetrip.example/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/play</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/daily</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/rank</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/multi</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/passport</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/credits</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.2</priority>
+  </url>
+</urlset>

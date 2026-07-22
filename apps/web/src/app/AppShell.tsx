@@ -5,7 +5,7 @@
 //
 // M0 스캐폴드("Hello WORLD TYPING" 한 줄)를 라우팅 루트 레이아웃으로 교체한다.
 
-import { Outlet, useSearchParams } from 'react-router-dom';
+import { Link, Outlet, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
@@ -16,6 +16,8 @@ import { useRouteFocus } from '../lib/useRouteFocus';
 import { useModalA11y } from '../lib/useModalA11y';
 import { deleteMyAccount, fetchMyDataExport } from '../net/api-client';
 import { downloadJson } from '../lib/download-json';
+import { getBootData, type BannerConfig } from './bootLoader';
+import { RouteMeta } from './RouteMeta';
 
 export function AppShell() {
   const theme = useSettingsStore((s) => s.theme);
@@ -52,11 +54,52 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
+      {/* WT-M6-06: 라우트별 SEO 메타(title/description/OG/Twitter/hreflang) — 시각 출력 없음. */}
+      <RouteMeta />
+      {/* WT-M6-06: KV config:banner 장애 배너(docs/06 §10-4). */}
+      <BannerBar />
       {/* 전역 토스트 영역 — 토스트 스토어/디스패처는 이 태스크 범위 밖(스토어 5종 고정, §4.3). */}
       <div id="wt-toast-region" aria-live="polite" className="sr-only" />
       <Outlet />
       <SettingsOverlay />
       <SwUpdateToast />
+    </div>
+  );
+}
+
+/**
+ * WT-M6-06: KV config:banner(운영자 장애 공지, docs/06 §10-4 "API 장애 시 배너 동작 확인" +
+ * §11-D9 D1/DO=canonical과 별개인 운영 핫스왑 채널). `getBootData()`는 데이터 라우터의 root
+ * loader(bootLoader)가 이미 resolve된 뒤에만 안전하다 — 이 컴포넌트를 AppShell 없이 classic
+ * <MemoryRouter>로 직접 렌더하는 기존 테스트(router.test.tsx 등)에서는 loader가 전혀 실행되지
+ * 않으므로, effect 안에서 try/catch로 감싸 "배너 없음"으로 조용히 폴백한다(장애 배너는 부가
+ * 기능이라 크래시 사유가 아니다 — HomePage의 데일리/티커 조회 실패 폴백과 같은 정신).
+ */
+function BannerBar() {
+  const { t } = useTranslation();
+  const [banner, setBanner] = useState<BannerConfig | null>(null);
+
+  useEffect(() => {
+    try {
+      setBanner(getBootData().config.banner ?? null);
+    } catch {
+      setBanner(null);
+    }
+  }, []);
+
+  if (!banner) return null;
+
+  return (
+    <div
+      role="status"
+      data-testid="app-banner"
+      data-level={banner.level}
+      aria-label={t('banner.ariaLabel')}
+      className={`px-4 py-2 text-center text-sm font-medium text-white ${
+        banner.level === 'warning' ? 'bg-amber-600' : 'bg-sky-700'
+      }`}
+    >
+      {banner.message}
     </div>
   );
 }
@@ -193,6 +236,11 @@ function SettingsOverlay() {
           </button>
         </div>
 
+        {/* WT-M6-06 a11y 수정(docs/03 §7.3, e2e E10 wcag2aa 게이트): text-red-600 단독은 이 모달의
+            기본(다크) 배경 dark:bg-slate-800 위에서 실측 3.02:1로 WCAG AA 4.5:1 미달(axe-core
+            color-contrast, e10-a11y.spec.ts "S12 설정 모달"에서 발견). 라이트 배경(흰색)에서는
+            red-600이 이미 AA를 충족하므로 dark: 변형만 더 밝은 red-400으로 교체한다(D50과 같은
+            정신 — 원색을 텍스트로 쓸 때는 배경별 대비를 보정해야 한다). */}
         <div className="mb-4 flex flex-col gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
           <button
             type="button"
@@ -212,7 +260,7 @@ function SettingsOverlay() {
                 <button
                   type="button"
                   data-testid="settings-data-reset-confirm"
-                  className="rounded border border-red-500 px-3 py-1 text-red-600"
+                  className="rounded border border-red-500 px-3 py-1 text-red-600 dark:text-red-400"
                   onClick={() => void handleResetConfirm()}
                 >
                   {t('settings.resetConfirm.confirm')}
@@ -235,7 +283,7 @@ function SettingsOverlay() {
             <button
               type="button"
               data-testid="settings-data-reset"
-              className="rounded border px-3 py-1 text-left text-red-600"
+              className="rounded border px-3 py-1 text-left text-red-600 dark:text-red-400"
               onClick={() => setDataStatus('confirmingReset')}
             >
               {t('settings.data.reset')}
@@ -243,10 +291,21 @@ function SettingsOverlay() {
           )}
 
           {dataStatus === 'error' && (
-            <p role="alert" data-testid="settings-data-error" className="text-sm text-red-600">
+            <p role="alert" data-testid="settings-data-error" className="text-sm text-red-600 dark:text-red-400">
               {t('settings.data.error')}
             </p>
           )}
+        </div>
+
+        {/* WT-M6-06: docs/06 §10-8 크레딧/라이선스 고지 페이지 + §6.5 처리방침 페이지의 실제
+            진입점(둘 다 라우트는 이미 존재했지만 이전까지 앱 내 어디에서도 링크되지 않았다). */}
+        <div className="mb-4 flex gap-4 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+          <Link to="/privacy" data-testid="settings-link-privacy" onClick={close}>
+            {t('settings.privacy')}
+          </Link>
+          <Link to="/credits" data-testid="settings-link-credits" onClick={close}>
+            {t('settings.credits')}
+          </Link>
         </div>
 
         <button type="button" data-testid="settings-close" className="rounded border px-3 py-1" onClick={close}>

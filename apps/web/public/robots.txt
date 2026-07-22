@@ -1,0 +1,12 @@
+# spec: docs/06 §10-3(사이트맵/robots), docs/07 WT-M6-06 산출물 지시("/api/·/multi/* Disallow,
+# /og/ Allow"), docs/00 §7 gotcha 7(오리진 하드코딩 금지)
+#
+# 도메인 미확정(§11 오픈퀘스천 Q1)이라 `Sitemap:` 지시어(절대 URL 필수)는 여기 굽지 않는다 —
+# 도메인 확정 후 리드가 `Sitemap: https://<PUBLIC_ORIGIN>/sitemap.xml`을 추가한다
+# (tooling/ops/launch-checklist.md 참조).
+User-agent: *
+Allow: /
+Allow: /r/
+Allow: /og/
+Disallow: /api/
+Disallow: /multi/

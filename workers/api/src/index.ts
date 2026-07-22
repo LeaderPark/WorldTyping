@@ -27,6 +27,7 @@ import { runRetentionJob, runAbuseSurgeCheck } from "./cron/retention";
 import { handleQueueBatch } from "./queue/consumer";
 import { securityHeaders } from "./mw/security-headers";
 import { corsMiddleware } from "./mw/cors";
+import { wwwToApexRedirect } from "./mw/www-redirect";
 import { apiErrorHandler } from "./lib/api-error";
 
 // ---- 최상위 앱 ------------------------------------------------------------
@@ -37,6 +38,10 @@ const app = new Hono<{ Bindings: Env }>();
 app.onError(apiErrorHandler);
 
 app.use("*", securityHeaders);
+// WT-M6-06(docs/06 §10-1): www → apex 301. securityHeaders보다 안쪽에 등록해 리다이렉트 응답에도
+// 보안 헤더가 그대로 실린다(securityHeaders는 next() 이후 c.res에 헤더를 세팅하므로 순서 무관하게
+// 적용된다 — 안쪽 미들웨어가 next()를 호출하지 않고 바로 반환해도 c.res는 그 응답을 그대로 반영).
+app.use("*", wwwToApexRedirect);
 app.use("/api/*", corsMiddleware);
 
 // /api/v1/* 라우트 마운트. 주의: Hono의 `app.route(path, subApp)`는 subApp에 등록된

@@ -7,6 +7,7 @@
 // 조정 지시). 라우팅은 이전과 동일하게 non-lazy `element`(router.tsx, router-config.test.ts
 // "Home/ModeSelect/TrackSelect/Privacy는 eager" 불변식 유지) — 텍스트 위주 페이지라 엔트리
 // 예산(<170KB gzip)에 미치는 영향이 미미해 별도 청크 분리 이득이 적다.
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import privacyKo from './privacy.ko.md?raw';
 import privacyEn from './privacy.en.md?raw';
@@ -122,7 +123,8 @@ export function PrivacyPage() {
       <hr className="my-8 border-slate-300 dark:border-slate-700" />
 
       {/* 크레딧: notice.disputed(i18n) + ODbL/Natural Earth/flag-icons 고지(docs/02 §2·§12).
-          전체 크레딧 페이지 본문은 WT-M6-06 소관 — 여기는 방침 페이지에 요구되는 최소 고지만. */}
+          전체 크레딧 페이지(라이선스 전문 링크 포함)는 WT-M6-06이 /credits로 신설했다 — 여기는
+          방침 페이지에 요구되는 최소 고지 + 그 페이지로의 링크만 유지한다. */}
       <section aria-label={t('privacy.credits.heading')} data-testid="privacy-credits">
         <h2 className="text-base font-semibold">{t('privacy.credits.heading')}</h2>
         <ul className="mt-2 list-disc pl-6 text-sm leading-relaxed">
@@ -131,7 +133,11 @@ export function PrivacyPage() {
           <li>{t('privacy.credits.flagIcons')}</li>
         </ul>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{t('notice.disputed')}</p>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('privacy.credits.fullPageNote')}</p>
+        <p className="mt-1 text-sm">
+          <Link to="/credits" data-testid="privacy-credits-link" className="underline">
+            {t('credits.title')}
+          </Link>
+        </p>
       </section>
     </div>
   );

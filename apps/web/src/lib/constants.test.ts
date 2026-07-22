@@ -4,6 +4,6 @@ import { APP_NAME } from "./constants";
 
 describe("@wt/web scaffold", () => {
   it("exposes the app name constant", () => {
-    expect(APP_NAME).toBe("WORLD TYPING");
+    expect(APP_NAME).toBe("TypeTrip");
   });
 });

@@ -28,10 +28,11 @@ import { requireAuth, type AuthVariables } from "../mw/auth";
 import { rateLimit } from "../mw/ratelimit";
 import { kstDate, kstDaysBetween } from "../lib/kst";
 import { trackRetentionPing, trackVisit } from "../lib/telemetry";
+import { loadAnticheatConfig } from "../lib/anticheat-config";
+import { logWarn } from "../lib/log";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const NEW_PID_ABUSE_WINDOW_SEC = 60 * 60; // 1시간(docs/04 §10.3)
-const NEW_PID_ABUSE_MAX = 20; // 동일 IP 해시 시간당 신규 pid 생성 상한
 const BLOCK_IP_TTL_SEC = 24 * 60 * 60; // 24h
 
 const SessionReqSchema = z
@@ -93,7 +94,8 @@ session.post("/session", rateLimit("session"), async (c) => {
 
   if (!user) {
     if (c.env.KV) {
-      const blocked = await bumpNewPidAbuseCounter(c.env.KV, ipHash);
+      const { newPidAbuseMaxPerHour } = await loadAnticheatConfig(c.env.KV); // D53: KV 핫스왑(기본 20/h)
+      const blocked = await bumpNewPidAbuseCounter(c.env.KV, ipHash, newPidAbuseMaxPerHour);
       if (blocked) {
         throw new ApiHttpError(
           403,
@@ -110,7 +112,8 @@ session.post("/session", rateLimit("session"), async (c) => {
     // 되살린다(닉네임/스트릭/커버 리셋). 신규 pid 어뷰징 카운터도 동일하게 소모시켜 삭제↔재생성
     // 반복으로 §10.3 한도를 우회하지 못하게 한다(신규 INSERT 경로와 동일 방어).
     if (c.env.KV) {
-      const blocked = await bumpNewPidAbuseCounter(c.env.KV, ipHash);
+      const { newPidAbuseMaxPerHour } = await loadAnticheatConfig(c.env.KV); // D53
+      const blocked = await bumpNewPidAbuseCounter(c.env.KV, ipHash, newPidAbuseMaxPerHour);
       if (blocked) {
         throw new ApiHttpError(
           403,
@@ -206,8 +209,7 @@ async function trackBootstrapTelemetry(env: Env, pid: string, geo: string | null
       await env.KV.put(key, todayKst, { expirationTtl: LAST_VISIT_TTL_SEC });
     }
   } catch (err) {
-    // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
-    console.warn("[session] bootstrap telemetry failed (non-fatal):", err);
+    logWarn("session_bootstrap_telemetry_failed", { message: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -327,15 +329,17 @@ async function reactivateDeletedUser(
 /**
  * 시간당 신규 pid 생성 카운터(docs/04 §10.3). 한도 초과 시 blk:ip:{hash}를 24h로 세팅하고
  * true(차단됨)를 반환한다 — 이 요청 자체도 거부한다(한도를 넘긴 요청부터 차단).
+ * maxPerHour는 §11-D53: config:anticheat KV 핫스왑(anticheat-config.ts loadAnticheatConfig의
+ * newPidAbuseMaxPerHour, 기본값 20) — 이 함수는 더 이상 상수를 하드코딩하지 않는다.
  */
-async function bumpNewPidAbuseCounter(kv: KVNamespace, ipHash: string): Promise<boolean> {
+async function bumpNewPidAbuseCounter(kv: KVNamespace, ipHash: string, maxPerHour: number): Promise<boolean> {
   const nowSec = Math.floor(Date.now() / 1000);
   const windowStart = Math.floor(nowSec / NEW_PID_ABUSE_WINDOW_SEC) * NEW_PID_ABUSE_WINDOW_SEC;
   const key = KV_KEYS.rateLimit("session:new-pid", ipHash, windowStart);
   const raw = await kv.get(key);
   const count = raw ? Number(raw) : 0;
 
-  if (count >= NEW_PID_ABUSE_MAX) {
+  if (count >= maxPerHour) {
     await kv.put(KV_KEYS.blockIp(ipHash), "1", { expirationTtl: BLOCK_IP_TTL_SEC });
     return true;
   }

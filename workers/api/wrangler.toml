@@ -55,7 +55,8 @@ max_batch_timeout = 5
 crons = [
   "0 15 * * *",   # KST 00:00 — 데일리+티어 시드 발행·D1 확정 저장
   "*/1 * * * *",  # lb-refresher — dirty만 (§11-D24, 04의 5분 주기 폐기)
-  "30 16 * * *",  # KST 01:30 — 보존 정리 + kpi_daily 스냅샷
+  "*/5 * * * *",  # 부정 급증 자체 체크 (WT-M6-04, docs/06 §8.2 → Slack)
+  "30 16 * * *",  # KST 01:30 — 보존 정리 + kpi_daily 스냅샷 + 주간 D1 리포트(월요일)
 ]
 
 [[analytics_engine_datasets]]

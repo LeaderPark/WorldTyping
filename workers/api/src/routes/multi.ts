@@ -16,6 +16,7 @@ import { claimRoomCode, normalizeRoomCode } from "../lib/room-code";
 import { requireAuth, type AuthVariables } from "../mw/auth";
 import { rateLimit } from "../mw/ratelimit";
 import { trackMpQueue } from "../lib/telemetry";
+import { logWarn } from "../lib/log";
 
 export const multi = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -64,8 +65,7 @@ multi.post("/match/quick", requireAuth, async (c) => {
   // mp_queue(docs/06 §5.2) — 좌석 배정 성공 시 1회. 응답을 막지 않는다.
   c.executionCtx.waitUntil(
     trackMpQueue(c.env, pid, { lang }).catch((err: unknown) => {
-      // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
-      console.warn("[multi/quick] mp_queue telemetry failed (non-fatal):", err);
+      logWarn("mp_queue_telemetry_failed", { message: err instanceof Error ? err.message : String(err) });
     }),
   );
   return c.json(body);

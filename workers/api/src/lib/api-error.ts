@@ -5,6 +5,8 @@
 // index.ts의 app.onError(apiErrorHandler) 단 한 곳만이 응답 포맷을 안다(포맷 드리프트 방지).
 import type { ErrorHandler } from "hono";
 import type { Env } from "../env";
+import { captureException } from "./reporter";
+import { logError } from "./log";
 
 export interface ApiErrorBody {
   error: {
@@ -58,9 +60,18 @@ export const apiErrorHandler: ErrorHandler<{ Bindings: Env }> = async (err, c) =
     return c.json(body, err.status);
   }
 
-  // 미처리 예외: 원인은 서버 로그로만(클라에는 코드/사유 노출 안 함), 응답은 여전히 ApiError 포맷.
-  // eslint-disable-next-line no-console -- 유일한 관측 경로(Workers Logs / wrangler tail).
-  console.error("[wt-api] unhandled error:", err);
+  // 미처리 예외: 원인은 서버 로그 + Sentry로만(클라에는 코드/사유 노출 안 함), 응답은 여전히
+  // ApiError 포맷. captureException은 SENTRY_DSN 미설정 시 no-op(파일 상단 reporter.ts 참조).
+  logError("unhandled_error", { message: err instanceof Error ? err.message : String(err), path: c.req.path });
+  // c.executionCtx는 일부 실행 컨텍스트(예: 유닛 테스트 하네스)에서 접근 자체가 throw할 수 있어
+  // 안전하게 얻는다 — 얻지 못하면 ctx 없이 captureException을 호출한다(reporter.ts가 그래도 처리).
+  let execCtx: { waitUntil(promise: Promise<unknown>): void } | undefined;
+  try {
+    execCtx = c.executionCtx;
+  } catch {
+    execCtx = undefined;
+  }
+  captureException(c.env, err, { ctx: execCtx, request: c.req.raw, tag: "hono:onError" });
   const body: ApiErrorBody = { error: { code: "INTERNAL", message: "internal server error" } };
   return c.json(body, 500);
 };

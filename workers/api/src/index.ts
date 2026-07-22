@@ -23,7 +23,7 @@ import { verifyToken, WsTicketPayloadSchema } from "@wt/shared";
 import { normalizeRoomCode } from "./lib/room-code";
 import { runLbRefresher } from "./cron/lb-refresher";
 import { ensureDailySeed } from "./cron/daily-seed";
-import { runRetentionJob } from "./cron/retention";
+import { runRetentionJob, runAbuseSurgeCheck } from "./cron/retention";
 import { handleQueueBatch } from "./queue/consumer";
 import { securityHeaders } from "./mw/security-headers";
 import { corsMiddleware } from "./mw/cors";
@@ -116,7 +116,8 @@ export default {
   //   "0 15 * * *"   → 데일리 시드 발행(WT-M3-05, 이 태스크에서 구현. 티어 시드는 /runs/start가
   //                     요청 시점에 파생하므로 별도 cron 불필요 — set-builder.ts tierSeedHex 참조)
   //   "*/1 * * * *"  → lb-refresher(WT-M3-04)
-  //   "30 16 * * *"  → 보존 정리 + kpi_daily 스냅샷(WT-M6-03, cron/retention.ts)
+  //   "*/5 * * * *"  → 부정 급증 자체 체크(WT-M6-04, docs/06 §8.2 — flagged+rejected>5% → Slack)
+  //   "30 16 * * *"  → 보존 정리 + kpi_daily 스냅샷(WT-M6-03) + 주간 D1 리포트(WT-M6-04, 월요일만)
   // 미구현 잡을 throw로 두면 그 크론이 매분/매일 에러 로그를 남기므로, 알 수 없는 cron은
   // 조용히 무시한다(구현되는 시점에 case를 추가).
   async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
@@ -128,6 +129,9 @@ export default {
         // scheduled 핸들러는 반환 Promise가 곧 잡 수명 — await로 완주를 보장한다(waitUntil은
         // fetch용이고, --test-scheduled에선 invocation이 먼저 끝나 취소될 수 있다).
         await runLbRefresher(env, event.scheduledTime);
+        return;
+      case "*/5 * * * *":
+        await runAbuseSurgeCheck(env, event.scheduledTime);
         return;
       case "30 16 * * *":
         // 보존 정리 + kpi_daily 스냅샷(WT-M6-03, cron/retention.ts) — 위 case 주석의 "no-op"은

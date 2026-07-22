@@ -15,3 +15,8 @@ DAILY_SALT=dev-secret-daily-salt
 # 토큰 생성 (Account.Account Analytics:Read).
 CF_ACCOUNT_ID=
 CF_AE_API_TOKEN=
+
+# Sentry(toucan-js, WT-M6-04). 비워두면 lib/reporter.ts가 완전 no-op(예외 캡처 시도 자체를
+# 하지 않는다) — 로컬 개발에는 값을 채울 필요 없다. 실 발급 절차: Sentry 프로젝트 생성 후
+# Client Keys(DSN) 복사, prod/staging은 `wrangler secret put SENTRY_DSN --env <env>`로만 주입.
+SENTRY_DSN=

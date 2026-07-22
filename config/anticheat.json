@@ -16,5 +16,6 @@
   "sumMsToleranceFlatMs": 500,
   "scoreMismatchTolerance": 1,
   "rejectedShadowbanThreshold": 3,
-  "multi": { "reactionFloorMs": 250, "maxKps": { "ko": 14, "en": 18 } }
+  "multi": { "reactionFloorMs": 250, "maxKps": { "ko": 14, "en": 18 } },
+  "newPidAbuseMaxPerHour": 20
 }

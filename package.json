@@ -12,6 +12,7 @@
     "build:og-fonts": "node tooling/scripts/build-og-fonts.mjs",
     "build:moderation-snapshot": "tsx tooling/scripts/build-moderation-snapshot.ts",
     "contrast-check": "tsx tooling/ci/contrast-check.ts",
+    "ops:rescore": "tsx tooling/ops/scripts/rescore.ts",
     "typecheck": "pnpm -r --if-present run typecheck",
     "test": "vitest run && pnpm --filter @wt/api run test:workers",
     "build": "pnpm -r --if-present run build",

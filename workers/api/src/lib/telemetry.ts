@@ -12,6 +12,7 @@
 // (≤20) 앞 9개의 위치 의미를 건드리지 않는 안전한 확장이다 — 리드 승인 전까지 잠정 규약.
 import type { Env } from "../env";
 import { sha256Hex } from "./hash";
+import { logWarn } from "./log";
 
 export type TelemetryEvent =
   | "visit"
@@ -106,8 +107,7 @@ export function writeTelemetryEvent(
       doubles: toDoubles(metrics),
     });
   } catch (err) {
-    // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로(wrangler tail).
-    console.warn(`[telemetry] writeDataPoint(${name}) failed:`, err);
+    logWarn("telemetry_write_failed", { name, message: err instanceof Error ? err.message : String(err) });
   }
 }
 

@@ -1,8 +1,8 @@
 // spec: docs/06 §5.2(game_abandon)·§5.4(kpi_daily 일 스냅샷)·§6.2(보존 — detail_json 90일,
 //       lb_best d:/w: 정리), docs/00 §11-D25 + WT-M6-03
 import { SELF, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
-import { runRetentionJob } from "../src/cron/retention";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { runRetentionJob, runAbuseSurgeCheck } from "../src/cron/retention";
 import { kstDate } from "../src/lib/kst";
 import { KV_KEYS } from "../src/lib/kv-keys";
 
@@ -176,5 +176,82 @@ describe("cron/retention — runRetentionJob(WT-M6-03)", () => {
     expect(keys).toContain(allBoard);
     expect(keys).not.toContain(oldDailyBoard);
     expect(keys).not.toContain(oldWeeklyBoard);
+  });
+
+  it("주간 D1 리포트: KST 월요일에만 채워지고, 그 외 요일은 null이다", async () => {
+    const pid = await bootstrapUser();
+    const monday = Date.parse("2026-08-10T01:30:00+09:00"); // 위 테스트로 검증된 월요일
+    const tuesday = Date.parse("2026-08-11T01:30:00+09:00");
+    await insertRun("weekly-run-1", pid, monday - DAY_MS);
+
+    const mondayResult = await runRetentionJob(env, monday);
+    expect(mondayResult.weeklyReport).not.toBeNull();
+    expect(mondayResult.weeklyReport!.usersCount).toBeGreaterThan(0);
+    expect(mondayResult.weeklyReport!.runsCount).toBeGreaterThan(0);
+
+    const tuesdayResult = await runRetentionJob(env, tuesday);
+    expect(tuesdayResult.weeklyReport).toBeNull();
+  });
+});
+
+describe("cron/retention — runAbuseSurgeCheck(WT-M6-04, docs/06 §8.2)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("표본이 최소치(20) 미만이면 비율이 높아도 triggered=false(오탐 방지)", async () => {
+    const pid = await bootstrapUser();
+    const now = Date.parse("2026-10-01T12:00:00+09:00");
+    for (let i = 0; i < 5; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await insertRun(`surge-lowsample-${i}`, pid, now - 60_000, { verdict: "rejected" });
+    }
+    const result = await runAbuseSurgeCheck(env, now);
+    expect(result).not.toBeNull();
+    expect(result!.total).toBe(5);
+    expect(result!.triggered).toBe(false);
+  });
+
+  it("표본 충분(≥20) + flagged/rejected 비율 > 5%이면 triggered=true이고 Slack webhook을 호출한다", async () => {
+    const pid = await bootstrapUser();
+    const now = Date.parse("2026-10-02T12:00:00+09:00");
+    for (let i = 0; i < 20; i += 1) {
+      const verdict = i < 5 ? "rejected" : "valid"; // 5/20 = 25% > 5%
+      // eslint-disable-next-line no-await-in-loop
+      await insertRun(`surge-hi-${i}`, pid, now - 60_000, { verdict });
+    }
+    await env.KV.put(KV_KEYS.configOps, JSON.stringify({ slackWebhookUrl: "https://hooks.slack.example/test" }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok", { status: 200 }));
+    try {
+      const result = await runAbuseSurgeCheck(env, now);
+      expect(result!.triggered).toBe(true);
+      expect(result!.total).toBe(20);
+      expect(result!.flaggedOrRejected).toBe(5);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "https://hooks.slack.example/test",
+        expect.objectContaining({ method: "POST" }),
+      );
+    } finally {
+      await env.KV.delete(KV_KEYS.configOps);
+    }
+  });
+
+  it("config:ops에 webhook이 없으면(부재) 급증이 감지돼도 fetch를 호출하지 않고 skip 로그만 남긴다", async () => {
+    const pid = await bootstrapUser();
+    const now = Date.parse("2026-10-03T12:00:00+09:00");
+    for (let i = 0; i < 20; i += 1) {
+      const verdict = i < 10 ? "flagged" : "valid";
+      // eslint-disable-next-line no-await-in-loop
+      await insertRun(`surge-nowebhook-${i}`, pid, now - 60_000, { verdict });
+    }
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const result = await runAbuseSurgeCheck(env, now);
+    expect(result!.triggered).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("DB 미바인딩이면 null을 반환한다(관대한 폴백)", async () => {
+    const result = await runAbuseSurgeCheck({ ...env, DB: undefined as unknown as typeof env.DB });
+    expect(result).toBeNull();
   });
 });

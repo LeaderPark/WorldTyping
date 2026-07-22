@@ -41,6 +41,30 @@ describe("@wt/api worker fetch", () => {
     expect(body.checks.kv.skipped).toBe(true);
   });
 
+  it("WT-M6-04: ?fault=d1 강제 실패 훅은 ENVIRONMENT='prod'에서는 무시된다(외부 조작 불가 가드)", async () => {
+    const res = await worker.fetch(
+      new Request("http://localhost/api/v1/health?fault=d1"),
+      makeEnv({ ENVIRONMENT: "prod" }),
+      ctx,
+    );
+    // DB/KV/MATCH_ROOM 전부 undefined(makeEnv 기본값)라 fault 무시 여부와 무관하게 skipped=true로
+    // ok:true가 나온다 — 가드 자체는 checks.d1.error에 "injected fault"가 없는 것으로 확인한다.
+    const body = (await res.json()) as { checks: { d1: { error?: string } } };
+    expect(body.checks.d1.error).toBeUndefined();
+  });
+
+  it("WT-M6-04: ?fault=d1은 ENVIRONMENT='dev'에서는 실제로 적용된다(대조군)", async () => {
+    const res = await worker.fetch(
+      new Request("http://localhost/api/v1/health?fault=d1"),
+      makeEnv({ ENVIRONMENT: "dev" }),
+      ctx,
+    );
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as { checks: { d1: { ok: boolean; error?: string } } };
+    expect(body.checks.d1.ok).toBe(false);
+    expect(body.checks.d1.error).toContain("injected fault");
+  });
+
   it("GET /api/v1/unknown → 404 ApiError JSON", async () => {
     const res = await worker.fetch(new Request("http://localhost/api/v1/unknown"), makeEnv(), ctx);
     expect(res.status).toBe(404);

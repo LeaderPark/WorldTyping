@@ -4,6 +4,9 @@
 #
 # 지금은 Cloudflare 계정이 연결되어 있지 않으므로 스텝 골격만 두고 잡 전체를 조건부
 # skip한다. 활성화 절차는 .github/workflows/README.md 참고.
+#
+# WT-M6-04: export→gzip 파이프라인의 로컬 dry-run 검증 절차는 tooling/ops/runbook.md §6.1,
+# 35일 R2 라이프사이클 구성과 복구 리허설 절차는 같은 문서 §6.1(라이프사이클)·§6.3(리허설).
 name: D1 Backup
 
 on:

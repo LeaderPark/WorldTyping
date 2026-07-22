@@ -15,6 +15,8 @@
 import type { Env } from '../env';
 import { signWsTicket } from '@wt/shared';
 import { claimRoomCode } from '../lib/room-code';
+import { logError } from '../lib/log';
+import { captureException } from '../lib/reporter';
 
 const QUICK_MODE = 'race-mixed' as const; // §11-D23: v1 퀵매치는 race-mixed만
 const QUICK_MAX_PLAYERS = 8; // 방 config 상한(§2.4). 실제 봉인은 fillTarget에서.
@@ -100,12 +102,20 @@ export class MatchmakerDO {
   // ───────────────────────── fetch: 내부 API(Worker가 호출) ─────────────────────────
 
   async fetch(request: Request): Promise<Response> {
-    await this.ensureHydrated();
-    const path = new URL(request.url).pathname;
-    if (path.endsWith('/internal/quick')) return this.handleQuick(request);
-    if (path.endsWith('/internal/cancel')) return this.handleCancel(request);
-    if (path.endsWith('/internal/debug')) return this.handleDebug();
-    return new Response('Not found', { status: 404 });
+    // 최상위 catch(docs/06 §8 Sentry DO 연결) — handleQuick 자체 catch 밖의 예외(hydrate 실패 등)까지
+    // 가로챈다.
+    try {
+      await this.ensureHydrated();
+      const path = new URL(request.url).pathname;
+      if (path.endsWith('/internal/quick')) return await this.handleQuick(request);
+      if (path.endsWith('/internal/cancel')) return await this.handleCancel(request);
+      if (path.endsWith('/internal/debug')) return await this.handleDebug();
+      return new Response('Not found', { status: 404 });
+    } catch (err) {
+      logError('do_matchmaker_fetch_unhandled', { message: err instanceof Error ? err.message : String(err) });
+      captureException(this.env, err, { request, tag: 'do:Matchmaker.fetch' });
+      return new Response('internal error', { status: 500 });
+    }
   }
 
   private async handleQuick(request: Request): Promise<Response> {
@@ -122,8 +132,7 @@ export class MatchmakerDO {
       const result = await this.assignQuick(lang, playerId);
       return Response.json(result);
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[Matchmaker] quick assign failed', err);
+      logError('matchmaker_quick_assign_failed', { message: err instanceof Error ? err.message : String(err) });
       return new Response('assign failed', { status: 500 });
     }
   }

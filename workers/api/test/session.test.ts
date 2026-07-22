@@ -4,6 +4,7 @@
 import { SELF, env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { derivePlayerId, signToken, verifyToken, SessionPayloadSchema } from "@wt/shared";
+import { KV_KEYS } from "../src/lib/kv-keys";
 
 const BASE = "http://local/api/v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -150,6 +151,48 @@ describe("POST /api/v1/session", () => {
     const body = (await results[10]!.json()) as { error: { code: string; retryAfterSec?: number } };
     expect(body.error.code).toBe("RATE_LIMITED");
     expect(body.error.retryAfterSec).toBeGreaterThan(0);
+  });
+
+  // §11-D53: NEW_PID_ABUSE_MAX(20/h) 하드코딩 → config:anticheat KV 핫스왑(newPidAbuseMaxPerHour).
+  it("D53: config:anticheat KV의 newPidAbuseMaxPerHour를 낮추면 그 즉시 더 적은 신규 pid로 IP_BLOCKED가 발화한다", async () => {
+    const ip = "203.0.113.99";
+    await env.KV.put(
+      KV_KEYS.configAnticheat,
+      JSON.stringify({
+        minMsPerKeystroke: 35,
+        cpmHardCapKo: 1100,
+        cpmHardCapEn: 1000,
+        cpmSoftCapKo: 950,
+        cpmSoftCapEn: 900,
+        rhythmCvThreshold: 0.12,
+        rhythmSpreadMsThreshold: 25,
+        burstMaxThreshold: 3,
+        growthJumpFactor: 0.6,
+        growthMinSample: 5,
+        accComboCpmThreshold: 800,
+        timeEnvelopeGraceMs: 3000,
+        sumMsToleranceLowFactor: 0.99,
+        sumMsToleranceHighFactor: 1.01,
+        sumMsToleranceFlatMs: 500,
+        scoreMismatchTolerance: 1,
+        rejectedShadowbanThreshold: 3,
+        multi: { reactionFloorMs: 250, maxKps: { ko: 14, en: 18 } },
+        newPidAbuseMaxPerHour: 2, // 기본 20 → 2로 핫스왑
+      }),
+    );
+    try {
+      // 세션 자체 레이트리밋(10/60s)에 걸리지 않도록 한도(2) 근처에서만 확인한다.
+      const r1 = await postSession({ deviceId: crypto.randomUUID() }, ip);
+      const r2 = await postSession({ deviceId: crypto.randomUUID() }, ip);
+      const r3 = await postSession({ deviceId: crypto.randomUUID() }, ip);
+      expect(r1.status).toBe(200);
+      expect(r2.status).toBe(200);
+      expect(r3.status).toBe(403);
+      const body3 = (await r3.json()) as { error: { code: string } };
+      expect(body3.error.code).toBe("IP_BLOCKED");
+    } finally {
+      await env.KV.delete(KV_KEYS.configAnticheat); // 다른 테스트에 영향 없게 원복
+    }
   });
 });
 

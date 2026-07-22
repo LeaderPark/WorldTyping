@@ -9,6 +9,7 @@ import { z } from "zod";
 import { DEFAULT_GRADE_CONFIG, DEFAULT_TIME_LIMIT_CONFIG } from "@wt/shared";
 import type { Env } from "../env";
 import { KV_KEYS } from "../lib/kv-keys";
+import { logError } from "../lib/log";
 
 interface ConfigRes {
   schemaVersion: 2;
@@ -99,12 +100,11 @@ config.get("/config", async (c) => {
         if (parsed.success) {
           cfg = { ...parsed.data, dataUrl }; // dataUrl은 override 여부에 따라 항상 이 라우트가 결정
         } else {
-          // eslint-disable-next-line no-console -- 운영자가 핫스왑한 값이 스키마를 깼다는 신호.
-          console.error("[wt-api] config:client failed schema validation, falling back", parsed.error);
+          // 운영자가 핫스왑한 값이 스키마를 깼다는 신호.
+          logError("config_client_schema_invalid", { message: parsed.error.message });
         }
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("[wt-api] config:client is not valid JSON, falling back", err);
+        logError("config_client_json_invalid", { message: err instanceof Error ? err.message : String(err) });
       }
     }
   }

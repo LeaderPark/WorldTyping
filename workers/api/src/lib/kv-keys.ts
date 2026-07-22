@@ -9,6 +9,8 @@ export const KV_KEYS = {
   configAnticheat: "config:anticheat",
   configModeration: "config:moderation",
   configBanner: "config:banner",
+  /** 운영 알림 설정(Slack webhook URL 등) — WT-M6-04. 부재 시 알림 전송을 skip 로그로 대체한다. */
+  configOps: "config:ops",
   configLobbyShards: "config:lobbyShards",
   dataCountriesOverride: "data:countries:override",
 

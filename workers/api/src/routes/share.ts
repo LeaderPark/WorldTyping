@@ -15,6 +15,7 @@ import { fallbackOgPng } from "../og/fallback-og";
 import { routeLabel } from "../og/layout";
 import { normalizeRoomCode } from "../lib/room-code";
 import { trackShareClick } from "../lib/telemetry";
+import { logWarn } from "../lib/log";
 
 export const share = new Hono<{ Bindings: Env }>();
 
@@ -120,7 +121,7 @@ share.get("/og/:file", async (c) => {
     png = await renderShareCardPng(toCardData(row));
   } catch (err) {
     // 렌더 실패(§9.1 500 금지) — 폴백. immutable로 캐싱하면 실패가 영구화되니 짧게만.
-    console.warn("[og] render failed, serving fallback:", err);
+    logWarn("og_render_failed", { message: err instanceof Error ? err.message : String(err) });
     return pngResponse(fallbackOgPng(), SHORT_CACHE, 200);
   }
 
@@ -148,8 +149,7 @@ share.get("/r/:shareId", async (c) => {
           utmSource: url.searchParams.get("utm_source") ?? undefined,
         });
       } catch (err) {
-        // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
-        console.warn("[share] share_click telemetry failed (non-fatal):", err);
+        logWarn("share_click_telemetry_failed", { message: err instanceof Error ? err.message : String(err) });
       }
     })(),
   );

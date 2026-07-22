@@ -42,6 +42,7 @@ import { evaluateRunAchievements } from "../lib/achievements";
 import { ensureDailySeed } from "../cron/daily-seed";
 import { buildDailyShareText } from "../lib/share-text";
 import { generateShareId } from "../lib/share-id";
+import { logWarn } from "../lib/log";
 import { trackDailyPlay, trackGameFinish, trackGameStart } from "../lib/telemetry";
 
 /** run 세션 사용 플래그 TTL(docs/06 §3.1 — 2h). */
@@ -187,8 +188,7 @@ runs.post("/runs/start", requireAuth, rateLimit("runs/start"), async (c) => {
           await bumpDailyCounter(c.env.KV, KV_KEYS.telStarts(kstDate(now)));
         }
       } catch (err) {
-        // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
-        console.warn("[runs/start] telemetry hook failed (non-fatal):", err);
+        logWarn("runs_start_telemetry_failed", { message: err instanceof Error ? err.message : String(err) });
       }
     })(),
   );
@@ -418,8 +418,7 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
           await bumpDailyCounter(c.env.KV, KV_KEYS.telSubmits(kstDate(now)));
         }
       } catch (err) {
-        // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
-        console.warn("[runs/submit] telemetry hook failed (non-fatal):", err);
+        logWarn("runs_submit_telemetry_failed", { message: err instanceof Error ? err.message : String(err) });
       }
     })(),
   );

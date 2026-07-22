@@ -78,6 +78,8 @@ import {
 import { assignFinalRanks, computePlayerMetrics } from './ranking';
 import { evaluateMatchAchievements, isPhotoFinishWin, type MatchAchievementInput } from '../lib/achievements';
 import { trackMpMatchFinish, trackMpMatchStart } from '../lib/telemetry';
+import { logError } from '../lib/log';
+import { captureException } from '../lib/reporter';
 
 // ───────────────────────── 서버측 국가 데이터(§5 compileTargets 캐시 원천) ─────────────────────────
 
@@ -355,17 +357,25 @@ export class MatchRoomDO {
   // ───────────────────────── fetch: 내부 API + WS 업그레이드 ─────────────────────────
 
   async fetch(request: Request): Promise<Response> {
-    await this.ensureHydrated();
-    const url = new URL(request.url);
-    const path = url.pathname;
+    // 최상위 catch(docs/06 §8 Sentry DO 연결) — 개별 핸들러가 던지는 미처리 예외를 여기서
+    // 한 번 더 가로채 Sentry로 보낸다. 응답은 500으로 통일(클라 프로토콜은 WS 재연결로 복구).
+    try {
+      await this.ensureHydrated();
+      const url = new URL(request.url);
+      const path = url.pathname;
 
-    if (path.endsWith('/internal/create')) return this.handleCreate(request);
-    if (path.endsWith('/internal/room-status')) return this.handleRoomStatus();
-    if (path.endsWith('/internal/debug')) return this.handleDebug();
+      if (path.endsWith('/internal/create')) return await this.handleCreate(request);
+      if (path.endsWith('/internal/room-status')) return await this.handleRoomStatus();
+      if (path.endsWith('/internal/debug')) return await this.handleDebug();
 
-    if (request.headers.get('Upgrade') === 'websocket') return this.handleUpgrade(request);
+      if (request.headers.get('Upgrade') === 'websocket') return await this.handleUpgrade(request);
 
-    return new Response('Not found', { status: 404 });
+      return new Response('Not found', { status: 404 });
+    } catch (err) {
+      logError('do_matchroom_fetch_unhandled', { message: err instanceof Error ? err.message : String(err) });
+      captureException(this.env, err, { request, tag: 'do:MatchRoom.fetch' });
+      return new Response('internal error', { status: 500 });
+    }
   }
 
   /**
@@ -1476,8 +1486,7 @@ export class MatchRoomDO {
         }));
       await trackMpMatchFinish(this.env, humanRows, { lang: this.config.lang });
     } catch (err) {
-      // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로(wrangler tail).
-      console.error('[MatchRoom] mp_match_finish telemetry failed (non-fatal)', err);
+      logError('mp_match_finish_telemetry_failed', { message: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -1488,8 +1497,7 @@ export class MatchRoomDO {
       const playerIds = [...this.players.values()].filter((p) => !p.isBot).map((p) => p.playerId);
       await trackMpMatchStart(this.env, playerIds, { lang: this.config.lang });
     } catch (err) {
-      // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로(wrangler tail).
-      console.error('[MatchRoom] mp_match_start telemetry failed (non-fatal)', err);
+      logError('mp_match_start_telemetry_failed', { message: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -1627,10 +1635,9 @@ export class MatchRoomDO {
       // 업적/커버(§9.2, docs/06 §4.3) — match_participants가 이미 커밋된 뒤에만 호출(win_streak
       // 집계가 이번 매치를 포함해야 함). best-effort: 실패해도 레이스 결과 자체는 이미 영속화됨.
       await this.grantMultiAchievements(rows).catch((err: unknown) => {
-        // eslint-disable-next-line no-console
-        console.error('[MatchRoom] achievement grant failed (non-fatal)', err);
+        logError('achievement_grant_failed', { message: err instanceof Error ? err.message : String(err) });
       });
-    } catch {
+    } catch (persistErr) {
       // 실패 → pendingPersist 저장 + persistRetry alarm(방 CLOSED 전까지 최대 5회).
       const attempts = (this.pendingPersist?.attempts ?? 0) + 1;
       if (attempts <= MAX_PERSIST_ATTEMPTS) {
@@ -1643,8 +1650,8 @@ export class MatchRoomDO {
         await this.syncAlarm();
       } else {
         // 최종 실패 — 매치 유실(리더보드는 Cron 재집계 대상 아님을 로그로 추적, §13-F5).
-        // eslint-disable-next-line no-console
-        console.error('[MatchRoom] D1 persist gave up after retries', race.raceId);
+        logError('match_persist_gave_up', { raceId: race.raceId });
+        captureException(this.env, persistErr, { tag: 'do:MatchRoom.persist' });
         this.pendingPersist = null;
         this.alarms.persistRetry = null;
         await this.ctx.storage.delete('pendingPersist');
@@ -1859,18 +1866,17 @@ export class MatchRoomDO {
       this.pendingPersist = null;
       await this.ctx.storage.delete('pendingPersist');
       await this.grantMultiAchievements(rows).catch((err: unknown) => {
-        // eslint-disable-next-line no-console
-        console.error('[MatchRoom] achievement grant failed (non-fatal)', err);
+        logError('achievement_grant_failed', { message: err instanceof Error ? err.message : String(err) });
       });
-    } catch {
+    } catch (persistErr) {
       const attempts = pending.attempts + 1;
       if (attempts <= MAX_PERSIST_ATTEMPTS) {
         pending.attempts = attempts;
         await this.ctx.storage.put('pendingPersist', pending);
         this.alarms.persistRetry = this.now() + this.timings.persistRetryDelayMs;
       } else {
-        // eslint-disable-next-line no-console
-        console.error('[MatchRoom] D1 persist gave up after retries', raceId);
+        logError('match_persist_gave_up', { raceId });
+        captureException(this.env, persistErr, { tag: 'do:MatchRoom.persistRetry' });
         this.pendingPersist = null;
         await this.ctx.storage.delete('pendingPersist');
       }

@@ -8,6 +8,7 @@
 import { uuidv7 } from "../lib/uuid";
 import type { Env } from "../env";
 import { appendGhostRecording } from "../lib/ghost";
+import { logError, logWarn } from "../lib/log";
 
 export type ReportReason = "macro_suspected" | "nickname_inappropriate" | "other";
 
@@ -49,8 +50,7 @@ export async function handleQueueBatch(batch: MessageBatch<unknown>, env: Env): 
       // 알 수 없는 type은 조용히 ack(향후 AE 등 추가 대비 — 파일 상단 주석).
       msg.ack();
     } catch (err) {
-      // eslint-disable-next-line no-console -- 컨슈머의 유일한 관측 경로(wrangler tail).
-      console.error("[wt-api] queue consumer error:", err);
+      logError("queue_consumer_error", { message: err instanceof Error ? err.message : String(err) });
       msg.retry();
     }
   }
@@ -89,10 +89,7 @@ async function processReport(db: D1Database, m: ReportQueueMessage): Promise<voi
       .run();
     // 운영 알림(구현 세부 지시 4). docs/06 §8.2 웹훅은 인프라 가용성/에러율 알림 전용이라 이
     // 신고 임계 알림에는 재사용하지 않는다 — v1은 wrangler tail 로그가 1차 관측 채널이다.
-    // eslint-disable-next-line no-console -- 알림 로그(운영 리뷰 쿼리와 함께 사용, docs/06 §3.6)
-    console.warn(
-      `[wt-api] report threshold reached: target_user_id=${targetUserId} run_id=${m.targetRunId} openCount=${openCount}`,
-    );
+    logWarn("report_threshold_reached", { targetUserId, runId: m.targetRunId, openCount });
   }
 }
 

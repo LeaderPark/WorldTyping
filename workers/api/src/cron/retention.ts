@@ -20,11 +20,19 @@ import { kstDate, kstIsoWeek } from "../lib/kst";
 import { KV_KEYS } from "../lib/kv-keys";
 import { trackGameAbandon } from "../lib/telemetry";
 import type { KpiDailyRow } from "../db/types";
+import { notifySlack } from "../lib/ops-config";
+import { log, logError, logWarn } from "../lib/log";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DETAIL_JSON_RETENTION_DAYS = 90; // docs/06 §6.2
 const LB_DAILY_RETENTION_DAYS = 90; // docs/06 §5(태스크 산출물 지시) — lb_best d: 보드
 const LB_WEEKLY_RETENTION_DAYS = 180; // lb_best w: 보드
+/** docs/06 §8.2 "부정 급증" 알림 임계 — flagged+rejected 비율. */
+const ABUSE_SURGE_RATIO_THRESHOLD = 0.05;
+/** 표본이 너무 작으면(런칭 초기 저트래픽) 비율 노이즈로 오탐 — 최소 표본 이상일 때만 판정. */
+const ABUSE_SURGE_MIN_SAMPLE = 20;
+// 부정 급증 자체 체크의 관측 창(§8.2 "Cron 5분 주기"와 동일 폭 — index.ts cron "star-slash-5 * * * *").
+const ABUSE_SURGE_WINDOW_MS = 5 * 60 * 1000;
 
 export interface RetentionResult {
   dateKst: string;
@@ -34,6 +42,8 @@ export interface RetentionResult {
   detailJsonCleared: number;
   lbDailyPruned: number;
   lbWeeklyPruned: number;
+  /** KST 월요일에만 채워진다(그 외 요일은 null — §8.2 "주간 Cron 리포트"). */
+  weeklyReport: WeeklyD1Report | null;
 }
 
 /** index.ts scheduled() "30 16 * * *"의 유일한 진입점. */
@@ -53,7 +63,105 @@ export async function runRetentionJob(env: Env, scheduledTimeMs?: number): Promi
   const lbDailyPruned = await pruneLbBoards(env, "d:", now, LB_DAILY_RETENTION_DAYS);
   const lbWeeklyPruned = await pruneLbBoards(env, "w:", now, LB_WEEKLY_RETENTION_DAYS);
 
-  return { dateKst, abandonCount, kpiInserted, aeSnapshotSkipped, detailJsonCleared, lbDailyPruned, lbWeeklyPruned };
+  // docs/06 §8.2 "D1 용량/성능 | 주간 Cron 리포트" — KST 월요일에만 실행(이 크론은 매일 돌지만
+  // 리포트는 주 1회면 충분, 별도 cron trigger를 새로 추가하지 않고 이 잡에 편승한다).
+  const weeklyReport = kstDayOfWeek(now) === 1 ? await buildWeeklyD1Report(env) : null;
+  if (weeklyReport) log("weekly_d1_report", { ...weeklyReport });
+
+  return {
+    dateKst,
+    abandonCount,
+    kpiInserted,
+    aeSnapshotSkipped,
+    detailJsonCleared,
+    lbDailyPruned,
+    lbWeeklyPruned,
+    weeklyReport,
+  };
+}
+
+/** KST 기준 요일(월=1..일=7, kst.ts kstIsoWeek과 동일한 ISO 요일 규약). */
+function kstDayOfWeek(nowMs: number): number {
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const shifted = new Date(nowMs + KST_OFFSET_MS);
+  return shifted.getUTCDay() || 7;
+}
+
+// ───────────────────────── 부정 급증 자체 체크(docs/06 §8.2) ─────────────────────────
+
+export interface AbuseSurgeResult {
+  windowStartMs: number;
+  windowEndMs: number;
+  total: number;
+  flaggedOrRejected: number;
+  ratio: number;
+  triggered: boolean;
+}
+
+// index.ts scheduled()의 5분 주기 cron 진입점(구현 세부 지시 — WT-M6-04 작업 특이 조정: "Slack
+// webhook URL은 KV config에서 로드, 부재 시 skip 로그"). 최근 5분간 생성된 runs 중 flagged+
+// rejected 비율이 임계(5%)를 넘으면 Slack에 알린다. 표본이 ABUSE_SURGE_MIN_SAMPLE 미만이면
+// 판정을 보류한다(저트래픽 구간 오탐 방지).
+export async function runAbuseSurgeCheck(env: Env, scheduledTimeMs?: number): Promise<AbuseSurgeResult | null> {
+  if (!env.DB) return null;
+  const now = scheduledTimeMs ?? Date.now();
+  const windowStartMs = now - ABUSE_SURGE_WINDOW_MS;
+
+  const row = await env.DB.prepare(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN verdict IN ('flagged','rejected') THEN 1 ELSE 0 END) AS bad
+     FROM runs WHERE created_at >= ?1 AND created_at < ?2`,
+  )
+    .bind(windowStartMs, now)
+    .first<{ total: number | null; bad: number | null }>();
+
+  const total = Number(row?.total ?? 0);
+  const flaggedOrRejected = Number(row?.bad ?? 0);
+  const ratio = total > 0 ? flaggedOrRejected / total : 0;
+  const triggered = total >= ABUSE_SURGE_MIN_SAMPLE && ratio > ABUSE_SURGE_RATIO_THRESHOLD;
+
+  if (triggered) {
+    logError("abuse_surge_detected", { total, flaggedOrRejected, ratioPct: Math.round(ratio * 1000) / 10 });
+    await notifySlack(
+      env.KV,
+      `[WT] 부정 급증 감지: 최근 5분 flagged+rejected ${flaggedOrRejected}/${total} (${(ratio * 100).toFixed(1)}%) — config:anticheat 캡 하향 검토(tooling/ops/runbook.md 참조)`,
+    );
+  }
+
+  return { windowStartMs, windowEndMs: now, total, flaggedOrRejected, ratio, triggered };
+}
+
+// ───────────────────────── 주간 D1 리포트(docs/06 §8.2) ─────────────────────────
+
+export interface WeeklyD1Report {
+  dateKst: string;
+  usersCount: number;
+  runsCount: number;
+  lbBestCount: number;
+  reportsOpenCount: number;
+}
+
+/**
+ * DB 크기/행 수 추정(§8.2 "D1 용량/성능"). 정밀 슬로 쿼리 상위 N개는 Cloudflare D1 대시보드
+ * (Query Insights)에서만 조회 가능해(Worker 바인딩으로는 노출되지 않음) 여기서는 로그 링크
+ * 안내만 남긴다 — tooling/ops/runbook.md "D1 용량/성능 리포트" 절차 참조.
+ */
+async function buildWeeklyD1Report(env: Env): Promise<WeeklyD1Report | null> {
+  if (!env.DB) return null;
+  const [users, runs, lbBest, reports] = await Promise.all([
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM users`).first<{ n: number | null }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM runs`).first<{ n: number | null }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM lb_best`).first<{ n: number | null }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM reports WHERE status = 'open'`).first<{ n: number | null }>(),
+  ]);
+  return {
+    dateKst: kstDate(Date.now()),
+    usersCount: Number(users?.n ?? 0),
+    runsCount: Number(runs?.n ?? 0),
+    lbBestCount: Number(lbBest?.n ?? 0),
+    reportsOpenCount: Number(reports?.n ?? 0),
+  };
 }
 
 /** 'YYYY-MM-DD' 문자열을 순수 캘린더 산술로 +N/-N일 이동(자정 UTC 앵커라 KST 오프셋과 무관 —
@@ -139,8 +247,7 @@ async function computeD1Kpi(
  */
 async function queryAeSnapshot(env: Env, dateKst: string): Promise<AeSnapshot | null> {
   if (!env.CF_ACCOUNT_ID || !env.CF_AE_API_TOKEN) {
-    // eslint-disable-next-line no-console -- 스킵 관측(wrangler tail).
-    console.warn("[retention] AE SQL snapshot skipped: CF_ACCOUNT_ID/CF_AE_API_TOKEN not configured");
+    log("ae_snapshot_skipped", { reason: "cf_account_or_token_missing" });
     return null;
   }
   try {
@@ -172,8 +279,7 @@ async function queryAeSnapshot(env: Env, dateKst: string): Promise<AeSnapshot | 
       matchmakingWaitMsSum: 0, // §5.2 blobs에 대기시간 원시값이 없어 v1은 미집계(0) — escalations 참조.
     };
   } catch (err) {
-    // eslint-disable-next-line no-console -- 스킵 관측(wrangler tail), 실패를 위장하지 않는다.
-    console.warn("[retention] AE SQL snapshot failed (skip):", err);
+    logWarn("ae_snapshot_failed", { message: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }

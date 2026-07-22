@@ -30,6 +30,14 @@ export interface RoomConfig {
 
 export type ConnState = 'connected' | 'grace' | 'left' | 'spectator';
 
+/**
+ * 봇(고스트) 재생 근거(§2.3-5). startCountdown이 세트 확정 후 이 근거로 국가별 누적 스플릿을
+ * 파생한다(lib/ghost.ts buildGhostCumSplits). recording = 과거 클린 완주자 수집분, builtin = F11 폴백.
+ */
+export type GhostSource =
+  | { kind: 'builtin'; targetPi: number }
+  | { kind: 'recording'; cumSplitsMs: number[] };
+
 export interface PlayerRecord {
   playerId: string; // 서버 발급. 세션 간 불변(게스트는 클라 guestId 기반)
   nickname: string;
@@ -50,6 +58,10 @@ export interface PlayerRecord {
   graceDeadline: number | null; // grace 진입 시 now + 15_000
   resumeKey: string; // 재접속 인증용 hex (welcome으로 1회 전달)
   suspicionFlags: string[]; // §9 안티치트 누적 플래그
+  // --- 고스트 수집·재생(§2.3-5, WT-M4-05) ---
+  splits: number[]; // 완료(accept+자동스킵)마다 누적 serverElapsedMs push — 클린 완주자 고스트 수집 원천
+  botCumSplits: number[] | null; // 봇 재생 스케줄(국가별 누적 ms). 비봇은 null
+  botSource: GhostSource | null; // 봇 재생 근거(리매치·세트 변경 시 재파생용). 비봇은 null
 }
 
 /**
@@ -107,6 +119,9 @@ export function createPlayerRecord(args: {
     graceDeadline: null,
     resumeKey: args.resumeKey,
     suspicionFlags: [],
+    splits: [],
+    botCumSplits: null,
+    botSource: null,
   };
 }
 
@@ -120,5 +135,8 @@ export function resetRaceFields(p: PlayerRecord): void {
   p.finishedAt = null;
   p.rank = null;
   p.suspicionFlags = [];
+  p.splits = [];
+  // botSource/botCumSplits는 여기서 건드리지 않는다 — 봇 스케줄은 startCountdown이 세트 확정 후
+  // botSource로 botCumSplits를 재파생한다(세트가 매 레이스 달라 재계산이 필수).
   // ready는 다음 대기실로 넘어갈 때만 의미가 있으므로 여기서 건드리지 않는다.
 }

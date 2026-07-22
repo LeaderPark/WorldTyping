@@ -60,7 +60,14 @@ import {
   type PlayerRecord,
   type PlayerMeta,
   type RaceState,
+  type GhostSource,
 } from './room-state';
+import {
+  BUILTIN_GHOST_PROFILES,
+  buildGhostCumSplits,
+  loadGhostRecordings,
+  piBucketOf,
+} from '../lib/ghost';
 import {
   emptyAlarmSet,
   nextAlarmTime,
@@ -129,6 +136,8 @@ const CLOSE_BAD_MESSAGE = 4400;
 const CLOSE_DATA_VERSION = 4426;
 const RACING_INACTIVITY_MS = 40_000; // RACING 무메시지 이탈(§7.3)
 const MAX_PERSIST_ATTEMPTS = 5; // §10.1-7
+const MAX_BOTS = 3; // bot-accept 시 삽입 상한(§2.3-5 "1~3개")
+const BOT_OFFER_ACCEPT_MS = 30_000; // bot-offer 표시 후 클라 수락 창(표시용 expiresAt — 서버는 1인 WAITING이면 언제든 수락 처리)
 
 interface Attachment {
   playerId?: string;
@@ -137,6 +146,8 @@ interface Attachment {
   badCount: number;
   superseded?: boolean;
   lastSeenAt?: number;
+  /** grace 만료 후 재접속(§7.2-4) — 관전 전용 소켓. 입력 메시지는 서버가 거부한다. */
+  spectator?: boolean;
 }
 
 interface PendingPersist {
@@ -462,6 +473,10 @@ export class MatchRoomDO {
         correctKeystrokes: p.correctKeystrokes,
         errorKeystrokes: p.errorKeystrokes,
         suspicionFlags: p.suspicionFlags,
+        isBot: p.isBot,
+        nickname: p.nickname,
+        botScheduleLen: p.botCumSplits?.length ?? null,
+        splitsLen: p.splits.length,
       })),
       hostId: this.hostId,
       race: this.race ? { raceId: this.race.raceId, seed: this.race.seed, len: this.race.countryIds.length } : null,
@@ -516,7 +531,19 @@ export class MatchRoomDO {
     await this.onDisconnect(ws);
   }
 
+  /** 관전 소켓(§7.2-4)이 보낼 수 없는 입력·상태변경 메시지. 서버에서 거부(무시). */
+  private static readonly SPECTATOR_BLOCKED = new Set<ClientMessage['type']>([
+    'progress',
+    'complete',
+    'ready',
+    'start',
+    'chat',
+    'bot-accept',
+  ]);
+
   private async route(ws: WebSocket, msg: ClientMessage): Promise<void> {
+    // 관전자에게 입력 메시지 수신 허용 금지(§2.3-5 제약·§7.2-4) — 조용히 폐기.
+    if (this.att(ws).spectator && MatchRoomDO.SPECTATOR_BLOCKED.has(msg.type)) return;
     switch (msg.type) {
       case 'hello':
         return this.onHello(ws, msg);
@@ -577,18 +604,35 @@ export class MatchRoomDO {
       isGuest = true;
     }
 
-    // 재접속(resume): resumeKey 일치 + connState !== 'left'.
+    const a = this.att(ws);
+
+    // 재접속(resume): resumeKey 불일치는 거부. 이미 left면 관전 모드(§7.2-4).
     if (msg.resume) {
       const rec = this.players.get(msg.resume.playerId);
-      if (!rec || rec.resumeKey !== msg.resume.resumeKey || rec.connState === 'left') {
+      if (!rec || rec.resumeKey !== msg.resume.resumeKey) {
         this.send(ws, this.errorMsg('AUTH_FAILED', 'resume rejected'));
+        return;
+      }
+      if (rec.connState === 'left') {
+        // grace 만료 후 재접속 → 관전 전용(입력 채널 없음, 트랙만). 레코드는 left로 유지해
+        // 순위·activePlayers 계산을 흔들지 않고, 이 소켓만 spectator로 마킹해 입력을 거부한다.
+        this.supersedeOldSockets(ws, rec.playerId);
+        a.playerId = rec.playerId;
+        a.resumeKey = rec.resumeKey;
+        a.spectator = true;
+        this.setAtt(ws, a);
+        const resumed =
+          this.phase === 'COUNTDOWN' || this.phase === 'RACING' || this.phase === 'FINISHED';
+        this.send(ws, this.welcomeMsg(msg.seq, rec.playerId, rec.resumeKey, resumed));
+        // room-state로 본인 connState='left'를 알려(클라가 관전 UI 판정) + race-sync로 세트/트랙 복원.
+        this.send(ws, this.roomStateMsg());
+        if (resumed && this.race) this.send(ws, this.raceSyncMsg(rec));
         return;
       }
       playerId = rec.playerId;
     }
 
     const existing = this.players.get(playerId);
-    const a = this.att(ws);
 
     // 같은 playerId의 구 WS는 새 WS로 대체(§7.2-5) — close(4001).
     this.supersedeOldSockets(ws, playerId);
@@ -741,8 +785,7 @@ export class MatchRoomDO {
   }
 
   private async maybeAutoStart(): Promise<void> {
-    // 퀵매치 방 자동 시작(§2.3-4). 봇 오퍼(§2.3-5, 1인 60초)는 KV ghost 리플레이 의존 →
-    // WT-M4-02/M5로 위임(escalations). 여기서는 4인/전원레디/2~3인 15초만 처리한다.
+    // 퀵매치 방 자동 시작(§2.3-4) + 1인 봇 오퍼 타이머(§2.3-5). 4인/전원레디/2~3인 15초/1인 60초.
     if (this.phase !== 'WAITING' || !this.config?.quickMatch) return;
     const active = this.activePlayers();
     if (active.length >= 4) {
@@ -754,17 +797,29 @@ export class MatchRoomDO {
       return;
     }
     if (active.length >= 2) {
+      // 2~3인: autoStart 무장, botOffer 해제.
       if (this.alarms.autoStart === null) {
         this.autoStartAt = this.now() + this.timings.autostartMs;
         this.alarms.autoStart = this.autoStartAt;
         await this.ctx.storage.put('autoStartAt', this.autoStartAt);
-        await this.syncAlarm();
         this.broadcast(this.roomStateMsg());
       }
-    } else if (this.alarms.autoStart !== null) {
+      this.alarms.botOffer = null;
+      await this.syncAlarm();
+    } else if (active.length === 1) {
+      // 1인: autoStart 해제, botOffer(60초) 무장.
+      if (this.alarms.autoStart !== null) {
+        this.alarms.autoStart = null;
+        this.autoStartAt = null;
+        await this.ctx.storage.put('autoStartAt', null);
+      }
+      if (this.alarms.botOffer === null) this.alarms.botOffer = this.now() + this.timings.botOfferMs;
+      await this.syncAlarm();
+    } else {
+      // 0인: 둘 다 해제(정리는 emptyCleanup이 담당).
       this.alarms.autoStart = null;
       this.autoStartAt = null;
-      await this.ctx.storage.put('autoStartAt', null);
+      this.alarms.botOffer = null;
       await this.syncAlarm();
     }
   }
@@ -788,10 +843,75 @@ export class MatchRoomDO {
     this.broadcast({ v: 1, type: 'chat', playerId: p.playerId, text, at: now });
   }
 
-  private onBotAccept(ws: WebSocket, _msg: Extract<ClientMessage, { type: 'bot-accept' }>): void {
-    // 고스트 봇 삽입은 KV ghost:* 리플레이(WT-M4-02/M5, Q4)에 의존한다. M4-01은 메시지 계약만
-    // 수용하고 실제 삽입은 후속 태스크로 위임(escalations 기재). 여기서는 no-op(방 안정성 보장).
-    void ws;
+  private async onBotAccept(
+    ws: WebSocket,
+    msg: Extract<ClientMessage, { type: 'bot-accept' }>,
+  ): Promise<void> {
+    const p = this.playerOf(ws);
+    if (!p || this.phase !== 'WAITING' || !this.config?.quickMatch) return;
+    // 오퍼 타이머는 소비(수락/거절 모두).
+    if (this.alarms.botOffer !== null) {
+      this.alarms.botOffer = null;
+      await this.syncAlarm();
+    }
+    if (!msg.accept) return; // 거절 → 큐 유지(재오퍼는 걸지 않음)
+    // 봇 오퍼는 1인 대기 상태 전용(§2.3-5). stale 수락 방어.
+    const humans = this.activePlayers().filter((x) => !x.isBot);
+    if (humans.length !== 1) return;
+    const requester = humans[0]!;
+
+    const sources = await this.loadGhostSources(requester.bestPi);
+    const cap = Math.max(0, (this.config.maxPlayers ?? 8) - this.activePlayers().length);
+    const chosen = sources.slice(0, Math.min(MAX_BOTS, cap));
+    if (chosen.length === 0) return; // 방어(항상 builtin 폴백이 있어 도달하지 않음)
+
+    chosen.forEach((src, i) => this.insertBot(src, i));
+    await this.persistPlayers();
+    await this.persistCore();
+    this.broadcast(this.roomStateMsg());
+    // 봇 삽입 후 즉시 COUNTDOWN(§2.3-5). startCountdown이 세트 확정 후 봇 스케줄을 파생한다.
+    await this.startCountdown(null);
+  }
+
+  /**
+   * bot-accept 시 고스트 재생 근거를 결정한다. KV ghost:{lang}:{mode}:{piBucket}에서 요청자 PI
+   * 버킷의 수집분을 최대 3개 로드하고, miss면 F11 내장 프로필 3종으로 폴백한다(§2.3-5, §13-F11).
+   */
+  private async loadGhostSources(requesterPi: number | null): Promise<GhostSource[]> {
+    const lang = this.config!.lang;
+    const mode = this.config!.mode;
+    const bucket = piBucketOf(requesterPi);
+    if (this.env.KV) {
+      try {
+        const recs = await loadGhostRecordings(this.env.KV, lang, mode, bucket, MAX_BOTS);
+        if (recs.length > 0) return recs.map((r) => ({ kind: 'recording', cumSplitsMs: r.cumSplitsMs }));
+      } catch {
+        // KV 실패 → 폴백으로 진행(방 안정성 우선).
+      }
+    }
+    return BUILTIN_GHOST_PROFILES.map((pf) => ({ kind: 'builtin', targetPi: pf.targetPi }));
+  }
+
+  /** 봇 PlayerRecord 생성·삽입. botCumSplits는 startCountdown이 세트 확정 후 파생한다. */
+  private insertBot(source: GhostSource, index: number): void {
+    const botId = 'bot_' + this.randomHex(8);
+    const nickname =
+      source.kind === 'builtin'
+        ? (BUILTIN_GHOST_PROFILES.find((pf) => pf.targetPi === source.targetPi)?.nickname ?? 'GHOST')
+        : `GHOST ${index + 1}`;
+    const rec = createPlayerRecord({
+      playerId: botId,
+      nickname,
+      passportCover: 'ghost',
+      bestPi: null,
+      isHost: false,
+      isBot: true,
+      resumeKey: this.randomHex(16),
+    });
+    rec.botSource = source;
+    this.players.set(botId, rec);
+    this.order.push(botId);
+    this.meta.set(botId, { isGuest: true, rttMs: null, skipped: 0, leftAt: null });
   }
 
   // ───────────────────────── progress(표시용, §4.4 레이트리밋) ─────────────────────────
@@ -867,6 +987,7 @@ export class MatchRoomDO {
     if (m.errThis > 0) p.errorKeystrokes += m.errThis;
     p.combo = m.errThis === 0 ? p.combo + 1 : 0;
     const serverElapsedMs = now - race.startAt;
+    p.splits.push(serverElapsedMs); // 고스트 수집 원천(§2.3-5): 국가 idx 완료 누적시각
 
     // §6.3-1 경계 검증: |ct − serverElapsedMs| > 3000 → CLOCK_DRIFT.
     if (Math.abs(m.ct - serverElapsedMs) > 3000 && !p.suspicionFlags.includes('CLOCK_DRIFT')) {
@@ -1062,6 +1183,15 @@ export class MatchRoomDO {
       meta.skipped = 0;
       meta.leftAt = null;
     }
+    // 봇 재생 스케줄 파생(§2.3-5) — 세트가 매 레이스 달라 botSource로 국가별 누적 스플릿을 재계산.
+    const raceCountries = countryIds
+      .map((id) => COUNTRY_BY_ID.get(id))
+      .filter((c): c is Country => c !== undefined);
+    for (const p of this.players.values()) {
+      if (p.isBot && p.botSource && p.connState !== 'left') {
+        p.botCumSplits = buildGhostCumSplits(p.botSource, raceCountries, this.config.lang);
+      }
+    }
     this.phase = 'COUNTDOWN';
     this.autoStartAt = null;
     this.alarms.autoStart = null;
@@ -1145,6 +1275,7 @@ export class MatchRoomDO {
       return;
     }
     let changed = await this.applyAutoSkips(now);
+    changed = (await this.advanceGhosts(now)) || changed; // 고스트 봇 스케줄 재생(§2.3-5)
 
     // 코얼레싱 tick 브로드캐스트 — 변화 없으면 스킵(§4.4).
     const tick = this.progressTickMsg(now);
@@ -1206,6 +1337,7 @@ export class MatchRoomDO {
       const meta = this.metaOf(p.playerId);
       meta.skipped += 1;
       const serverElapsedMs = now - this.race.startAt;
+      p.splits.push(serverElapsedMs); // 자동스킵도 완료로 스플릿 기록(고스트 수집 시 세트 길이 정합)
       const finished = p.nextIndex === this.race.countryIds.length;
       if (finished) {
         p.finishedAt = now;
@@ -1231,6 +1363,48 @@ export class MatchRoomDO {
       await this.persistCore();
     }
     return any;
+  }
+
+  /**
+   * 고스트 봇 재생(§2.3-5): RACING tick마다 raceStart 기준 누적 스플릿 ≤ 경과시간인 인덱스까지
+   * nextIndex를 전진시킨다. 봇은 complete를 보내지 않고 서버가 스케줄대로만 진행한다(클라 통신 없음).
+   * 봇은 suspicion/리더보드 반영이 없으며 매치는 is_bot_match=1로 기록된다(persistResults).
+   */
+  private async advanceGhosts(now: number): Promise<boolean> {
+    if (!this.race || !this.config) return false;
+    const lang = this.config.lang;
+    const elapsed = now - this.race.startAt;
+    let changed = false;
+    for (const p of this.players.values()) {
+      if (!p.isBot || !p.botCumSplits || p.finishedAt !== null) continue;
+      const sched = p.botCumSplits;
+      let advanced = false;
+      while (p.nextIndex < sched.length) {
+        const due = sched[p.nextIndex];
+        if (due === undefined || due > elapsed) break;
+        const idx = p.nextIndex;
+        const id = this.race.countryIds[idx];
+        const country = id ? COUNTRY_BY_ID.get(id) : undefined;
+        p.correctKeystrokes += country ? requiredKeystrokes(country, lang) : 0;
+        p.combo += 1;
+        p.nextIndex += 1;
+        p.lastAcceptAt = this.race.startAt + due;
+        p.splits.push(due);
+        advanced = true;
+        if (p.nextIndex === this.race.countryIds.length) {
+          p.finishedAt = this.race.startAt + due;
+          p.rank = ++this.finishCounter;
+          this.broadcastPlayerFinished(p, due);
+          break;
+        }
+      }
+      if (advanced) changed = true;
+    }
+    if (changed) {
+      await this.persistPlayers();
+      await this.persistCore();
+    }
+    return changed;
   }
 
   private async maybeFinishRace(): Promise<void> {
@@ -1277,6 +1451,36 @@ export class MatchRoomDO {
 
     // D1 영속화(§10.1-5) — 실패 시 pendingPersist + 재시도(§10.1-7).
     await this.persistResults(reason, rows, raceEndAt);
+    // 클린·비봇 완주자 스플릿을 고스트로 수집(§2.3-5) — best-effort, 결과에 비차단.
+    await this.collectCleanGhosts(rows);
+  }
+
+  /**
+   * 클린·비봇 완주자의 국가별 누적 스플릿을 Queue EVENTS(ghost-collect)로 적재 예약한다(§2.3-5).
+   * 컨슈머(queue/consumer.ts)가 KV ghost:{lang}:{mode}:{piBucket} 링 버퍼(≤20)에 넣는다.
+   * 봇이 낀 매치(is_bot_match=1)는 재수집하지 않는다 — 사람 대 사람 클린 기록만 고스트가 된다.
+   */
+  private async collectCleanGhosts(rows: ResultRow[]): Promise<void> {
+    if (!this.env.EVENTS || !this.race || !this.config) return;
+    if ([...this.players.values()].some((p) => p.isBot)) return;
+    const { lang, mode } = this.config;
+    for (const row of rows) {
+      if (row.isBot || !row.finished || row.disconnected) continue;
+      const p = this.players.get(row.playerId);
+      if (!p || p.suspicionFlags.length > 0 || p.splits.length === 0) continue;
+      try {
+        await this.env.EVENTS.send({
+          type: 'ghost-collect',
+          lang,
+          mode,
+          piBucket: piBucketOf(row.pi),
+          cumSplitsMs: p.splits.slice(),
+          createdAt: this.now(),
+        });
+      } catch {
+        // 큐 전송 실패는 무시(고스트 수집은 부가 기능 — 레이스 결과 영속화와 독립).
+      }
+    }
   }
 
   private clampedKsByPlayer(): Record<string, number> {
@@ -1507,6 +1711,20 @@ export class MatchRoomDO {
             await this.startCountdown(null);
           }
           break;
+        case 'botOffer':
+          // 퀵매치 1인 60초 경과 → 그 유저에게 bot-offer 제시(§2.3-5). 수락은 onBotAccept.
+          this.alarms.botOffer = null;
+          if (this.phase === 'WAITING' && this.config?.quickMatch && this.activePlayers().length === 1) {
+            const human = this.activePlayers().find((x) => !x.isBot);
+            if (human) {
+              this.sendToPlayer(human.playerId, {
+                v: 1,
+                type: 'bot-offer',
+                expiresAt: now + BOT_OFFER_ACCEPT_MS,
+              });
+            }
+          }
+          break;
         case 'raceStart':
           this.alarms.raceStart = null;
           await this.startRacing();
@@ -1702,8 +1920,22 @@ export class MatchRoomDO {
         const id = race.countryIds[p.nextIndex];
         const country = id ? COUNTRY_BY_ID.get(id) : undefined;
         const need = country ? requiredKeystrokes(country, lang) : 0;
-        const ksPct =
-          p.finishedAt !== null ? 100 : need > 0 && lp ? Math.min(100, Math.round((Math.min(lp.ks, need) / need) * 100)) : 0;
+        let ksPct: number;
+        if (p.finishedAt !== null) {
+          ksPct = 100;
+        } else if (p.isBot && p.botCumSplits) {
+          // 봇은 클라 신고가 없으므로 스케줄 구간 내 시간 보간으로 ksPct를 합성한다(부드러운 이동).
+          const sched = p.botCumSplits;
+          const elapsed = now - race.startAt;
+          const prev = p.nextIndex > 0 ? (sched[p.nextIndex - 1] ?? 0) : 0;
+          const next = sched[p.nextIndex];
+          ksPct =
+            next !== undefined && next > prev
+              ? Math.max(0, Math.min(100, Math.round(((elapsed - prev) / (next - prev)) * 100)))
+              : 0;
+        } else {
+          ksPct = need > 0 && lp ? Math.min(100, Math.round((Math.min(lp.ks, need) / need) * 100)) : 0;
+        }
         const state: 'racing' | 'finished' | 'grace' | 'left' =
           p.finishedAt !== null ? 'finished' : p.connState === 'grace' ? 'grace' : p.connState === 'left' ? 'left' : 'racing';
         return { id: p.playerId, idx: p.nextIndex, ksPct, combo: p.combo, state, rank: p.rank };

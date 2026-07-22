@@ -9,6 +9,7 @@
 /** 후보 종류. graceDeadlines만 플레이어별 다중(맵), 나머지는 방 단위 단일 슬롯. */
 export type AlarmKind =
   | 'autoStart' // 퀵매치 2~3인 15s 자동 시작 (§2.3-4)
+  | 'botOffer' // 퀵매치 1인 60s 후 bot-offer 제시 (§2.3-5)
   | 'raceStart' // COUNTDOWN startAt 도달 → RACING (§1.1)
   | 'hardcap' // startAt + 180s 강제 종료 (§1.1 RACING)
   | 'voteDeadline' // FINISHED 리매치 투표 마감 (§1.1)
@@ -18,6 +19,7 @@ export type AlarmKind =
 
 export interface AlarmSet {
   autoStart: number | null;
+  botOffer: number | null;
   raceStart: number | null;
   hardcap: number | null;
   voteDeadline: number | null;
@@ -31,6 +33,7 @@ export interface AlarmSet {
 export function emptyAlarmSet(): AlarmSet {
   return {
     autoStart: null,
+    botOffer: null,
     raceStart: null,
     hardcap: null,
     voteDeadline: null,
@@ -43,6 +46,7 @@ export function emptyAlarmSet(): AlarmSet {
 
 const SCALAR_KINDS: readonly Exclude<AlarmKind, never>[] = [
   'autoStart',
+  'botOffer',
   'raceStart',
   'hardcap',
   'voteDeadline',

@@ -259,6 +259,9 @@ function mkPlayer(id: string, over: Partial<PlayerRecord> = {}): PlayerRecord {
     graceDeadline: null,
     resumeKey: 'k',
     suspicionFlags: [],
+    splits: [],
+    botCumSplits: null,
+    botSource: null,
     ...over,
   };
 }
@@ -1016,14 +1019,28 @@ describe('MatchRoom DO — 완주 / 리매치 / 승계 / 정리', () => {
     a.close();
   });
 
-  it('bot-accept는 no-op(방 안정)', async () => {
+  it('bot-accept 거절 → 방 유지(WAITING)', async () => {
+    const code = newRoomCode();
+    const stub = stubFor(code);
+    await createRoom(stub, code, { quickMatch: true });
+    const a = await connect(stub, 'g1', 'Alice');
+    a.send({ type: 'bot-accept', accept: false });
+    await sleep(40);
+    expect((await debug(stub)).phase).toBe('WAITING');
+    a.close();
+  });
+
+  it('bot-accept 수락 → 봇 삽입 + COUNTDOWN(§2.3-5, 상세는 ghost.test.ts)', async () => {
     const code = newRoomCode();
     const stub = stubFor(code);
     await createRoom(stub, code, { quickMatch: true });
     const a = await connect(stub, 'g1', 'Alice');
     a.send({ type: 'bot-accept', accept: true });
-    await sleep(40);
-    expect((await debug(stub)).phase).toBe('WAITING');
+    await sleep(60);
+    const d = await debug(stub);
+    expect(['COUNTDOWN', 'RACING']).toContain(d.phase);
+    const bots = d.players.filter((p) => (p as { isBot?: boolean }).isBot);
+    expect(bots.length).toBeGreaterThanOrEqual(1);
     a.close();
   });
 });

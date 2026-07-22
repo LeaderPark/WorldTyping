@@ -18,7 +18,12 @@ import { useGameClock } from '../../../features/typing/useGameClock';
 import { HiddenTypingInput } from '../../../features/typing/HiddenTypingInput';
 import { OpponentTracks } from '../../../features/multiplayer/OpponentTracks';
 import { GameView } from '../../GamePage/GameView';
-import { useMultiplayerStore, type RaceReplayMessage, type RoomPlayer } from '../../../stores/multiplayer';
+import {
+  extractRaceStart,
+  useMultiplayerStore,
+  type RaceReplayMessage,
+  type RoomPlayer,
+} from '../../../stores/multiplayer';
 import type { useMultiplayer } from '../../../features/multiplayer/useMultiplayer';
 import { useRaceSession } from './useRaceSession';
 import { useHardCapClock } from './useHardCapClock';
@@ -29,9 +34,52 @@ export interface RaceViewProps {
   myPlayerId: string | null;
   lang: 'ko' | 'en';
   mp: ReturnType<typeof useMultiplayer>;
+  /** grace 만료 후 재접속(§7.2-4) — 관전 전용. 입력 파이프라인을 붙이지 않고 트랙만 렌더한다. */
+  spectating?: boolean;
 }
 
-export function RaceView({ replay, players, myPlayerId, lang, mp }: RaceViewProps) {
+export function RaceView({ replay, players, myPlayerId, lang, mp, spectating }: RaceViewProps) {
+  if (spectating) {
+    return <SpectatorView replay={replay} players={players} myPlayerId={myPlayerId} mp={mp} />;
+  }
+  return <RaceViewLive replay={replay} players={players} myPlayerId={myPlayerId} lang={lang} mp={mp} />;
+}
+
+/** 관전 모드: 입력 채널 없이 상대 트랙만(§7.2-4). RaceClient만 붙여 tick으로 트랙을 갱신한다. */
+function SpectatorView({
+  replay,
+  players,
+  myPlayerId,
+  mp,
+}: {
+  replay: RaceReplayMessage;
+  players: readonly RoomPlayer[];
+  myPlayerId: string | null;
+  mp: ReturnType<typeof useMultiplayer>;
+}) {
+  const { t } = useTranslation();
+  const total = extractRaceStart(replay).countries.length;
+  const others = players.filter((p) => p.playerId !== myPlayerId);
+  // 입력/엔진 없이 tick만 소비하도록 no-op 바인딩으로 브리지를 붙인다(complete/progress 미전송).
+  useEffect(() => {
+    const detach = mp.attachRace({
+      engine: { rollbackTo: () => {}, subscribe: () => () => {} },
+      inputEvents: { subscribe: () => () => {} },
+      flushInput: () => {},
+    });
+    return detach;
+  }, [mp]);
+  return (
+    <div className="wt-room__spectator" data-testid="race-spectator">
+      <p className="wt-room__spectator-badge" data-testid="spectator-badge">
+        {t('room.spectator')}
+      </p>
+      <OpponentTracks players={others} total={total} />
+    </div>
+  );
+}
+
+function RaceViewLive({ replay, players, myPlayerId, lang, mp }: Omit<RaceViewProps, 'spectating'>) {
   const { t } = useTranslation();
   const { engine, countries, hardCapAt } = useRaceSession(replay, lang, mp.getOffsetMs);
 

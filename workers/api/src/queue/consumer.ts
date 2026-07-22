@@ -1,11 +1,13 @@
 // spec: docs/06 §3.6(신고 플로우 전문 — reports INSERT, 동일 대상 5건 → 대상 run flagged + 운영
-//       알림), docs/00 §11-D16(Queue wt-events = AE 적재·신고·고스트 저장 전용) + docs/07 WT-M3-05
+//       알림), docs/05 §2.3-5(고스트 수집 — 클린 완주자 스플릿을 KV ghost 링 버퍼 적재),
+//       docs/00 §11-D16(Queue wt-events = AE 적재·신고·고스트 저장 전용) + docs/07 WT-M3-05·WT-M4-05
 //
-// wt-events 컨슈머. v1은 report 메시지만 처리한다(AE 적재·고스트 저장은 후속 마일스톤 — 알려지지
-// 않은 type은 조용히 ack하고 무시해, 이후 다른 타입이 같은 큐에 추가돼도 이 컨슈머가 깨지지
-// 않는다). 즉시 제재는 하지 않는다(제약/금지 — flagged 마킹까지만, 수동 리뷰가 최종 조치를 결정).
+// wt-events 컨슈머. report(신고) + ghost-collect(고스트 수집)를 처리한다. 알려지지 않은 type은
+// 조용히 ack하고 무시해, 이후 다른 타입이 같은 큐에 추가돼도 이 컨슈머가 깨지지 않는다. 즉시
+// 제재는 하지 않는다(제약/금지 — flagged 마킹까지만, 수동 리뷰가 최종 조치를 결정).
 import { uuidv7 } from "../lib/uuid";
 import type { Env } from "../env";
+import { appendGhostRecording } from "../lib/ghost";
 
 export type ReportReason = "macro_suspected" | "nickname_inappropriate" | "other";
 
@@ -18,28 +20,33 @@ export interface ReportQueueMessage {
   createdAt: number;
 }
 
-export type EventsQueueMessage = ReportQueueMessage;
+/** MatchRoom DO가 클린 완주자 스플릿을 적재 예약할 때 보내는 메시지(§2.3-5). */
+export interface GhostCollectQueueMessage {
+  type: "ghost-collect";
+  lang: string;
+  mode: string;
+  piBucket: string;
+  cumSplitsMs: number[];
+  createdAt: number;
+}
+
+export type EventsQueueMessage = ReportQueueMessage | GhostCollectQueueMessage;
 
 /** 동일 대상(target_user_id) OPEN 신고가 이 개수에 도달하면 대상 run을 자동 flagged(§3.6). */
 const REPORT_FLAG_THRESHOLD = 5;
 
 /** index.ts의 queue() 핸들러가 그대로 위임하는 진입점. */
 export async function handleQueueBatch(batch: MessageBatch<unknown>, env: Env): Promise<void> {
-  const db = env.DB;
-  if (!db) {
-    // 로컬/미구성 환경 — 다른 라우트의 "바인딩 미설정 시 관대하게 skip" 톤과 동일. ack해서
-    // 무한 재시도 폭주를 막는다.
-    batch.ackAll();
-    return;
-  }
-
   for (const msg of batch.messages) {
     try {
       const body = msg.body as Partial<EventsQueueMessage> | undefined;
       if (body?.type === "report") {
-        await processReport(db, body as ReportQueueMessage);
+        // 바인딩 미설정 로컬 환경은 관대하게 skip(다른 라우트 톤과 동일) — ack로 재시도 폭주 방지.
+        if (env.DB) await processReport(env.DB, body as ReportQueueMessage);
+      } else if (body?.type === "ghost-collect") {
+        if (env.KV) await processGhostCollect(env.KV, body as GhostCollectQueueMessage);
       }
-      // 알 수 없는 type은 조용히 ack(향후 AE/고스트 메시지 대비 — 파일 상단 주석).
+      // 알 수 없는 type은 조용히 ack(향후 AE 등 추가 대비 — 파일 상단 주석).
       msg.ack();
     } catch (err) {
       // eslint-disable-next-line no-console -- 컨슈머의 유일한 관측 경로(wrangler tail).
@@ -47,6 +54,12 @@ export async function handleQueueBatch(batch: MessageBatch<unknown>, env: Env): 
       msg.retry();
     }
   }
+}
+
+async function processGhostCollect(kv: KVNamespace, m: GhostCollectQueueMessage): Promise<void> {
+  if (!Array.isArray(m.cumSplitsMs) || m.cumSplitsMs.length === 0) return;
+  if (!m.lang || !m.mode || !m.piBucket) return;
+  await appendGhostRecording(kv, m.lang, m.mode, m.piBucket, { cumSplitsMs: m.cumSplitsMs });
 }
 
 async function processReport(db: D1Database, m: ReportQueueMessage): Promise<void> {

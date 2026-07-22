@@ -18,7 +18,14 @@ export default defineWorkersConfig(async () => {
     test: {
       // WT-M4-01: match-room / WT-M4-02: matchmaker·multi-routes. 셋 다 MatchRoom/Matchmaker DO의
       // SQLite 파일을 남겨 isolatedStorage=true면 Windows EBUSY로 러너가 죽는다 → 여기(false)에서 실행.
-      include: ["test/match-room.test.ts", "test/matchmaker.test.ts", "test/multi-routes.test.ts"],
+      include: [
+        "test/match-room.test.ts",
+        "test/matchmaker.test.ts",
+        "test/multi-routes.test.ts",
+        // WT-M4-05: MatchRoom DO(bot 재생·재접속)를 구동해 DO SQLite를 남긴다 → 여기(isolatedStorage=false).
+        "test/ghost.test.ts",
+        "test/reconnect.test.ts",
+      ],
       setupFiles: ["./test/apply-migrations.ts"],
       poolOptions: {
         workers: {

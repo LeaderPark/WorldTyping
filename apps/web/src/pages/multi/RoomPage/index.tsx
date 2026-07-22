@@ -76,6 +76,11 @@ export function RoomPage() {
     navigate('/multi');
   };
 
+  // grace 만료 후 재접속(§7.2-4): 서버가 room-state에서 본인 connState='left'로 알린다 → 관전 모드.
+  const myPlayer = room?.players.find((p) => p.playerId === myPlayerId);
+  const spectating =
+    !!myPlayer && (myPlayer.connState === 'left' || myPlayer.connState === 'spectator');
+
   if (!roomCode) return null;
 
   if (connection === 'failed') {
@@ -112,7 +117,14 @@ export function RoomPage() {
 
       {(room.phase === 'countdown' || room.phase === 'racing') &&
         (raceReplay ? (
-          <RaceView replay={raceReplay} players={room.players} myPlayerId={myPlayerId} lang={room.lang} mp={mp} />
+          <RaceView
+            replay={raceReplay}
+            players={room.players}
+            myPlayerId={myPlayerId}
+            lang={room.lang}
+            mp={mp}
+            spectating={spectating}
+          />
         ) : (
           <p data-testid="room-race-loading">{t('boarding.connecting')}</p>
         ))}

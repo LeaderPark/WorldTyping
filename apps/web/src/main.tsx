@@ -23,10 +23,32 @@ if (!rootEl) {
   throw new Error("#root element not found");
 }
 
-createRoot(rootEl).render(
-  <StrictMode>
-    <AppProviders>
-      <RouterProvider router={router} />
-    </AppProviders>
-  </StrictMode>,
-);
+// D48(docs/00 §11-D48, WT-M5-01d): index.html의 정적 크리티컬 셸(D47)과 React 첫 커밋이
+// 같은 프레임에 몰리면 브라우저가 둘을 하나의 페인트로 합쳐 정적 셸이 "독립 페인트"로 기록되지
+// 않는다(실측: 로컬 Lighthouse가 2490/2640ms 바이모달로 갈렸다 — 레이스 재현). rAF 콜백은 다음
+// 페인트 직전에 실행되므로, 마운트를 한 프레임 미루면 그 사이 브라우저가 이미 그려둔 정적 셸을
+// 별도 프레임으로 커밋할 기회가 생긴다. D47의 "React 마운트 시 자연 대체"는 유지하되 그 교체
+// 타이밍만 미루는 것 — 정적 셸의 마크업·게이트 배선 스크립트(index.html)는 변경 없음.
+//
+// 실측(WT-M5-01d): 단일 rAF는 5/5 실행이 전부 2640ms로 개선 없음 — D48 문구대로 double-rAF로
+// 승격했고, 이후 10회 실행에서 1860~2640ms 분포(중앙값은 개선되었으나 2640ms 재발 4/10)로
+// 바이모달이 완전히는 해소되지 않았다. D48이 이 잔여 가능성을 명시적으로 예견해 트레이스 근거
+// 보고를 지시했으므로 그 경로를 따른다(최종 보고 escalations) — 그럼에도 double-rAF를
+// single-rAF/무지연 대비 개선이라 유지한다.
+//
+// bootLoader(라우터 루트 loader)는 createBrowserRouter(...) 호출 시점에 이미 시작되므로(위),
+// 이 지연은 데이터 페치를 늦추지 않는다 — 늦춰지는 건 React의 첫 DOM 커밋뿐이다. 정적 셸의
+// 언어 게이트 클릭 배선도 index.html 자체 스크립트가 처리하므로(hasChosenLanguage 상태를
+// React 마운트 전에 이미 localStorage에 기록) rAF 지연 창 안에 클릭이 들어와도 React가 나중에
+// 마운트되며 그 상태를 그대로 읽어 이중 게이트 없이 일관되게 이어받는다.
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    createRoot(rootEl).render(
+      <StrictMode>
+        <AppProviders>
+          <RouterProvider router={router} />
+        </AppProviders>
+      </StrictMode>,
+    );
+  });
+});

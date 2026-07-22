@@ -447,6 +447,7 @@ flowchart LR
 | D53 | 세션 신규 pid 상한 핫스왑화 | session.ts의 NEW_PID_ABUSE_MAX(20/h) 하드코딩 ↔ D12 "안티치트 임계 전부 핫스왑" 원칙 + E2E 스위트 성장으로 로컬 상한 소진 실측 | **config:anticheat KV로 승격 확정** — M6에서 이행(기본값 20/h 유지, 환경별 튜닝 가능). E2E 측은 공유 deviceId + 자체 카운터 리셋(e2e 인프라 한정)으로 이미 완화 (M5 확정) |
 | D54 | 부하 테스트 레이트리밋 우회 | 06 §10-5: "세션 발급 IP 상한 우회" 요구하나 메커니즘 미정의 | **KV `config:loadtest` 확정**: 존재 시 mw/ratelimit.ts 전 스코프 우회(부하 테스트 창 전용, 종료 즉시 delete 원복 — 절차는 tooling/ops/launch-checklist.md). 04 §6.5 LIMITS 표는 이 예외를 포함해 읽는다 (M6 확정, 2026-07-22) |
 | D55 | LIMITS.leaderboard 배선 | 04 §6.5: lb 60/60s/IP 적용 서술 ↔ 구현: 정의만 있고 라우트 미배선(M6-05 감사에서 발견) | **배선 확정**: GET /lb·/lb/me에 rateLimit('leaderboard') 적용(keyset D1 경로 보호). 부하 테스트는 D54 플래그로 우회되므로 충돌 없음 (M6 확정) |
+| D56 | 런칭 마감 세부 3건 | ① 06 §10-2가 /daily 독립 라우트 전제 ↔ 실 플레이는 /play/daily/:date ② robots의 /api/ 처리 모호 ③ sitemap 도메인 미확정(Q1) | **일괄 확정**: ① `/daily`는 순수 SEO 랜딩(오늘 챌린지 CTA → /play/daily/:date로 유도)으로 신설 ② robots.txt는 /api/·/multi/* Disallow(07 블록 지시 채택) ③ sitemap `<loc>`은 typetrip.example(RFC 2606) 플레이스홀더 — 도메인 확정 시 치환(절차는 launch-checklist) (M6 확정, 2026-07-23) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

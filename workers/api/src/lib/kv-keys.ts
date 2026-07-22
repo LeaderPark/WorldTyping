@@ -46,4 +46,15 @@ export const KV_KEYS = {
 
   /** GET /users/:id/passport 60초 캐시(docs/06 §4.3, WT-M5-03). */
   passport: (userId: string): string => `passport:${userId}`,
+
+  /** 마지막 방문일(KST 'YYYY-MM-DD') — retention_ping D1/D7/D30 코호트 판정용(WT-M6-03).
+   *  D1 users 테이블에 컬럼을 추가하지 않고 KV에 두는 이유: 매 bootstrap마다 갱신되는
+   *  고빈도 값이라 D1 UPDATE보다 KV가 저렴하고, 실패해도 리텐션 지표 정밀도만 낮아질 뿐
+   *  기능에 영향이 없다(§11-D9 D1=canonical 원칙과 배치되지 않는 순수 분석 보조 데이터). */
+  lastVisit: (pid: string): string => `visit:last:${pid}`,
+
+  /** 일별 runs/start·submit 카운터(game_abandon 근사 집계, WT-M6-03 cron/retention.ts).
+   *  dateKst = start/submit가 실제로 일어난 KST 날짜. */
+  telStarts: (dateKst: string): string => `tel:starts:${dateKst}`,
+  telSubmits: (dateKst: string): string => `tel:submits:${dateKst}`,
 } as const;

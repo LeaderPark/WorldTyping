@@ -77,6 +77,7 @@ import {
 } from './alarms';
 import { assignFinalRanks, computePlayerMetrics } from './ranking';
 import { evaluateMatchAchievements, isPhotoFinishWin, type MatchAchievementInput } from '../lib/achievements';
+import { trackMpMatchFinish, trackMpMatchStart } from '../lib/telemetry';
 
 // ───────────────────────── 서버측 국가 데이터(§5 compileTargets 캐시 원천) ─────────────────────────
 
@@ -1243,6 +1244,7 @@ export class MatchRoomDO {
     await this.syncAlarm();
     this.broadcast(this.roomStateMsg());
     this.scheduleTick();
+    await this.trackMatchStartTelemetry();
   }
 
   // ───────────────────────── 250ms tick(§4.4·§11.2) ─────────────────────────
@@ -1454,6 +1456,41 @@ export class MatchRoomDO {
     await this.persistResults(reason, rows, raceEndAt);
     // 클린·비봇 완주자 스플릿을 고스트로 수집(§2.3-5) — best-effort, 결과에 비차단.
     await this.collectCleanGhosts(rows);
+    // mp_match_finish(docs/06 §5.2, WT-M6-03) — best-effort, 결과 확정에 비차단.
+    await this.trackMatchFinishTelemetry(rows);
+  }
+
+  /** mp_match_finish(docs/06 §5.2, WT-M6-03) — 봇 제외 실인원 각각 1행. best-effort. */
+  private async trackMatchFinishTelemetry(rows: ResultRow[]): Promise<void> {
+    if (!this.config) return;
+    try {
+      const humanRows = rows
+        .filter((r) => !r.isBot)
+        .map((r) => ({
+          playerId: r.playerId,
+          finished: r.finished,
+          cpm: r.cpm,
+          pi: r.pi,
+          accMilli: Math.round(r.acc * 1000),
+          elapsedMs: r.elapsedMs ?? 0,
+        }));
+      await trackMpMatchFinish(this.env, humanRows, { lang: this.config.lang });
+    } catch (err) {
+      // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로(wrangler tail).
+      console.error('[MatchRoom] mp_match_finish telemetry failed (non-fatal)', err);
+    }
+  }
+
+  /** mp_match_start(docs/06 §5.2, WT-M6-03) — 봇 제외 실인원 각각 1행. best-effort. */
+  private async trackMatchStartTelemetry(): Promise<void> {
+    if (!this.config) return;
+    try {
+      const playerIds = [...this.players.values()].filter((p) => !p.isBot).map((p) => p.playerId);
+      await trackMpMatchStart(this.env, playerIds, { lang: this.config.lang });
+    } catch (err) {
+      // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로(wrangler tail).
+      console.error('[MatchRoom] mp_match_start telemetry failed (non-fatal)', err);
+    }
   }
 
   /**

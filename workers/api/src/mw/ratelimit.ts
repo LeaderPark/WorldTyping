@@ -22,6 +22,9 @@ export const LIMITS = {
   nickname: { per: "pid", window: 3600, max: 5 },
   "rooms(create)": { per: "pid", window: 60, max: 5 },
   leaderboard: { per: "ip", window: 60, max: 60 },
+  // 클라 배칭 텔레메트리(§5.2 "10개/5초" 배치 주기 — WT-M6-03). 배치 1건이 아니라 요청 자체를
+  // 제한한다(최대 10개/5초 배칭이면 분당 12회 남짓이 정상 상한, 여유를 둬 IP당 60/분).
+  t: { per: "ip", window: 60, max: 60 },
 } as const satisfies Record<string, LimitRule>;
 
 export type RateLimitScope = keyof typeof LIMITS;

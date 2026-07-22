@@ -15,6 +15,7 @@ import { KV_KEYS } from "../lib/kv-keys";
 import { claimRoomCode, normalizeRoomCode } from "../lib/room-code";
 import { requireAuth, type AuthVariables } from "../mw/auth";
 import { rateLimit } from "../mw/ratelimit";
+import { trackMpQueue } from "../lib/telemetry";
 
 export const multi = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -59,7 +60,15 @@ multi.post("/match/quick", requireAuth, async (c) => {
     body: JSON.stringify({ lang, playerId: pid }),
   });
   if (!res.ok) throw new ApiHttpError(503, "MATCHMAKING_FAILED", "매칭 서버 오류. 잠시 후 다시 시도해 주세요.");
-  return c.json(await res.json());
+  const body = await res.json();
+  // mp_queue(docs/06 §5.2) — 좌석 배정 성공 시 1회. 응답을 막지 않는다.
+  c.executionCtx.waitUntil(
+    trackMpQueue(c.env, pid, { lang }).catch((err: unknown) => {
+      // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
+      console.warn("[multi/quick] mp_queue telemetry failed (non-fatal):", err);
+    }),
+  );
+  return c.json(body);
 });
 
 const CancelSchema = z.object({ ticket: z.string().min(1) }).strict();

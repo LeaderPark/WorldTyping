@@ -42,6 +42,7 @@ import { evaluateRunAchievements } from "../lib/achievements";
 import { ensureDailySeed } from "../cron/daily-seed";
 import { buildDailyShareText } from "../lib/share-text";
 import { generateShareId } from "../lib/share-id";
+import { trackDailyPlay, trackGameFinish, trackGameStart } from "../lib/telemetry";
 
 /** run 세션 사용 플래그 TTL(docs/06 §3.1 — 2h). */
 const SESS_FLAG_TTL_SEC = 2 * 60 * 60;
@@ -175,6 +176,23 @@ runs.post("/runs/start", requireAuth, rateLimit("runs/start"), async (c) => {
     countryIds: built.countryIds,
     seed: built.seed,
   };
+
+  // game_start(docs/06 §5.2) + 일별 시작 카운터(cron/retention.ts game_abandon 근사, WT-M6-03) —
+  // 응답을 막지 않는다.
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        await trackGameStart(c.env, pid, { modeKey: built.modeKey, lang, platform });
+        if (c.env.KV) {
+          await bumpDailyCounter(c.env.KV, KV_KEYS.telStarts(kstDate(now)));
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
+        console.warn("[runs/start] telemetry hook failed (non-fatal):", err);
+      }
+    })(),
+  );
+
   return c.json(body);
 });
 
@@ -372,6 +390,40 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
     });
   }
 
+  // game_finish(+ 데일리 첫 정식 제출이면 daily_play) + 일별 제출 카운터(docs/06 §5.2, WT-M6-03)
+  // — 응답을 막지 않는다. runs INSERT가 이미 성공했으므로(위 db.batch) 이 시점부터는 순수 부가
+  // 관측이다.
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        await trackGameFinish(
+          c.env,
+          pid,
+          { modeKey: token.modeKey, lang: token.lang, platform: token.platform, geo: geo ?? undefined, verdict: finalVerdict },
+          {
+            score: vr.server.score,
+            pi: vr.server.pi,
+            cpm: vr.server.cpm,
+            accMilli: vr.server.accMilli,
+            elapsedMs: vr.server.elapsedMs,
+            countriesCleared: vr.server.countriesCleared,
+            skipped: vr.server.countriesSkipped,
+            completed: vr.server.completed,
+          },
+        );
+        if (dailyFirstValid) {
+          await trackDailyPlay(c.env, pid, { modeKey: token.modeKey, lang: token.lang, platform: token.platform, geo: geo ?? undefined });
+        }
+        if (c.env.KV) {
+          await bumpDailyCounter(c.env.KV, KV_KEYS.telSubmits(kstDate(now)));
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
+        console.warn("[runs/submit] telemetry hook failed (non-fatal):", err);
+      }
+    })(),
+  );
+
   return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks, shareText, shareId));
 });
 
@@ -413,6 +465,15 @@ function submitRes(
     shareText,
     shareId,
   };
+}
+
+/** 일별 KV 카운터 증분(game_abandon 근사 집계, cron/retention.ts 소비). TTL은 다음날 01:30
+ *  크론이 읽고 지나가기에 충분한 여유(3일)만 준다 — 정밀 한도 판정 목적이 아니라 KV 최종
+ *  일관성으로 충분하다(§7 gotcha 8과 동일 원칙). */
+async function bumpDailyCounter(kv: KVNamespace, key: string): Promise<void> {
+  const raw = await kv.get(key);
+  const count = raw ? Number(raw) : 0;
+  await kv.put(key, String(count + 1), { expirationTtl: 3 * 24 * 60 * 60 });
 }
 
 /** shares INSERT(§9.1) — runs INSERT와 같은 batch에 넣어 원자 반영. */

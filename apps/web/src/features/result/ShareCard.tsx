@@ -12,6 +12,7 @@ import { useCallback, useState } from 'react';
 import type { RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { captureResultCardPng } from './capture';
+import { trackShareClick } from '../../net/telemetry';
 
 export type ShareUtmSource = 'x' | 'threads' | 'ig' | 'copy';
 
@@ -61,12 +62,14 @@ export function ShareCard({ cardRef, platform, shareTitle }: ShareCardProps) {
       if (nav.share && nav.canShare?.({ files: [file] })) {
         await nav.share({ files: [file], title: shareTitle, text: shareTitle, url });
         setStatus('shared');
+        trackShareClick({ utmSource: 'copy' });
         return;
       }
       if (nav.share) {
         // 파일 첨부 미지원 브라우저 — 링크 공유만이라도 제공.
         await nav.share({ title: shareTitle, text: shareTitle, url });
         setStatus('shared');
+        trackShareClick({ utmSource: 'copy' });
         return;
       }
       setStatus('idle');
@@ -96,11 +99,13 @@ export function ShareCard({ cardRef, platform, shareTitle }: ShareCardProps) {
     a.click();
     URL.revokeObjectURL(href);
     setStatus('copied');
+    trackShareClick({ utmSource: 'copy' });
   }, [capture]);
 
   const openIntent = useCallback(
     (kind: 'x' | 'threads') => {
       const url = buildShareUrl(kind);
+      trackShareClick({ utmSource: kind });
       if (kind === 'x') {
         const intent = `https://x.com/intent/post?text=${encodeURIComponent(shareTitle)}&url=${encodeURIComponent(url)}`;
         window.open(intent, '_blank', 'noopener,noreferrer');

@@ -18,10 +18,12 @@ import { multi } from "./routes/multi";
 import { users } from "./routes/users";
 import { me } from "./routes/me";
 import { share } from "./routes/share";
+import { t } from "./routes/t";
 import { verifyToken, WsTicketPayloadSchema } from "@wt/shared";
 import { normalizeRoomCode } from "./lib/room-code";
 import { runLbRefresher } from "./cron/lb-refresher";
 import { ensureDailySeed } from "./cron/daily-seed";
+import { runRetentionJob } from "./cron/retention";
 import { handleQueueBatch } from "./queue/consumer";
 import { securityHeaders } from "./mw/security-headers";
 import { corsMiddleware } from "./mw/cors";
@@ -55,6 +57,7 @@ app.route("/api/v1", multi); // WT-M4-02: POST /match/quick, DELETE /match/quick
 //                              POST /rooms/:code/join, GET /rooms/public
 app.route("/api/v1", users); // WT-M5-03: GET /users/:id/passport, PUT /users/me/passport-cover
 app.route("/api/v1", me); // WT-M6-01: GET /users/me/export, DELETE /users/me (프라이버시 셀프서비스)
+app.route("/api/v1", t); // WT-M6-03: POST /t — 클라 배칭 텔레메트리(client_error 등)
 
 // /api/v1/* 중 위에서 매칭되지 않은 경로 → docs/04 §2.1 ApiError 포맷 404
 // (health를 포함해 이후 마일스톤에서 추가되는 모든 /api/v1/* 라우트는 이 줄보다 위에 등록한다).
@@ -113,7 +116,7 @@ export default {
   //   "0 15 * * *"   → 데일리 시드 발행(WT-M3-05, 이 태스크에서 구현. 티어 시드는 /runs/start가
   //                     요청 시점에 파생하므로 별도 cron 불필요 — set-builder.ts tierSeedHex 참조)
   //   "*/1 * * * *"  → lb-refresher(WT-M3-04)
-  //   "30 16 * * *"  → 보존 정리 + kpi_daily 스냅샷(후속 마일스톤 — no-op)
+  //   "30 16 * * *"  → 보존 정리 + kpi_daily 스냅샷(WT-M6-03, cron/retention.ts)
   // 미구현 잡을 throw로 두면 그 크론이 매분/매일 에러 로그를 남기므로, 알 수 없는 cron은
   // 조용히 무시한다(구현되는 시점에 case를 추가).
   async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
@@ -125,6 +128,11 @@ export default {
         // scheduled 핸들러는 반환 Promise가 곧 잡 수명 — await로 완주를 보장한다(waitUntil은
         // fetch용이고, --test-scheduled에선 invocation이 먼저 끝나 취소될 수 있다).
         await runLbRefresher(env, event.scheduledTime);
+        return;
+      case "30 16 * * *":
+        // 보존 정리 + kpi_daily 스냅샷(WT-M6-03, cron/retention.ts) — 위 case 주석의 "no-op"은
+        // 이 태스크 구현 전 상태였다.
+        await runRetentionJob(env, event.scheduledTime);
         return;
       default:
         return;

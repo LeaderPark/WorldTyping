@@ -26,6 +26,8 @@ import { KV_KEYS } from "../lib/kv-keys";
 import { getClientIp, getGeoCountry, hashIp } from "../lib/ip-hash";
 import { requireAuth, type AuthVariables } from "../mw/auth";
 import { rateLimit } from "../mw/ratelimit";
+import { kstDate, kstDaysBetween } from "../lib/kst";
+import { trackRetentionPing, trackVisit } from "../lib/telemetry";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const NEW_PID_ABUSE_WINDOW_SEC = 60 * 60; // 1시간(docs/04 §10.3)
@@ -146,6 +148,11 @@ session.post("/session", rateLimit("session"), async (c) => {
     expiresAt: new Date(expiresAtMs).toISOString(),
     geo: user.geo ?? "XX",
   };
+
+  // visit + retention_ping(docs/06 §5.2, WT-M6-03) — 응답을 막지 않는 부가 관측(waitUntil로
+  // 워커 회수 전 완주만 보장). 실패해도 부트스트랩 자체는 이미 성공 응답이 나간 뒤다.
+  c.executionCtx.waitUntil(trackBootstrapTelemetry(c.env, pid, user.geo, now));
+
   return c.json(body);
 });
 
@@ -169,6 +176,40 @@ session.get("/session/me", requireAuth, async (c) => {
 });
 
 // ───────────────────────── 내부 헬퍼 ─────────────────────────
+
+/** lastVisit(KV)의 TTL — 최대 코호트 창(D30)보다 여유 있게(35일). */
+const LAST_VISIT_TTL_SEC = 35 * 24 * 60 * 60;
+
+/**
+ * visit(세션당 1회) + retention_ping(D1/D7/D30, 마지막 방문일 대비) 발행. 마지막 방문일은 D1
+ * users 테이블이 아니라 KV `visit:last:{pid}`에 둔다(kv-keys.ts 상단 주석 — 저장 실패해도
+ * 리텐션 지표 정밀도만 낮아질 뿐 기능 영향 없음). 같은 날 재부트스트랩은 KV를 갱신하지 않는다
+ * (하루 최초 방문만 lastVisit 앵커로 남겨야 다음날 이후의 코호트 계산이 정확하다).
+ */
+async function trackBootstrapTelemetry(env: Env, pid: string, geo: string | null, now: number): Promise<void> {
+  try {
+    await trackVisit(env, pid, { geo: geo ?? undefined });
+    if (!env.KV) return;
+    const todayKst = kstDate(now);
+    const key = KV_KEYS.lastVisit(pid);
+    const lastVisitDate = await env.KV.get(key);
+    if (lastVisitDate && lastVisitDate !== todayKst) {
+      const days = kstDaysBetween(lastVisitDate, todayKst);
+      await trackRetentionPing(
+        env,
+        pid,
+        { d1: days === 1, d7: days === 7, d30: days === 30 },
+        { geo: geo ?? undefined },
+      );
+    }
+    if (lastVisitDate !== todayKst) {
+      await env.KV.put(key, todayKst, { expirationTtl: LAST_VISIT_TTL_SEC });
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
+    console.warn("[session] bootstrap telemetry failed (non-fatal):", err);
+  }
+}
 
 async function selectUser(db: D1Database, userId: string): Promise<UserRow | null> {
   const row = await db

@@ -8,3 +8,10 @@ SESSION_HMAC_SECRET=dev-secret-session
 SESSION_HMAC_SECRET_PREV=
 RUN_HMAC_SECRET=dev-secret-run
 DAILY_SALT=dev-secret-daily-salt
+
+# AE SQL API(선택, WT-M6-03 cron/retention.ts kpi_daily 스냅샷용). 계정 미연결 상태에서는
+# 비워둔다 — 비어 있으면 해당 조회만 건너뛰고 D1 직접 계산 열만 채운다(스킵 로그로 확인).
+# 실 발급 절차: Cloudflare 대시보드 → My Profile → API Tokens → "Account Analytics" 읽기 권한
+# 토큰 생성 (Account.Account Analytics:Read).
+CF_ACCOUNT_ID=
+CF_AE_API_TOKEN=

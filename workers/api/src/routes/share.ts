@@ -14,6 +14,7 @@ import { renderShareCardPng, type ShareCardData } from "../og/render";
 import { fallbackOgPng } from "../og/fallback-og";
 import { routeLabel } from "../og/layout";
 import { normalizeRoomCode } from "../lib/room-code";
+import { trackShareClick } from "../lib/telemetry";
 
 export const share = new Hono<{ Bindings: Env }>();
 
@@ -136,6 +137,23 @@ share.get("/r/:shareId", async (c) => {
   const shareId = c.req.param("shareId");
   const origin = originOf(c.env, c.req.url);
 
+  // share_click(docs/06 §5.2·§9.1) — 히트 자체를 센다(존재 여부와 무관, 스크레이퍼 사전요청도
+  // 포함되나 K-factor 근사는 이 노이즈를 허용한다는 게 §5.4 취지). 응답을 막지 않는다.
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        const url = new URL(c.req.url);
+        trackShareClick(c.env, {
+          referrerHost: refererHost(c.req.header("Referer")),
+          utmSource: url.searchParams.get("utm_source") ?? undefined,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console -- 텔레메트리 유일 관측 경로.
+        console.warn("[share] share_click telemetry failed (non-fatal):", err);
+      }
+    })(),
+  );
+
   if (!isValidShareId(shareId)) return htmlResponse(notFoundShell(origin), 404);
 
   const db = c.env.DB;
@@ -173,6 +191,16 @@ function htmlResponse(html: string, status: number): Response {
     status,
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": SHORT_CACHE },
   });
+}
+
+/** Referer 헤더에서 호스트만 추출(blobs[7] referrerHost, §5.2). 파싱 실패는 undefined. */
+function refererHost(referer: string | undefined): string | undefined {
+  if (!referer) return undefined;
+  try {
+    return new URL(referer).host;
+  } catch {
+    return undefined;
+  }
 }
 
 /** PUBLIC_ORIGIN이 있으면 절대 오리진, 없으면 요청 오리진(§7 gotcha 7 — 하드코딩 금지). */

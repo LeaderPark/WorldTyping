@@ -24,6 +24,18 @@ export function kstYesterday(dateKst: string): string {
  * 쓴다(예: 2025-12-29(월)~2026-01-04(일)은 전부 2026-W01). KST로 시프트한 뒤 UTC 게터로만
  * 계산해 로컬 타임존 함정을 피한다(kstDate와 동일 규약).
  */
+/**
+ * 두 KST 'YYYY-MM-DD' 사이의 정수 일수 차(b - a, 음수 가능). 리텐션 코호트 판정(D1/D7/D30,
+ * WT-M6-03)의 단일 원천 — 문자열을 UTC 자정으로 재해석해 로컬 타임존 함정을 피한다(kstDate와
+ * 동일 규약: 이 함수의 입력은 이미 kstDate()가 만든 문자열이라 여기서 다시 KST 오프셋을
+ * 더하지 않는다).
+ */
+export function kstDaysBetween(aDateKst: string, bDateKst: string): number {
+  const a = Date.parse(`${aDateKst}T00:00:00Z`);
+  const b = Date.parse(`${bDateKst}T00:00:00Z`);
+  return Math.round((b - a) / DAY_MS);
+}
+
 export function kstIsoWeek(nowMs: number = Date.now()): string {
   const shifted = new Date(nowMs + KST_OFFSET_MS);
   const d = new Date(

@@ -43,6 +43,12 @@ export interface Env {
   DAILY_SALT: string;
   SENTRY_DSN?: string;
   TURNSTILE_SECRET?: string;
+  // AE SQL API(계정 토큰) — cron/retention.ts의 kpi_daily 일 스냅샷이 AE 집계(DAU/share_clicks/
+  // matchmaking_*)를 끌어올 때만 필요(docs/06 §5.4, WT-M6-03). 미설정 시 그 조회만 스킵하고
+  // D1에서 직접 계산 가능한 열(completed_runs/daily_play_users/flagged_runs/rejected_runs/
+  // total_runs/matchmaking_started)만 채운다 — 실패를 위장하지 않는다.
+  CF_ACCOUNT_ID?: string;
+  CF_AE_API_TOKEN?: string;
 
   // 환경 식별 (wrangler.toml [vars] / [env.*.vars])
   ENVIRONMENT: "dev" | "staging" | "prod";

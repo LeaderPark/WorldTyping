@@ -17,6 +17,7 @@ import type { CountriesDataset } from '@wt/shared';
 import { DEFAULT_GRADE_CONFIG, DEFAULT_TIME_LIMIT_CONFIG } from '@wt/shared';
 import { ensureSession } from '../net/api-client';
 import { flushPendingQueue, registerPendingQueueAutoFlush } from '../net/pending-queue';
+import { registerGlobalErrorReporter } from '../net/telemetry';
 import { useSettingsStore } from '../stores/settings';
 
 const ClientConfigSchema = z
@@ -128,6 +129,7 @@ export async function bootLoader(): Promise<BootData> {
   cached = Object.freeze({ config, countries, dataVersion });
 
   registerPendingQueueAutoFlush();
+  registerGlobalErrorReporter(); // docs/03 §8.6 — window.onerror/unhandledrejection 전역 연결(WT-M6-03)
   void ensureSession(useSettingsStore.getState().guestId)
     .then(() => flushPendingQueue())
     .catch((err: unknown) => {

@@ -1,18 +1,21 @@
 // spec: docs/03 §4.2(AppShell 역할 — 테마 클래스/전역 토스트/설정 오버레이/Outlet),
 //       §7.3(접근성 — 모달 ESC/focus), §8.1(테마 data-theme 속성), §8.4(PWA 업데이트 UX —
-//       "인게임 중에는 토스트 유예"), WT-M2-05, WT-M5-01
+//       "인게임 중에는 토스트 유예"), docs/06 §6.3(열람/삭제권 셀프서비스 UI), WT-M2-05,
+//       WT-M5-01, WT-M6-01
 //
 // M0 스캐폴드("Hello WORLD TYPING" 한 줄)를 라우팅 루트 레이아웃으로 교체한다.
 
 import { Outlet, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useSettingsStore } from '../stores/settings';
 import { useSessionStore } from '../stores/session';
 import { useHotkeys } from '../lib/hotkeys';
 import { useRouteFocus } from '../lib/useRouteFocus';
 import { useModalA11y } from '../lib/useModalA11y';
+import { deleteMyAccount, fetchMyDataExport } from '../net/api-client';
+import { downloadJson } from '../lib/download-json';
 
 export function AppShell() {
   const theme = useSettingsStore((s) => s.theme);
@@ -112,6 +115,9 @@ function SettingsOverlay() {
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const [dataStatus, setDataStatus] = useState<
+    'idle' | 'exporting' | 'confirmingReset' | 'deleting' | 'deleted' | 'error'
+  >('idle');
 
   const close = () => {
     const next = new URLSearchParams(searchParams);
@@ -122,6 +128,35 @@ function SettingsOverlay() {
   useHotkeys(isOpen ? { Escape: close } : {});
   // 배경 inert + 포커스 트랩 + 닫힘 시 트리거로 복귀(§7.3) — ESC는 위 useHotkeys가 이미 처리.
   useModalA11y(dialogRef, isOpen);
+
+  // docs/06 §6.3 열람/삭제권 셀프서비스 — "내 데이터 내려받기"는 즉시 다운로드, "데이터 초기화
+  // 및 삭제"는 2단계 확인 후 DELETE /users/me + localStorage 전체 삭제(§6.3 "+ localStorage
+  // 삭제") + 새로고침으로 완전히 새 신원처럼 부팅되게 한다(session.ts의 재부트스트랩 리셋과는
+  // 별개의 클라 측 방어 — 둘 다 있어야 "삭제"가 실제로 체감된다).
+  const handleExport = async () => {
+    setDataStatus('exporting');
+    try {
+      const data = await fetchMyDataExport();
+      downloadJson(`typetrip-data-${Date.now()}.json`, data);
+      setDataStatus('idle');
+    } catch {
+      setDataStatus('error');
+    }
+  };
+
+  const handleResetConfirm = async () => {
+    setDataStatus('deleting');
+    try {
+      await deleteMyAccount();
+      setDataStatus('deleted');
+      localStorage.clear();
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch {
+      setDataStatus('error');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -156,6 +191,62 @@ function SettingsOverlay() {
           >
             {t('settings.theme.light')}
           </button>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <button
+            type="button"
+            data-testid="settings-data-export"
+            className="rounded border px-3 py-1 text-left"
+            disabled={dataStatus === 'exporting'}
+            onClick={() => void handleExport()}
+          >
+            {t('settings.data.export')}
+          </button>
+
+          {dataStatus === 'confirmingReset' ? (
+            <div className="rounded border border-red-400 p-3">
+              <p className="text-sm font-semibold">{t('settings.resetConfirm.title')}</p>
+              <p className="mt-1 text-sm">{t('settings.resetConfirm.body')}</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  data-testid="settings-data-reset-confirm"
+                  className="rounded border border-red-500 px-3 py-1 text-red-600"
+                  onClick={() => void handleResetConfirm()}
+                >
+                  {t('settings.resetConfirm.confirm')}
+                </button>
+                <button
+                  type="button"
+                  data-testid="settings-data-reset-cancel"
+                  className="rounded border px-3 py-1"
+                  onClick={() => setDataStatus('idle')}
+                >
+                  {t('settings.resetConfirm.cancel')}
+                </button>
+              </div>
+            </div>
+          ) : dataStatus === 'deleting' || dataStatus === 'deleted' ? (
+            <p role="status" data-testid="settings-data-reset-done" className="text-sm">
+              {t('settings.resetConfirm.done')}
+            </p>
+          ) : (
+            <button
+              type="button"
+              data-testid="settings-data-reset"
+              className="rounded border px-3 py-1 text-left text-red-600"
+              onClick={() => setDataStatus('confirmingReset')}
+            >
+              {t('settings.data.reset')}
+            </button>
+          )}
+
+          {dataStatus === 'error' && (
+            <p role="alert" data-testid="settings-data-error" className="text-sm text-red-600">
+              {t('settings.data.error')}
+            </p>
+          )}
         </div>
 
         <button type="button" data-testid="settings-close" className="rounded border px-3 py-1" onClick={close}>

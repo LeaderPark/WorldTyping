@@ -102,6 +102,23 @@ session.post("/session", rateLimit("session"), async (c) => {
     }
     user = await insertNewUser(db, pid, deviceHash, getGeoCountry(c), Date.now());
     isNewUser = true;
+  } else if (user.status === "deleted") {
+    // WT-M6-01: 삭제된 계정이 같은 deviceId로 재부트스트랩됨 — D38(user_id=pid 결정적 파생)
+    // 때문에 새 user_id를 발급할 수 없어(§11-D38 주석 참조) 같은 행을 "사실상 신규 유저"로
+    // 되살린다(닉네임/스트릭/커버 리셋). 신규 pid 어뷰징 카운터도 동일하게 소모시켜 삭제↔재생성
+    // 반복으로 §10.3 한도를 우회하지 못하게 한다(신규 INSERT 경로와 동일 방어).
+    if (c.env.KV) {
+      const blocked = await bumpNewPidAbuseCounter(c.env.KV, ipHash);
+      if (blocked) {
+        throw new ApiHttpError(
+          403,
+          "IP_BLOCKED",
+          "이 네트워크에서 신규 세션 발급이 시간당 한도를 초과해 24시간 차단되었습니다.",
+        );
+      }
+    }
+    user = await reactivateDeletedUser(db, pid, deviceHash, getGeoCountry(c), Date.now());
+    isNewUser = true;
   }
 
   const now = Date.now();
@@ -223,6 +240,47 @@ async function insertNewUser(
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error("insertNewUser: exhausted retries");
+}
+
+/**
+ * 삭제된 계정을 같은 deviceId 재부트스트랩으로 "사실상 신규 유저"로 되살린다(WT-M6-01, session.ts
+ * 상단 주석 참조). device_hash를 새로 파생한 값으로 되돌리고, 닉네임/스트릭/커버를 신규 가입과
+ * 동일한 초기값으로 리셋한다(user_unlocks·lb_best는 DELETE /users/me 시점에 이미 삭제됨).
+ * nickname_norm UNIQUE 충돌 시 insertNewUser와 동일하게 접미사를 바꿔 재시도한다.
+ */
+async function reactivateDeletedUser(
+  db: D1Database,
+  userId: string,
+  deviceHash: string,
+  geo: string | null,
+  now: number,
+): Promise<UserRow> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < MAX_INSERT_ATTEMPTS; attempt += 1) {
+    const suffix = attempt === 0 ? userId.slice(-4).toUpperCase() : randomGuestSuffix();
+    const nickname = `GUEST_${suffix}`;
+    const norm = nicknameNorm(nickname);
+    try {
+      await db
+        .prepare(
+          `UPDATE users SET device_hash = ?2, nickname = ?3, nickname_norm = ?4, geo = ?5,
+                  passport_cover = 'basic-green', status = 'active', streak_daily = 0,
+                  streak_updated = NULL, updated_at = ?6
+             WHERE user_id = ?1`,
+        )
+        .bind(userId, deviceHash, nickname, norm, geo, now)
+        .run();
+      const updated = await selectUser(db, userId);
+      if (!updated) throw new Error("reactivateDeletedUser: row vanished after UPDATE");
+      return updated;
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!/UNIQUE/i.test(msg)) throw err;
+      // nickname_norm 충돌 — 접미사를 바꿔 재시도(insertNewUser와 동일 사유).
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("reactivateDeletedUser: exhausted retries");
 }
 
 /**

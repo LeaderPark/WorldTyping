@@ -96,6 +96,7 @@ export const apiClient = {
     request<T>(path, { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
   put: <T>(path: string, body?: unknown): Promise<T> =>
     request<T>(path, { method: 'PUT', body: body !== undefined ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string): Promise<T> => request<T>(path, { method: 'DELETE' }),
 };
 
 // ───────────────────────── 세션 부트스트랩(docs/04 §5, docs/06 §4.1) ─────────────────────────
@@ -367,4 +368,28 @@ export function fetchPassport(userId: string): Promise<PassportRes> {
 
 export function putPassportCover(coverId: string): Promise<{ passportCover: string }> {
   return apiClient.put<{ passportCover: string }>('/users/me/passport-cover', { coverId });
+}
+
+// ───────────────────────── 프라이버시 셀프서비스(docs/06 §6.3, WT-M6-01) ─────────────────────────
+
+/**
+ * GET /users/me/export — 서버 응답 스키마가 원천(workers/api/src/routes/me.ts)이라 클라는
+ * unknown으로만 다루고 그대로 다운로드 파일로 흘려보낸다("내려받기"가 목적이지 화면 렌더링이
+ * 목적이 아니다 — 필드 화이트리스트/가공 없음).
+ */
+export function fetchMyDataExport(): Promise<unknown> {
+  return apiClient.get<unknown>('/users/me/export');
+}
+
+export interface DeleteMyAccountRes {
+  ok: true;
+  deletedAt: number;
+  /** §6.3 "최대 10분" 고지와 동일 값(초) — 클라가 문구를 서버 응답에서 그대로 가져다 쓴다. */
+  cacheMaxDelaySec: number;
+}
+
+/** DELETE /users/me — 즉시 익명화·삭제(§6.3). 로컬 정리(localStorage 전체 삭제)는 호출부
+ *  (AppShell SettingsOverlay)가 성공 응답을 받은 뒤 책임진다 — 이 함수는 순수 API 왕복만. */
+export function deleteMyAccount(): Promise<DeleteMyAccountRes> {
+  return apiClient.delete<DeleteMyAccountRes>('/users/me');
 }

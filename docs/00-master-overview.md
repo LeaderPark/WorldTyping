@@ -438,6 +438,7 @@ flowchart LR
 | D44 | 리더보드 "내 지역" 탭 v1 | 03 §1.1: Global/내 지역 2탭 ↔ 세션 응답에 geo 미노출(users.geo는 D1 전용) | **v1은 스텁 유지, M5에서 활성화**: POST /session·GET /session/me 응답에 `geo`(CF-IPCountry 저장값) 필드를 추가하고 RankPage 탭을 배선하는 소형 태스크를 M5에 편성. 클라 측 IP/타임존 추정 금지 (M3 확정) |
 | D45 | 홈 히어로 지도 로딩 전략 | 03 §8.3 확정 청크: HeroMap이 d3-geo+topojson eager import ↔ 03 §8.5 LCP<2.5s 예산(실측 2.64s 초과) | **§8.3 개정 — 홈 한정 lazy 전환**: HeroMap(d3-geo/topojson/geo-index)은 React.lazy 청크로 분리하고, 즉시 페인트되는 경량 플레이스홀더(인라인 실루엣 SVG 또는 히어로 텍스트/카드)가 LCP 요소가 되도록 설계. 게임 라우트 지도 로딩은 불변. LCP 게이트가 성능 예산의 상위 계약 (M5 확정, 2026-07-22) |
 | D46 | Pretendard 웹폰트 v1 | 03 §8.1 폰트 preload ↔ npm 레지스트리에 한글 서브셋 패키지 부재(전체 2.0MB뿐) | **웹 UI는 v1 시스템 폰트 스택 확정**(Pretendard 웹폰트 셀프호스트는 백로그 — 서브셋 파이프라인 필요). 단 M6-02 OG 렌더러는 satori용 서브셋 TTF가 필수이므로 subset-font(npm, harfbuzzjs) 빌드 스텝을 M6-02 태스크 내에서 신설(~180KB, KS 완성형 + 라틴/숫자) (M5 확정) |
+| D47 | 홈 LCP 실원인·해소책 (D45 진단 정정) | D45 진단(지도 eager가 원인) ↔ 실측 반증: lazy 분리 후에도 LCP 2640ms 불변(5/5, 베이스라인 동일), LCP 요소는 S2 언어 게이트 문구, 게이트 제거 실험에서도 2640ms — CSR 첫 페인트 JS 총비용(4x 스로틀)이 상한 | **정적 크리티컬 셸 확정**: index.html의 #root 안에 S2 언어 게이트+히어로 타이틀을 정적 HTML/CSS로 인라인, 최소 인라인 스크립트가 React와 동일한 localStorage 상태를 기록(동일 data-testid 유지 — E2E 호환). React 마운트 시 자연 대체(createRoot가 교체). D45의 지도 lazy 분리는 엔트리 위생 개선으로 유지. LCP 게이트 <2.5s 불변 (M5 확정, 2026-07-22) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

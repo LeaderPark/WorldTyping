@@ -6,8 +6,8 @@
   "main": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
-    "test": "vitest run -c vitest.workers.config.ts",
-    "test:workers": "vitest run -c vitest.workers.config.ts",
+    "test": "vitest run -c vitest.workers.config.ts && vitest run -c vitest.do.config.ts",
+    "test:workers": "vitest run -c vitest.workers.config.ts && vitest run -c vitest.do.config.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "dev": "wrangler dev",
     "e2e:dev": "node ./scripts/e2e-dev-server.mjs",

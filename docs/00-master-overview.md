@@ -445,6 +445,8 @@ flowchart LR
 | D51 | 데일리 이모지 그리드 색 의미 | 01 §9.1 예시가 산술 불일치(10칸 vs "9/10"), 색 의미 미명문화 | **확정**: 🟩=완주·오타 0, 🟨=완주·오타 있음, 🟥=스킵/타임아웃 또는 라이프 0 이후 미도달(이후 칸 전부 🟥). 구현 원천 `workers/api/src/lib/share-text.ts` (M5 확정) |
 | D52 | 업적·메타 세부 일괄 확정 | 01 §9.2 필러 9칸 위임·§9.4 스탬프 범위·alias_master 기준·livesLost 검증·멀티 토스트·커버 선택 API 미정의 | **일괄 승인**: ① 필러 9종 = first_daily/combo_master/world_tour_s/perfect_marathon/tier_all_clear/win_streak_10/multi_veteran/flawless_race/night_owl(코드 상수+테스트 고정) ② 스탬프 자동 발급은 고정 12노선(대륙6+티어5+일주1) 한정 — 데일리/멀티 제외 ③ alias_master는 단판 기준 ④ livesLost는 v1 클라 신뢰 승계(서버 lives 시뮬레이션은 백로그) ⑤ 멀티 업적 실시간 토스트 미배선(WS 불확장 — D7, REST newUnlocks만) ⑥ PUT /users/me/passport-cover 추가 승인(소유권 서버 검증, 저빈도라 레이트리밋 스코프 생략) ⑦ IG 캔버스 재렌더는 M6-02 OG 레이아웃 재사용으로 이연 (M5 확정) |
 | D53 | 세션 신규 pid 상한 핫스왑화 | session.ts의 NEW_PID_ABUSE_MAX(20/h) 하드코딩 ↔ D12 "안티치트 임계 전부 핫스왑" 원칙 + E2E 스위트 성장으로 로컬 상한 소진 실측 | **config:anticheat KV로 승격 확정** — M6에서 이행(기본값 20/h 유지, 환경별 튜닝 가능). E2E 측은 공유 deviceId + 자체 카운터 리셋(e2e 인프라 한정)으로 이미 완화 (M5 확정) |
+| D54 | 부하 테스트 레이트리밋 우회 | 06 §10-5: "세션 발급 IP 상한 우회" 요구하나 메커니즘 미정의 | **KV `config:loadtest` 확정**: 존재 시 mw/ratelimit.ts 전 스코프 우회(부하 테스트 창 전용, 종료 즉시 delete 원복 — 절차는 tooling/ops/launch-checklist.md). 04 §6.5 LIMITS 표는 이 예외를 포함해 읽는다 (M6 확정, 2026-07-22) |
+| D55 | LIMITS.leaderboard 배선 | 04 §6.5: lb 60/60s/IP 적용 서술 ↔ 구현: 정의만 있고 라우트 미배선(M6-05 감사에서 발견) | **배선 확정**: GET /lb·/lb/me에 rateLimit('leaderboard') 적용(keyset D1 경로 보호). 부하 테스트는 D54 플래그로 우회되므로 충돌 없음 (M6 확정) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

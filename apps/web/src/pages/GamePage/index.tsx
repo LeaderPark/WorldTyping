@@ -301,6 +301,16 @@ export function GamePage() {
             ghostIndex={ghostIndex}
           />
         )}
+        {/* 카운트다운 인트로 카피(WT-UI-03, 원작 "운행을 시작합니다"에 대응) — 엔진 카운트다운
+            메커니즘은 그대로 두고, 출발 직전 잠깐 지도 무대 위에 안내를 얹는다. */}
+        {phase === 'countdown' && (
+          <div className="wt-game-intro" data-testid="game-intro" role="status" aria-live="polite">
+            <div className="wt-game-intro__box">
+              <p className="wt-game-intro__title">{t('game.intro.title')}</p>
+              <p className="wt-game-intro__hint">{t('game.intro.hint')}</p>
+            </div>
+          </div>
+        )}
         {phase === 'finished' && result && (
           <ResultView
             engine={engine}

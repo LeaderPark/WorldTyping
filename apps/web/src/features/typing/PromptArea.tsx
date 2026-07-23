@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import type { Country } from '@wt/shared';
 import type { TypingInputController } from '@wt/engine';
 import { PromptRenderer, type JuiceLevel } from './prompt-renderer';
+import { FlagIcon } from '../../components/FlagIcon';
 
 export interface PromptAreaProps {
   country: Country;
@@ -88,9 +89,15 @@ export function PromptArea({
 
   return (
     <div className="wt-prompt-area" data-testid="prompt-area">
-      <span className="wt-prompt-area__flag" role="img" aria-label={country.nameKo} data-testid="prompt-flag">
-        {country.flagEmoji}
-      </span>
+      <FlagIcon
+        id={country.id}
+        emoji={country.flagEmoji}
+        label={lang === 'ko' ? country.nameKo : country.nameEn}
+        size="lg"
+        className="wt-prompt-area__flag"
+        testId="prompt-flag"
+      />
+
       <div ref={mountRef} className="wt-prompt-area__glyphs" data-testid="prompt-mount" />
       {children}
     </div>

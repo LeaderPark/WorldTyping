@@ -108,6 +108,15 @@
     justify-content: flex-end;
     padding-bottom: 1.5rem;
   }
+
+  /* WT-UI-03: 인게임 3밴드는 --vv-height 앵커 안에 통합된다 — 싱글 variant가 content(=visual
+     viewport)를 abspos inset:0로 채우고, 보딩패스 스트립(하단 flex 밴드)이 소프트 키보드 바로 위에
+     고정된다. content의 flex-end/padding은 BoardingPass·ResultView(일반 흐름) 전용으로 유지된다. */
+  .wt-game-view[data-variant='single'] .wt-game-view__stage { padding-bottom: 0.4rem; }
+  .wt-strip { padding: 0.4rem 0.4rem 0; }
+  .wt-appbar-game { padding: 0.4rem 0.6rem; }
+  .wt-appbar__title { max-width: 6rem; font-size: 0.85rem; }
+  .wt-progress-line__next { display: none; }
 }
 
 /* 모바일 스킵 고정 버튼(§7.2 "스킵은 화면 우하단 고정 버튼(ESC 없음)"). 44px 터치 타깃(§7.1
@@ -154,8 +163,11 @@
    spec: docs/03 §2.8(음절 상태 4종·오타 색각 이중 부호화), §3.6(레이아웃 프로퍼티 불변 —
    transform/opacity만). 색 토큰은 WT-M2-04 tokens.css 도입 시 그 변수로 승격한다(지금은 폴백). */
 .wt-prompt {
-  --wt-prompt-done: #f8fafc;
-  --wt-prompt-pending: #64748b;
+  /* WT-UI-03: 프롬프트가 흰 캡슐(--surface) 안에 놓이며 기존 done=#f8fafc(흰색)는 라이트에서
+     비가시였다 — 테마 인식 텍스트 토큰으로 보정(라이트=진한 --text / 다크=밝은 --text 자동 대응).
+     오류색은 라이트/다크 모두 대비가 충분한 적색을 유지(색각 이중 부호화는 물결 밑줄이 담당). */
+  --wt-prompt-done: var(--text);
+  --wt-prompt-pending: var(--text-muted);
   --wt-prompt-error: #ef4444;
   display: inline-flex;
   flex-direction: column;
@@ -254,20 +266,219 @@
   padding: 2rem 1rem;
 }
 
-/* ── HUD(§4.2 HudBar) ── */
-.wt-hud {
-  display: flex;
-  flex-wrap: wrap;
+/* ── WT-UI-03: 국기 아이콘(components/FlagIcon.tsx) ──
+   4:3 고정 박스(리플로우 방지) — img/이모지 폴백이 같은 치수를 공유한다. 색은 토큰만. */
+.wt-flag {
+  display: inline-block;
+  flex: none;
+  object-fit: cover;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--map-border);
+  background: var(--surface-sunken);
+}
+.wt-flag--sm { width: 1.25rem; height: 0.9375rem; }
+.wt-flag--md { width: 1.5rem; height: 1.125rem; }
+.wt-flag--lg { width: 2.25rem; height: 1.6875rem; }
+.wt-flag--emoji {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  overflow: hidden;
+  line-height: 1;
+  font-size: 1rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ── WT-UI-03: 상단 앱바(features/hud/GameAppBar.tsx) ──
+   [나가기][모드/트랙명] … [진행바] … [♥][정확도][설정]. data-testid="hud-bar"의 가로 중앙은 항상
+   진행바(비상호작용)라 E8 포커스 유지 탭 타깃으로 안전하다. 색은 토큰만(원색 텍스트 없음, D50). */
+.wt-appbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+.wt-appbar-game {
+  flex: none;
+  padding: 0.5rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--map-border);
+  box-shadow: var(--shadow-card);
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
 }
-.wt-hud__lives {
-  color: var(--grade-a, #ef4444);
-  letter-spacing: 0.1em;
+.wt-appbar__left { display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex: 0 1 auto; }
+.wt-appbar__center { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; }
+.wt-appbar__right { display: flex; align-items: center; gap: 0.5rem; flex: 0 0 auto; }
+.wt-appbar__exit,
+.wt-appbar__settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--map-border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1;
+  text-decoration: none;
 }
+.wt-appbar__title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+.wt-appbar__lives { color: var(--grade-a); letter-spacing: 0.08em; flex: none; }
+.wt-appbar__acc { opacity: 0.7; flex: none; }
+.wt-appbar__acc-value { color: var(--text); font-weight: 700; flex: none; min-width: 2.5rem; }
+
+/* ── WT-UI-03: 부유 대시보드(features/hud/DashboardCard.tsx) + CPM 다이얼(CpmDial.tsx) ──
+   지도 무대 위에 뜬 순수 표시 카드(pointer-events:none — 포커스 유지 계약 방해 없음). */
+.wt-dashboard {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--map-border);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.wt-dashboard__divider { width: 1px; align-self: stretch; background: var(--map-border); }
+.wt-dashboard__timer { display: flex; flex-direction: column; align-items: center; }
+.wt-dashboard__timer-label { font-size: 0.62rem; color: var(--text-muted); letter-spacing: 0.04em; }
+.wt-dashboard__timer-value { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.wt-dial { display: flex; flex-direction: column; align-items: center; }
+.wt-dial__gauge { width: 3.4rem; height: auto; overflow: visible; }
+.wt-dial__track { fill: none; stroke: var(--map-idle); stroke-width: 8; stroke-linecap: round; }
+.wt-dial__tick { stroke: var(--text-muted); stroke-width: 2; opacity: 0.5; }
+.wt-dial__needle {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  transform: rotate(-90deg); /* 0 CPM 초기값 — JS가 statsTick마다 style.transform으로 덮어쓴다 */
+  transition: transform 240ms ease-out;
+}
+.wt-dial__needle polygon { fill: var(--text); }
+.wt-dial__hub { fill: var(--text); }
+.wt-dial__readout { display: flex; align-items: baseline; gap: 0.2rem; margin-top: -0.35rem; }
+.wt-dial__value { font-size: 1rem; font-weight: 700; color: var(--text); }
+.wt-dial__unit { font-size: 0.6rem; color: var(--text-muted); }
+:root[data-reduced] .wt-dial__needle { transition: none; }
+
+/* ── WT-UI-03: 하단 보딩패스 스트립(pages/GamePage/BoardingStrip.tsx) ──
+   배경=현재 출제국 대륙색(인라인 --wt-strip-continent). 흰 케이싱 바(r28) 안에 [이전국][흰 캡슐]
+   [다음국]. 텍스트는 전부 케이싱/캡슐(--surface 계열) 위에 두어 대비 확보(원색 텍스트 없음, D50). */
+.wt-strip {
+  flex: none;
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--wt-strip-continent, var(--surface-sunken));
+}
+.wt-strip__bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 28px;
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-float);
+}
+.wt-strip__arrow { display: flex; align-items: center; flex: none; color: var(--text-muted); font-size: 1.2rem; opacity: 0.6; }
+.wt-strip__neighbor { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0.15rem; }
+.wt-strip__neighbor--empty { visibility: hidden; }
+.wt-strip__neighbor--prev { align-items: flex-start; }
+.wt-strip__neighbor--next { align-items: flex-end; }
+.wt-strip__neighbor-caption { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 0.05em; }
+.wt-strip__neighbor-body { display: flex; align-items: center; gap: 0.35rem; min-width: 0; max-width: 100%; }
+.wt-strip__neighbor--next .wt-strip__neighbor-body { flex-direction: row-reverse; }
+.wt-strip__neighbor-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wt-strip-continent, var(--grade-c)) 22%, var(--surface));
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+.wt-strip__neighbor-name { color: var(--text); font-weight: 600; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wt-strip__capsule {
+  position: relative;
+  flex: 1.5 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--map-border);
+}
+.wt-strip__secondary { font-size: 0.75rem; color: var(--text-muted); }
+/* 콤보 배지가 흰 캡슐(--surface) 위에 놓이므로 라이트에선 원색 grade-a가 대비 미달 — --continent-*-text
+   와 동일 기법(색상 유지 + black 혼합)으로 보정하고, 다크(--surface 어두움)는 원색을 되살린다(D50). */
+.wt-strip__capsule .wt-combo-badge { color: color-mix(in srgb, var(--grade-a) 80%, black); }
+:root[data-theme='dark'] .wt-strip__capsule .wt-combo-badge { color: var(--grade-a); }
+/* 캡슐 안 PromptArea: 국기+글리프는 한 줄, 게이지는 아래 줄로. */
+.wt-prompt-area { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.15rem 0.5rem; }
+.wt-prompt-area .wt-gauge { flex: 0 0 100%; margin: 0.15rem auto 0; }
+/* 스트립 캡슐은 화면 일부 폭이므로 글리프 clamp를 낮춰 긴 국가명 오버플로를 막는다(렌더러 무수정 —
+   font-size 스케일만 CSS로 조정). fontScale 배수(§7.3)는 그대로 곱해진다. */
+.wt-strip .wt-prompt-area__glyphs {
+  font-size: calc(clamp(1.25rem, 3.5vw, 2.1rem) * var(--wt-font-scale));
+  max-width: 100%;
+}
+
+/* ── WT-UI-03: 카운트다운 인트로(index.tsx, phase=countdown) ── */
+.wt-game-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: wt-intro-fade 350ms ease-out;
+}
+.wt-game-intro__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 1rem 1.75rem;
+  border-radius: 1rem;
+  text-align: center;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(6px);
+}
+.wt-game-intro__title {
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  font-weight: 800;
+  color: var(--text);
+}
+.wt-game-intro__hint { font-size: 0.9rem; color: var(--text-muted); }
+@keyframes wt-intro-fade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+:root[data-reduced] .wt-game-intro { animation: none; }
 
 /* 콤보 배지(§13.3-3 배지 바운스). combo<=0이면 숨김. */
 .wt-combo-badge {
@@ -287,7 +498,8 @@
   100% { transform: scale(1); }
 }
 
-/* juice #3 화면 가장자리 글로우(§13.3-3 "화면 가장자리 미세 글로우"). */
+/* juice #3 화면 가장자리 글로우(§13.3-3 "화면 가장자리 미세 글로우"). 기본형(레이스 variant가 쓰는
+   일반 흐름 중앙 컬럼) — 싱글 variant는 아래에서 전폭 3밴드로 덮어쓴다. */
 .wt-game-view {
   display: flex;
   flex-direction: column;
@@ -299,11 +511,30 @@
   box-shadow: inset 0 0 0 3px var(--grade-a), inset 0 0 60px 10px color-mix(in srgb, var(--grade-a) 35%, transparent);
 }
 
-.wt-game-view__prompt {
-  position: relative;
-  display: inline-flex;
+/* ── WT-UI-03: 싱글 3밴드 레이아웃 ──
+   지도 무대(.wt-game-page__map) 위에 전폭으로 얹는다: 앱바(top) · 부유 스테이지(flex:1, 지도 관통)
+   · 보딩패스 스트립(bottom). data-variant로 게이팅해 레이스(RoomPage 임베드)는 기본형 그대로 둔다
+   — RaceView.tsx 무수정 보존. 컨테이너(.wt-game-page__content)의 패딩은 abspos 자식에 영향 없다. */
+.wt-game-view[data-variant='single'] {
+  position: absolute;
+  inset: 0;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0;
+}
+.wt-game-view__stage {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1rem;
+}
+.wt-game-view[data-variant='single'] .wt-game-view__stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  justify-content: flex-end;
+  padding: 1rem 1rem 0.75rem;
+  overflow: hidden;
 }
 
 /* juice #2 스탬프(§13.3-2 "15° 기울어져 찍히며(150ms)"). 기본 숨김(opacity 0), 확정 시
@@ -344,35 +575,72 @@
   transition: none; /* rAF가 매 프레임 직접 갱신 — CSS 전이는 이중 애니메이션이라 끈다. */
 }
 
-/* 진행바(●─●─◉─○, §4.2 ProgressLine). */
+/* ── WT-UI-03: 진행바(§4.2 ProgressLine, 앱바 이설) ──
+   대륙색 구간 레일(__rail-fill) 위에 도트 세그먼트(__dots, 스테이션 마커)를 겹쳐 얹는다. 대륙색은
+   앵커(GameAppBar)가 --wt-progress-continent로 주입. 도트는 ack-ghost/self-ghost 마커까지 그대로
+   보이며 testid/시맨틱은 불변. 스킵 힌트는 앱바에서 숨긴다(데스크톱 ESC / 모바일 고정 버튼). */
 .wt-progress-line {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  max-width: 40rem;
-  text-align: center;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 32rem;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
 }
-.wt-progress-line__dots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem;
-  max-width: 20rem;
-}
-.wt-dot {
-  width: 0.4rem;
-  height: 0.4rem;
+.wt-progress-line__rail {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 3rem;
+  height: 0.55rem;
   border-radius: 999px;
   background: var(--map-idle);
 }
+.wt-progress-line__rail-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--wt-progress-continent, var(--grade-c));
+  transition: width 300ms ease-out;
+}
+:root[data-reduced] .wt-progress-line__rail-fill { transition: none; }
+.wt-progress-line__dots {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 3px;
+}
+.wt-dot {
+  flex: 0 0 auto;
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 45%, transparent);
+}
+/* done 도트는 대륙색 채움 위에 얹히므로 --surface 반투명 핍(라이트/다크 모두 대비). */
 .wt-dot--done {
-  background: var(--grade-c);
+  background: color-mix(in srgb, var(--surface) 75%, transparent);
 }
 .wt-dot--current {
-  background: var(--grade-s);
-  transform: scale(1.6);
+  width: 0.55rem;
+  height: 0.55rem;
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--wt-progress-continent, var(--grade-s));
 }
+.wt-progress-line__count { flex: 0 0 auto; font-weight: 700; color: var(--text); font-size: 0.8rem; }
+.wt-progress-line__next {
+  flex: 0 1 auto;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wt-progress-line__skip { display: none; }
 
 /* 보딩패스(S5, §10.2 전문 — "개찰기 통과 애니메이션(200ms)"). */
 .wt-boarding {

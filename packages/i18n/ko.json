@@ -33,6 +33,8 @@
   "game.start.tap": "여권을 눌러 출발",
   "game.progress": "{current} / {total}",
   "game.next": "다음 목적지",
+  "game.intro.title": "탑승을 시작합니다",
+  "game.intro.hint": "목적지 이름을 입력하면 자동으로 다음 나라로 이동합니다",
 
   "hud.cpm": "{cpm}타/분",
   "hud.accuracy": "{accuracy}%",
@@ -43,6 +45,12 @@
   "hud.skipHint": "ESC 스킵",
   "hud.skipButton": "스킵",
   "hud.lives": "라이프 {count}",
+
+  "dial.cpm.label": "타/분",
+  "dial.time.label": "비행시간",
+
+  "strip.prev": "이전 나라",
+  "strip.next": "다음 나라",
 
   "result.title": "입국 완료!",
   "result.cpm": "타수 {cpm} CPM",

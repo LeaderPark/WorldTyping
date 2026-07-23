@@ -33,6 +33,8 @@
   "game.start.tap": "Tap your passport to depart",
   "game.progress": "{current} / {total}",
   "game.next": "Next destination",
+  "game.intro.title": "Now boarding",
+  "game.intro.hint": "Type each destination to roll on to the next country",
 
   "hud.cpm": "{cpm} CPM",
   "hud.accuracy": "{accuracy}%",
@@ -43,6 +45,12 @@
   "hud.skipHint": "ESC to skip",
   "hud.skipButton": "Skip",
   "hud.lives": "Lives {count}",
+
+  "dial.cpm.label": "CPM",
+  "dial.time.label": "Flight time",
+
+  "strip.prev": "Previous",
+  "strip.next": "Next",
 
   "result.title": "Arrival complete!",
   "result.cpm": "{cpm} CPM",

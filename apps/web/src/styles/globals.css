@@ -1181,3 +1181,354 @@
 .wt-kicker--oceania {
   color: var(--continent-oceania-text);
 }
+
+/* ── WT-UI-07: rank/passport/daily ──────────────────────────────────────────
+   spec: docs/06 §1(리더보드)·§10-2(데일리 SEO), docs/01 §9.4(여권 커버/스탬프)·§10.2(S8/S13).
+   이 세 페이지는 이 태스크 이전까지 전용 CSS가 전혀 없었다(RankPage/PassportPage는 기본 브라우저
+   렌더, DailyPage는 임시 Tailwind 유틸 — bg-sky-500 같은 원색 하드코딩 포함) — WT-UI-01이 미리
+   깔아둔 전역 컴포넌트 클래스(.wt-card/.wt-pill/.wt-token)를 처음 실제로 소비하는 태스크다. 색은
+   전부 위 시맨틱 토큰만 참조(신규 토큰 없음 — tokens.css 동결). */
+
+/* 필 활성 상태(.wt-pill 기본 정의는 위 §2.3) — 채워진 accent 배경 + 흰 텍스트. 대비는
+   .wt-btn--primary와 동일 기법(color-mix 85%, contrast-check.ts 등록, 실측 4.85:1). */
+.wt-pill--active {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+  border-color: transparent;
+  color: #fff;
+}
+.wt-pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* S8 랭킹 — 필터 pill 행 + 리스트 카드화 + 내 행 sticky. */
+.wt-rank-page {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+.wt-rank-page__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+.wt-rank-page__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1.25rem;
+}
+.wt-rank-page__filters [role='group'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+/* 모드 셀렉트: 네이티브 <select>지만 나머지 필터 pill과 높이/반경/보더를 맞춘다. */
+.wt-rank-page__mode-select {
+  height: 46px;
+  padding: 0 2rem 0 1.25rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.wt-rank-page__error,
+.wt-rank-page__empty {
+  padding: 1.25rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.wt-rank-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* border-radius는 .wt-card가 이미 표 박스 자체에 부여(배경/그림자용) — 여기에 overflow:hidden을
+     추가로 걸면 표 자신이 "스크롤 컨테이너"가 되어(실제 스크롤이 없어도 CSS 스펙상 성립) 아래
+     내 행 sticky가 문서 스크롤이 아니라 표 자신을 기준으로 묶여 사실상 무력화된다 — 그래서
+     클리핑 대신 모서리 4칸에만 개별 radius를 준다(border-collapse라 셀 배경이 뾰족하게 남는 걸
+     막는다). */
+}
+.wt-rank-table thead tr:first-child th:first-child {
+  border-top-left-radius: var(--radius-card);
+}
+.wt-rank-table thead tr:first-child th:last-child {
+  border-top-right-radius: var(--radius-card);
+}
+.wt-rank-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: var(--radius-card);
+}
+.wt-rank-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: var(--radius-card);
+}
+.wt-rank-table thead th {
+  text-align: left;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.wt-rank-table tbody td {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.wt-rank-table tbody tr:last-child td {
+  border-bottom: none;
+}
+/* 좁은 화면: 5열이 320px대 폭에서도 가로 스크롤 없이 들어가도록 셀 여백/글자 축소(표 자체를
+   overflow-x 스크롤 컨테이너로 감싸지 않는다 — 위 주석대로 그러면 sticky 내 행이 문서 스크롤
+   대신 그 래퍼에 묶여 무력화된다). */
+@media (max-width: 639px) {
+  .wt-rank-table thead th,
+  .wt-rank-table tbody td {
+    padding: 0.5rem 0.375rem;
+    font-size: 0.8125rem;
+  }
+}
+/* 내 행: 페이지 안에 있는 동안에는 뷰포트 상단에 sticky(§8 wireframe "고정 표시"의 인라인 버전).
+   문서 스크롤 기준으로 동작하려면 조상 중 어느 것도 overflow:hidden/auto·transform을 걸면 안
+   된다(위 .wt-rank-table 주석 참조 — AppShell/래핑 요소도 전부 overflow:visible 상태). */
+.wt-rank-table__row--me {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  font-weight: 700;
+}
+
+/* 내 행이 현재 페이지(상위 50) 밖일 때의 순위 요약 — 뷰포트 하단에 sticky로 항상 보이게(§8
+   wireframe "841 나 (GUEST_4821) … ← 고정 표시"). */
+.wt-rank-page__my-row {
+  position: sticky;
+  bottom: 1rem;
+  margin-top: 1.25rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+  border: 1.5px solid var(--accent);
+  font-weight: 700;
+  text-align: center;
+}
+
+.wt-rank-page__load-more {
+  display: flex;
+  margin: 1.25rem auto 0;
+}
+
+.wt-rank-page__total {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* S13 여권 — 펼친 2페이지 스프레드(좌: 커버/닉네임/스트릭/PI 최고, 우: 스탬프 .wt-token 그리드). */
+.wt-passport-page {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+.wt-passport-page__title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+.wt-passport-page [data-testid='passport-loading'],
+.wt-passport-page [data-testid='passport-error'] {
+  padding: 1.25rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.wt-passport-page__spread {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+  padding: 1.5rem;
+}
+@media (min-width: 640px) {
+  .wt-passport-page__spread {
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+  .wt-passport-page__left {
+    padding-right: 2rem;
+    /* 제본선: 펼친 책의 중앙 접힘 — 장식용 점선(WCAG 1.4.11 대상 아님, 순수 장식). */
+    border-right: 1px dashed var(--border);
+  }
+  .wt-passport-page__right {
+    padding-left: 2rem;
+  }
+}
+
+.wt-passport-page__nickname {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+.wt-passport-page__stat {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.wt-passport-page__covers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  list-style: none;
+}
+/* 커버 스와치: 색 점(::before) + 라벨 텍스트가 있는 pill 버튼. 색은 각 --cover-color 수정자가
+   대륙/등급 시맨틱 토큰만 참조해 정의한다(신규 토큰 없음). */
+.wt-cover-swatch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 2.75rem;
+  padding: 0 1rem 0 2rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.wt-cover-swatch::before {
+  content: '';
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: var(--cover-color, var(--text-muted));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); /* 밝은 커버색(gold 등)도 흰 배경 위에서 경계가 보이도록 */
+}
+.wt-cover-swatch--basic-green {
+  --cover-color: var(--grade-c);
+}
+.wt-cover-swatch--continent-asia {
+  --cover-color: var(--continent-asia);
+}
+.wt-cover-swatch--continent-europe {
+  --cover-color: var(--continent-europe);
+}
+.wt-cover-swatch--continent-africa {
+  --cover-color: var(--continent-africa);
+}
+.wt-cover-swatch--continent-north-america {
+  --cover-color: var(--continent-north-america);
+}
+.wt-cover-swatch--continent-south-america {
+  --cover-color: var(--continent-south-america);
+}
+.wt-cover-swatch--continent-oceania {
+  --cover-color: var(--continent-oceania);
+}
+.wt-cover-swatch--gold {
+  --cover-color: var(--grade-s);
+}
+.wt-cover-swatch--hologram {
+  --cover-color: var(--grade-a);
+}
+.wt-cover-swatch--hologram::before {
+  background: linear-gradient(135deg, var(--grade-s), var(--continent-europe), var(--grade-a));
+}
+.wt-cover-swatch--streak-30 {
+  --cover-color: var(--grade-b);
+}
+.wt-cover-swatch--streak-100 {
+  --cover-color: var(--grade-a);
+}
+/* 현재 사용 중 커버(단독 .wt-cover-swatch 스코프 — RaceResult/WaitingRoom의 범용 .wt-btn--active와
+   겹치지 않는다, 둘 다 이 클래스를 갖는 요소가 없어 안전). */
+.wt-cover-swatch.wt-btn--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  font-weight: 700;
+}
+.wt-cover-swatch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* 스탬프 그리드(12노선: 대륙 6 + 티어 5 + 세계일주 1) — .wt-token 재사용, 잠김은
+   .wt-token--locked(WT-UI-01 기존 정의: 서클만 opacity 0.4, 라벨은 대비 유지). */
+.wt-passport-page__stamps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem 0.5rem;
+  padding: 0;
+  margin: 0.75rem 0 0;
+  list-style: none;
+}
+@media (min-width: 640px) {
+  .wt-passport-page__stamps {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+.wt-passport-page__achievements {
+  padding: 0;
+  margin: 0.5rem 0 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+}
+
+/* /daily — SEO 랜딩 라이트 히어로(콘텐츠/메타는 불변, D56). */
+.wt-daily-page {
+  min-height: 60vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+.wt-daily-page__hero {
+  max-width: 28rem;
+  width: 100%;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+}
+.wt-daily-page__title {
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+.wt-daily-page__desc {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  margin-bottom: 0.5rem;
+}
+/* CTA: .wt-pill 기본(흰 배경 + accent 텍스트/보더)을 덮어써 꽉 찬 accent 버튼으로 — 대비는
+   .wt-btn--primary와 동일 기법(color-mix 85%, contrast-check.ts 등록, 실측 4.85:1). */
+.wt-daily-page__cta {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+  border-color: transparent;
+  color: #fff;
+}

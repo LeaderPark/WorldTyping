@@ -170,7 +170,7 @@ export function RankPage() {
             <button
               key={p}
               type="button"
-              className={`wt-btn${period === p ? ' wt-btn--active' : ''}`}
+              className={`wt-pill${period === p ? ' wt-pill--active' : ''}`}
               aria-pressed={period === p}
               data-testid={`rank-period-${p}`}
               onClick={() => setPeriod(p)}
@@ -181,6 +181,7 @@ export function RankPage() {
         </div>
 
         <select
+          className="wt-rank-page__mode-select"
           data-testid="rank-filter-mode"
           value={modeKey}
           onChange={(e) => setModeKey(e.target.value)}
@@ -198,7 +199,7 @@ export function RankPage() {
             <button
               key={l}
               type="button"
-              className={`wt-btn${lang === l ? ' wt-btn--active' : ''}`}
+              className={`wt-pill${lang === l ? ' wt-pill--active' : ''}`}
               aria-pressed={lang === l}
               data-testid={`rank-lang-${l}`}
               onClick={() => setLang(l)}
@@ -213,7 +214,7 @@ export function RankPage() {
             <button
               key={p}
               type="button"
-              className={`wt-btn${platform === p ? ' wt-btn--active' : ''}`}
+              className={`wt-pill${platform === p ? ' wt-pill--active' : ''}`}
               aria-pressed={platform === p}
               data-testid={`rank-platform-${p}`}
               onClick={() => setPlatform(p)}
@@ -226,7 +227,7 @@ export function RankPage() {
         <div role="group" aria-label="scope" data-testid="rank-filter-scope">
           <button
             type="button"
-            className={`wt-btn${scope === 'global' ? ' wt-btn--active' : ''}`}
+            className={`wt-pill${scope === 'global' ? ' wt-pill--active' : ''}`}
             aria-pressed={scope === 'global'}
             data-testid="rank-scope-global"
             onClick={() => setScope('global')}
@@ -236,7 +237,7 @@ export function RankPage() {
           {/* geo==="XX"(미확보/차단국가)는 지역을 특정할 수 없어 비활성 유지(§11-D44). */}
           <button
             type="button"
-            className={`wt-btn${scope === 'mine' ? ' wt-btn--active' : ''}`}
+            className={`wt-pill${scope === 'mine' ? ' wt-pill--active' : ''}`}
             aria-pressed={scope === 'mine'}
             disabled={!myGeo || myGeo === 'XX'}
             title={t('rank.scope.mine')}
@@ -260,7 +261,7 @@ export function RankPage() {
       )}
 
       {entries.length > 0 && (
-        <table className="wt-rank-table" data-testid="rank-table">
+        <table className="wt-rank-table wt-card" data-testid="rank-table">
           <thead>
             <tr>
               <th>{t('rank.col.rank')}</th>
@@ -296,7 +297,7 @@ export function RankPage() {
       )}
 
       {nextCursor && (
-        <button type="button" className="wt-btn" data-testid="rank-load-more" onClick={loadMore}>
+        <button type="button" className="wt-pill wt-rank-page__load-more" data-testid="rank-load-more" onClick={loadMore}>
           {t('rank.loadMore')}
         </button>
       )}

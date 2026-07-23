@@ -119,12 +119,14 @@ export function PassportPage() {
             <p className="wt-passport-page__nickname" data-testid="passport-nickname">
               {data.nickname}
             </p>
-            <p data-testid="passport-streak">{t('passport.streak', { count: data.streakDaily })}</p>
-            <p data-testid="passport-best-pi">
+            <p className="wt-passport-page__stat" data-testid="passport-streak">
+              {t('passport.streak', { count: data.streakDaily })}
+            </p>
+            <p className="wt-passport-page__stat" data-testid="passport-best-pi">
               {data.bestPi !== null ? t('passport.bestPi', { pi: data.bestPi }) : t('passport.bestPi.none')}
             </p>
 
-            <h2>{t('passport.covers.title')}</h2>
+            <h2 className="wt-kicker">{t('passport.covers.title')}</h2>
             <ul className="wt-passport-page__covers" data-testid="passport-covers">
               {ALL_COVERS.map((coverId) => {
                 const owned = coverId === DEFAULT_COVER || ownedCovers.has(coverId);
@@ -154,28 +156,37 @@ export function PassportPage() {
           </section>
 
           <section className="wt-passport-page__right" data-testid="passport-right">
-            <h2>{t('passport.stamps.title')}</h2>
+            <h2 className="wt-kicker">{t('passport.stamps.title')}</h2>
             {ownedStampRoutes.size === 0 ? (
               <p data-testid="passport-stamps-empty">{t('passport.stamps.empty')}</p>
             ) : (
               <ul className="wt-passport-page__stamps" data-testid="passport-stamps">
-                {STAMP_ROUTES.map((route) => (
-                  <li
-                    key={route}
-                    data-testid={`passport-stamp-${route}`}
-                    className={`wt-passport-page__stamp${ownedStampRoutes.has(route) ? ' wt-passport-page__stamp--owned' : ''}`}
-                    aria-label={humanizeUnlockId(route)}
-                  />
-                ))}
+                {STAMP_ROUTES.map((route) => {
+                  const owned = ownedStampRoutes.has(route);
+                  return (
+                    <li
+                      key={route}
+                      data-testid={`passport-stamp-${route}`}
+                      className={`wt-token wt-passport-page__stamp${owned ? ' wt-passport-page__stamp--owned' : ' wt-token--locked'}`}
+                    >
+                      <span className="wt-token__circle" aria-hidden="true">
+                        {owned ? '✓' : '🔒'}
+                      </span>
+                      <span className="wt-token__label">{humanizeUnlockId(route)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
 
-            <h2>{t('passport.achievements.title')}</h2>
-            <p data-testid="passport-achievements-count">{t('passport.achievements.count', { count: achievements.length })}</p>
+            <h2 className="wt-kicker">{t('passport.achievements.title')}</h2>
+            <p className="wt-passport-page__stat" data-testid="passport-achievements-count">
+              {t('passport.achievements.count', { count: achievements.length })}
+            </p>
             {achievements.length === 0 ? (
               <p data-testid="passport-achievements-empty">{t('passport.achievements.empty')}</p>
             ) : (
-              <ul data-testid="passport-achievements">
+              <ul className="wt-passport-page__achievements" data-testid="passport-achievements">
                 {achievements.map((a) => (
                   <li key={a.id} data-testid={`passport-achievement-${a.id}`}>
                     {humanizeUnlockId(a.id)}

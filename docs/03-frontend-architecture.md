@@ -421,6 +421,7 @@ export interface WorldMapHandle {
 ```
 
 - 이유: 국가 확정은 초당 수 회 발생 가능(고수 기준 1국가/1.5초). React state 경유 시 지도 서브트리 재조정 비용이 입력 프레임을 위협한다. `useImperativeHandle` 없이 **엔진 이벤트 구독을 WorldMap 내부 useEffect에서 직접** 하는 방식도 허용(스토어 우회) — 구현 단순한 쪽 선택하되 "React 리렌더로 폴리곤을 다시 그리지 않는다"는 계약은 불변.
+- *(개정 — 00 §11-D67)*: 이 컴포넌트 계층은 **홈 히어로 평면 지도(`HeroMap`) 전용**이다. 싱글 인게임 지도는 §3.7 `GlobeMap`(canvas + SVG 오버레이)이며, `GlobeMapHandle = WorldMapHandle & { setIdleSpin }`으로 위 핸들 시그니처를 전부 승계한다("리렌더 0" 계약도 동일).
 
 ### 3.3 색상 상태
 
@@ -449,6 +450,7 @@ function computeCamera(ids: CountryId[], padding = 40): { x: number; y: number; 
 - 적용: `<g data-layer="camera">`에 `transform: translate(x,y) scale(k)`를 **WAAPI**(`element.animate`)로 800ms `ease-in-out` 전이. React 미개입.
 - 모드별 카메라 정책: 대륙 모드 = 시작 시 해당 대륙 fitExtent 고정 + 타깃 국가가 뷰포트 밖이면 미세 팬(타깃 중심으로 25% 이내 이동만 — 멀미 방지). 세계일주 = 현재 leg 구간(현 타깃 ±2개국 bounds)을 따라가는 추적 카메라. 티어/데일리/멀티 = 국가 위치가 산발적이므로 **월드 전체 고정 + 타깃 펄스만**(카메라 이동 없음 — 매 국가 대륙 점프 팬은 시각 소음).
   - *(개정 — 00 §11-D63, 2026-07-23)*: 대륙/세계일주는 **현 구간(prev·cur·next) leg 추적 flyTo(padding 70, 600ms)**로 통일 개정("대륙 fitExtent 고정 + 미세 팬"·"타깃 ±2개국 bounds" 서술은 폐기). 티어/데일리/멀티 = 월드 전체 고정은 불변. 구현 원천 `apps/web/src/features/map/camera.ts`.
+  - *(개정 — 00 §11-D67, WT-DC-08)*: 위 평면 카메라(`computeCamera`/`computeLegCamera`/`camera.ts`)는 이제 **홈 히어로 전용**이다. 싱글 인게임 카메라는 §3.7 지구본의 `projection.rotate` 홉 추적(줌 없음)으로 대체됐고 D63의 leg flyTo·"티어/데일리 월드 고정"은 폐기됐다.
 - `prefers-reduced-motion` 또는 설정 ON 시: 전이 durationMs=0 (즉시 스냅).
 - **stroke 보정**: scale 시 국경선이 두꺼워지므로 `vector-effect: non-scaling-stroke`를 전 path에 지정.
 
@@ -457,12 +459,25 @@ function computeCamera(ids: CountryId[], padding = 40): { x: number; y: number; 
 - 세그먼트 = 이전 국가 centroid → 현 국가 centroid의 quadratic Bézier(제어점: 중점을 법선 방향으로 거리의 12% 오프셋 — 항공 노선 감성). `route` 레이어에 `<path>` append 후 `stroke-dasharray`/`stroke-dashoffset` 트릭으로 300ms drawing 애니메이션(WAAPI).
 - 날짜변경선 교차(예: 오세아니아 FJ→TO, 세계일주 KR→…→US): 두 centroid의 x 거리가 뷰포트 절반 초과면 **화면 밖으로 나갔다 들어오는 2-패스 세그먼트**로 분할(경도 ±180 래핑) — 지도를 가로지르는 흉한 직선 방지. `GeoIndex` 구축 시 각 인접쌍의 래핑 여부를 사전 계산해둔다.
 - 완주 리트레이스: 전체 세그먼트를 하나의 합성 path로 미리 이어두고 `dashoffset`을 1.2s에 0으로 — 결과 카드 캡처(§8.3)는 이 종료 프레임.
+- *(개정 — 00 §11-D67)*: 위 quadratic Bézier + 날짜변경선 2-패스 노선은 **홈 히어로 평면 지도 전용**이다. 싱글 인게임 노선은 §3.7 지구본에서 **great-circle 아크(`geoInterpolate` 64점 샘플)**로 그리며 진행 홉이 프리픽스(progress)를 구동한다(orthographic이 뒷면 아크를 자동 클립하므로 래핑 2-패스 불필요).
 
 ### 3.6 성능 가드
 
 - **폴리곤 수**: 110m 기준 feature 177개, 총 path 명령 수 ~1.1만. SVG로 60fps 무난(하이라이트는 개별 path 2~3개의 attribute 변경뿐).
 - **리렌더 회피 체크리스트**: ① WorldMap props는 마운트 후 불변, ② 게임 상태는 지도에 절대 props로 흐르지 않음(핸들/구독), ③ devtools Profiler로 "국가 확정 시 WorldMap 커밋 0회" CI 스냅샷은 불가하므로 코드리뷰 계약 항목으로 명시.
 - **저사양 강등**(GDD §13.4): `useJuiceLevel` 훅이 첫 판 동안 `requestAnimationFrame` 델타를 샘플링, 33ms 초과 프레임 비율 > 10%면 level 하향 → `setJuiceLevel(1)`: 펄스/파티클 off, 카메라 스냅. level 0: route drawing도 즉시 완성형. 지도 Canvas 강등(escape hatch)은 v1 미구현, 인터페이스(`WorldMapHandle`)만 렌더러 독립적으로 유지.
+  - *(개정 — 00 §11-D67)*: §3.2~§3.6은 이제 **홈 히어로 평면 지도(`HeroMap`)에 한해** 유효하다. **싱글 인게임 지도는 §3.7 지구본(`GlobeMap`)으로 대체**됐고, 강등/juice 계약(`setJuiceLevel`, reduced-motion=즉시 스냅)은 지구본에도 그대로 승계된다(canvas 홉 rAF는 홉/스핀 구간에만 돌고 playing 정지 시 재그리기 0).
+
+### 3.7 지구본 여정 무대 (싱글 인게임 지도, 00 §11-D67)
+
+*(WT-DC-08 신설)* 싱글 GamePage의 인게임 지도는 평면 지도(§3.2~§3.6, D63 leg 카메라)를 **d3-geo `geoOrthographic` 자체 벡터 지구본 + 비행기 홉**으로 대체한다(리드 프로토타입 FEEL 이식, maplibre 기각 — 오프라인/자기호스트/entry<170KB 불변). **표시 전용** — 엔진/판정/입력/프로토콜/엔진 이벤트 계약은 불변이다. 평면 `WorldMap`·`camera`·`route-layer`는 홈 히어로(S1) 전용으로 존치한다.
+
+- **파일**: `apps/web/src/features/map/globe/` — `globe-index.ts`(GlobeIndex: 전 feature + featureByCountry + anchor[경도,위도]=latlng 역순 + continent + neutralFeatures, feature-binding 공유·코소보 바인딩) / `globe-hop.ts`(순수 수학: `bearingDeg`·`hopDurationMs`=clamp(550+400·각거리/π,550,900)·`easeInOutCubic`·`sampleArc`(geoInterpolate 64점)·`isFrontFacing`) / `globe-render.ts`(canvas 1패스) / `GlobeMap.tsx`(`GlobeMapHandle`=`WorldMapHandle & { setIdleSpin }` + rAF 루프) / `useGlobeIndex.ts`. 바인딩 규칙은 `feature-binding.ts`(평면 geo-index와 공유).
+- **렌더 계층**: **canvas**(baseground, `aria-hidden`) — 바다 원판(`--map-ocean`)+림(`--map-rim`)+경위선(`geoGraticule10`,`--map-graticule`)+중립+기본 폴리곤+skipped+solved(대륙색 300ms 알파 램프)+target(대륙색+밝기)+노선 great-circle 아크(케이싱+대륙색, 진행 홉=프리픽스)+스테이션 도트. 매 프레임 `projection.rotate`로 전 폴리곤 재투영(orthographic이 뒷면 자동 클립). **SVG 오버레이**(`.wt-map .wt-globe__overlay`) — 숨김 ledger(`[data-layer=solved|skipped] [data-country]` = e2e 셀렉터 보존, d 없는 path) · 타깃 펄스 링 · 체크포인트 링 · 웨이포인트 라벨 3 · 비행기 g · 파티클 g. 팔레트는 사전 해석(루프 내 getComputedStyle 금지, §4.5).
+- **카메라 = 홉 추적**: `moveVehicle(from,to)`가 단일 rAF 루프에서 `projection.rotate([-interp(easeInOutCubic(raw))])`로 카메라를 홉 보간 위치에 고정(비행기는 화면 중심에서 lift `scale=1+sin(π·raw)·0.85` + `bearingDeg-90` 회전). duration=각거리 가중 550~900ms. **홉 중 재호출=선점**(잔여 아크 즉시 완성, 현 위치→새 목적지 리타깃, 큐잉 없음). `drawRouteSegment`=노선 원장 등록(직후 동일 from/to 홉이 진행 소유). `flyTo`=세트 anchor `geoCentroid`로 회전만(줌 불변) — finished 리빌(1200ms)·스킵 카메라 이징(400ms).
+- **전 싱글 모드 홉 추적 통일(D67 ③)**: D63의 "티어/데일리 월드 고정"과 leg flyTo는 폐기. 모든 모드가 확정 시 도착국으로 홉·카메라 추적하며, `countryShown`에서는 웨이포인트 라벨만 전 모드 무조건 갱신한다. 먼 타깃은 지구본 뒷면(비가시)일 수 있으나 타이핑은 텍스트 프롬프트 기반이라 무영향(리드 확정 ①).
+- **idle spin(리드 확정 ②)**: 보딩(phase idle)·결과(finished) 배경에서만 ~1.2°/s 자전 ON, countdown·playing 중 OFF(playing 중 정지 = canvas 재그리기 0 = 입력 핫패스 무비용). reduced-motion/juice≥1이면 홉·스핀 생략(즉시 스냅).
+- **좌표계**: canvas는 fit transform(logical 960×500 → 컨테이너 contain 매핑 × DPR≤2), SVG 오버레이는 동일 viewBox `0 0 960 500` + `preserveAspectRatio="xMidYMid meet"`로 정렬. 리사이즈는 `ResizeObserver`(1회 재그리기), 테마 전환은 `data-theme`/`data-contrast` `MutationObserver`(팔레트 재해석)로 흡수.
 
 ---
 
@@ -498,14 +513,14 @@ const router = createBrowserRouter([
 ```
 <AppShell>                        // 테마 클래스, 전역 토스트, 설정 오버레이, <Outlet/>
 ├─ HomePage (S1)
-│   ├─ WorldMap (히어로, 인터랙션: 대륙 호버 점등)
+│   ├─ WorldMap (히어로, 인터랙션: 대륙 호버 점등)   // 홈 전용 평면 지도(§3.2~§3.6)
 │   ├─ ModeCards / DailyBadge / TickerBar
 │   └─ LanguageGateOverlay (S2, localStorage 'wt:lang' 부재 시 1회)
-├─ GamePage (S5–S7)               // 세션 소유자. 엔진/컨트롤러 생명주기 관리
+├─ GamePage (S5–S7)               // 세션 소유자. 엔진/컨트롤러 생명주기 관리 + GlobeMap 소유(배경)
+│   ├─ GlobeMap (전 phase 배경, handle 연결)  // §3.7 지구본(00 §11-D67, 싱글 인게임 지도). WorldMap 대체
 │   ├─ BoardingPass (phase: idle)
 │   ├─ GameView (phase: countdown|playing)
 │   │   ├─ HudBar                 // 타이머/CPM/ACC/콤보/라이프 — §4.5 직접 DOM 갱신
-│   │   ├─ WorldMap (배경, handle 연결)
 │   │   ├─ PromptArea             // FlagIcon + PromptRenderer(§2.8) 마운트 지점 + TimeLimitGauge
 │   │   ├─ ProgressLine           // ●─●─◉ 노선 진행바 + 다음 국가 미리보기
 │   │   └─ HiddenTypingInput      // §2.7 컨트롤러 부착점

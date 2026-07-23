@@ -26,10 +26,10 @@ import { useGameClock } from '../../features/typing/useGameClock';
 import { HiddenTypingInput } from '../../features/typing/HiddenTypingInput';
 import { isGhostUnlocked, loadGhost, useGhostProgress } from '../../features/typing/ghost';
 import { useSoundManager } from '../../audio/useSoundManager';
-import { WorldMap } from '../../features/map/WorldMap';
-import { useWorldGeoIndex } from '../../features/map/useWorldGeoIndex';
-import { LEG_DURATION_MS, LEG_PADDING } from '../../features/map/camera';
-import type { WorldMapHandle } from '../../features/map/map-handle';
+// WT-DC-08(00 §11-D67): 싱글 인게임 지도를 평면 WorldMap+leg 카메라(D63)에서 d3-geo 지구본 +
+// 비행기 홉(GlobeMap)으로 대체한다. 평면 WorldMap·camera(leg)·route-layer는 홈 히어로 전용 존치.
+import { GlobeMap, type GlobeMapHandle } from '../../features/map/globe/GlobeMap';
+import { useGlobeIndex } from '../../features/map/globe/useGlobeIndex';
 import { useSessionStore } from '../../stores/session';
 import { useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
@@ -101,10 +101,10 @@ export function GamePage() {
   // 사운드: 엔진(확정/체크포인트/카운트다운)+컨트롤러(정타/오타) 이벤트 구독(§13.1, 구현
   // 세부 지시 3). 고빈도 값이 아니라 이벤트 배선뿐이므로 §4.5 불변식과 무관하다.
   useSoundManager(engine, controller);
-  const geoIndex = useWorldGeoIndex();
+  const geoIndex = useGlobeIndex();
 
-  const mapHandleRef = useRef<WorldMapHandle | null>(null);
-  const onMapReady = useCallback((h: WorldMapHandle) => {
+  const mapHandleRef = useRef<GlobeMapHandle | null>(null);
+  const onMapReady = useCallback((h: GlobeMapHandle) => {
     mapHandleRef.current = h;
   }, []);
 
@@ -146,10 +146,8 @@ export function GamePage() {
     setResult(snap.result);
     mapHandleRef.current?.reset();
 
-    // 현지화 국가명(웨이포인트 라벨용). langRef로 최신 lang을 읽는다(§11-D63).
+    // 현지화 국가명(웨이포인트 라벨용). langRef로 최신 lang을 읽는다(§11-D67).
     const nameOf = (c: Country): string => (langRef.current === 'ko' ? c.nameKo : c.nameEn);
-    // 현 구간 추적 카메라 모드(§11-D63): 대륙·세계일주만 추적, 티어·데일리는 월드 고정.
-    const legTracking = mode === 'continent' || mode === 'worldtour';
 
     const unsub = engine.subscribe((e) => {
       switch (e.type) {
@@ -173,27 +171,19 @@ export function GamePage() {
             controller?.setCountry(c);
             const h = mapHandleRef.current;
             h?.setTarget(c.id);
-            // 출발역(첫 국가)에는 이동체를 스냅 배치한다(이후 이동은 확정 시 flyIn).
+            // 출발역(첫 국가): 비행기 스냅 배치 + 카메라를 첫 국가로 즉시 고정(§11-D67). 이후
+            // 카메라 이동은 확정 시 홉(moveVehicle)만 담당한다.
             if (e.index === 0) h?.moveVehicle(c.id, c.id, { durationMs: 0 });
-            if (legTracking) {
-              // §11-D63: 현 구간(prev·cur·next) 추적 카메라 + 웨이포인트 라벨.
-              const prev = countries[e.index - 1];
-              const next = countries[e.index + 1];
-              const leg = [prev, c, next].filter((x): x is Country => Boolean(x));
-              h?.flyTo(
-                leg.map((x) => x.id),
-                { padding: LEG_PADDING, durationMs: LEG_DURATION_MS },
-              );
-              h?.setWaypointLabels({
-                prev: prev ? { id: prev.id, label: nameOf(prev) } : null,
-                cur: { id: c.id, label: nameOf(c) },
-                next: next ? { id: next.id, label: nameOf(next) } : null,
-              });
-            } else if (e.index === 0) {
-              // §11-D63: 티어/데일리/멀티 = 월드 고정. 시작 시 전체 세트를 1회 프레이밍하고 이후
-              // 카메라는 이동하지 않는다(매 국가 대륙 점프 팬은 시각 소음).
-              h?.flyTo(countryIds);
-            }
+            // §11-D67: 전 싱글 모드 홉 추적 통일 — leg 카메라 flyTo 폐기(D63 대체). 웨이포인트
+            // 라벨(prev·cur·next 역명)만 전 모드 무조건 갱신한다. 먼 타깃은 지구본 뒷면(비가시)일
+            // 수 있으나 타이핑은 텍스트 프롬프트 기반이라 무영향(리드 확정 ①).
+            const prev = countries[e.index - 1];
+            const next = countries[e.index + 1];
+            h?.setWaypointLabels({
+              prev: prev ? { id: prev.id, label: nameOf(prev) } : null,
+              cur: { id: c.id, label: nameOf(c) },
+              next: next ? { id: next.id, label: nameOf(next) } : null,
+            });
           }
           break;
         }
@@ -201,9 +191,11 @@ export function GamePage() {
           const c = countries[e.index];
           if (c) {
             if (e.skipped) {
-              // ESC 스킵(docs/03 §10.2 E3, GDD §5.5): 축하 연출·노선 세그먼트·이동체 이동 없이
-              // 회색 빗금(--map-skipped)으로만 표시한다 — 스킵은 방문한 경유지가 아니다.
+              // ESC 스킵(docs/03 §10.2 E3, GDD §5.5): 축하 연출·노선 세그먼트·비행기 홉 없이 회색
+              // 빗금(--map-skipped)으로만 표시한다 — 스킵은 방문한 경유지가 아니다. 단 카메라만
+              // 400ms 이징으로 스킵국으로 돌려 무대가 진행을 따라오게 한다(§11-D67, 신규).
               mapHandleRef.current?.markSkipped(c.id);
+              mapHandleRef.current?.flyTo([c.id], { durationMs: 400 });
             } else {
               // juice #2: 폴리곤이 대륙(노선)색으로 채워지고, 노선 세그먼트가 이전 국가에서 그려져
               // 들어오며(§13.3-2), 그 경로를 따라 이동체가 날아 들어온다(§11-D63).
@@ -287,6 +279,14 @@ export function GamePage() {
     mapHandleRef.current?.setJuiceLevel(reducedActive ? 1 : 0);
   }, [reducedActive, geoIndex]);
 
+  // WT-DC-08(리드 지시 ②, §11-D67): idle spin은 보딩(idle)·결과(finished) 배경에서만 ON,
+  // countdown·playing 중 OFF — playing 중 정지 = canvas 재그리기 0 = 입력 핫패스 무비용. juice
+  // 효과가 이 효과보다 먼저 실행되므로(정의 순서) reduced-motion/juice 강등 시 spin은 자동 억제된다.
+  // geoIndex가 늦게 도착해 GlobeMap이 뒤늦게 마운트되는 경우도 현재 phase에 맞춰 반영한다.
+  useEffect(() => {
+    mapHandleRef.current?.setIdleSpin(phase === 'idle' || phase === 'finished');
+  }, [phase, geoIndex]);
+
   // WT-DC-04(①): 카운트다운 숫자 로컬 타이머. sound-manager 비프 케이던스(0/1000/2000ms)에 동기해
   // 재생되는 비프 개수만큼 숫자를 센다 — 풀(3000ms)=3·2·1, 리트라이(1500ms)=2·1. 길이는 엔진
   // countdownEndsAt에서 도출한다(엔진 시간 무수정). tick 애니는 juice일 때만 WAAPI scale(1.6)→1 +
@@ -330,7 +330,7 @@ export function GamePage() {
   return (
     <div className="wt-game-page" data-testid="game-page">
       {geoIndex && (
-        <WorldMap index={geoIndex} className="wt-game-page__map" onReady={onMapReady} />
+        <GlobeMap index={geoIndex} className="wt-game-page__map" onReady={onMapReady} />
       )}
 
       <HiddenTypingInput inputRef={inputRef} retainFocus={phase === 'countdown' || phase === 'playing'} />

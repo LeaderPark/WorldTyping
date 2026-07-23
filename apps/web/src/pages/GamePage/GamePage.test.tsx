@@ -89,10 +89,10 @@ vi.mock('../../app/bootLoader', () => ({
   }),
 }));
 
-// 지도는 juice 배경일 뿐 게임 로직과 무관(§3.6) — fetch 없이 렌더를 단순화한다. 실제 지도 배선
-// 계약은 WorldMap.test.tsx(WT-M2-04)가 이미 검증한다.
-vi.mock('../../features/map/useWorldGeoIndex', () => ({
-  useWorldGeoIndex: () => null,
+// 지도는 juice 배경일 뿐 게임 로직과 무관(§3.6) — fetch 없이 렌더를 단순화한다. 실제 지구본 배선
+// 계약은 GlobeMap.test.tsx(WT-DC-08)가 검증한다. GamePage는 이제 지구본(useGlobeIndex)을 쓴다.
+vi.mock('../../features/map/globe/useGlobeIndex', () => ({
+  useGlobeIndex: () => null,
 }));
 
 /** runs/start(모드별 세트)·runs/submit(제출)에 응답하는 최소 fetch 목(WT-M3-06). 티어는

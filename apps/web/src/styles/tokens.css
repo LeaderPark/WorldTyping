@@ -88,6 +88,10 @@
   --map-route-casing: #ffffff; /* 노선 라인(§3.5) — 기존 하드코딩(#f8fafc 근사) 값을 토큰화 */
   --map-dot: #94a3b8; /* 초소국 circle 기본 */
   --map-station-fill: #ffffff; /* 방문국 스테이션 도트 흰 fill(§11-D63) */
+  /* 지구본 무대(00 §11-D67, WT-DC-08) — 크림 --bg(#f4f5ef)와 어울리는 저채도 바다/림/경위선. */
+  --map-ocean: #dbe6ea; /* 바다 원판(폴리곤 밖) */
+  --map-rim: #b6c3c9; /* 지구본 외곽 림 */
+  --map-graticule: #c6d1d4; /* 경위선(극옅음, 렌더에서 알파 0.32) */
 }
 
 /* 다크 테마(옵션, D57 — "삭제 금지, 토글 보존"). 신설 시맨틱 토큰 전부 다크 대응값을 정의한다.
@@ -128,6 +132,10 @@
   --map-route-casing: #f8fafc; /* 구 .wt-map__route 하드코딩값과 동일 — 토큰화만, 시각 델타 0 */
   --map-dot: #64748b;
   --map-station-fill: #e2e8f0; /* 다크 무대에서도 대륙색 ring과 대비되는 밝은 도트 fill(§11-D63) */
+  /* 지구본 무대(00 §11-D67) — 다크 심해/림/경위선(다크 --bg #0f172a와 이음매 없이). */
+  --map-ocean: #0f1a29;
+  --map-rim: #2a3b50;
+  --map-graticule: #24334a;
 }
 
 /* ── 지도 레이어 스타일(§3.2 계층) — .wt-map 아래 5 레이어. 모든 색은 위 변수만 참조. ── */
@@ -250,6 +258,99 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .wt-map__target {
+    animation: none;
+  }
+}
+
+/* ── 지구본 무대 오버레이(00 §11-D67, WT-DC-08) — canvas 위 SVG(비행기·타깃 링·라벨·파티클).
+   좌표계 = viewBox 960×500(canvas fit transform과 동일 contain 매핑). 색은 토큰만(원색 텍스트 금지,
+   D62). canvas·overlay 둘 다 컨테이너를 채우고 입력을 가로채지 않는다. ── */
+.wt-globe__canvas,
+.wt-globe__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+/* 비행기: 어두운 실루엣(--text) + 크림 halo(--bg)로 채색 노선/바다 위에서도 또렷하게. transform은
+   moveVehicle이 WAAPI/attribute로 갱신(레이아웃 불변, §4.5). */
+.wt-globe__plane {
+  fill: var(--text);
+  stroke: var(--bg);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+/* 웨이포인트 라벨(prev/cur/next): 12px/600, 크림 halo(paint-order stroke). 위치는 setWaypointLabels/
+   재투영이 x·y로 지정. non-scaling-stroke halo로 폴리곤 위 가독성 확보. */
+.wt-globe__label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  user-select: none;
+}
+.wt-globe__label--cur {
+  font-weight: 800;
+}
+.wt-globe__label--prev,
+.wt-globe__label--next {
+  opacity: 0.75;
+}
+/* 타깃 펄스 링: 대륙색(setTarget이 --continent-color 인라인 지정). scale 펄스는 링 중심(fill-box). */
+.wt-globe__target-ring {
+  fill: none;
+  stroke: var(--continent-color, var(--grade-s));
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wt-globe-pulse 1.2s ease-in-out infinite;
+}
+@keyframes wt-globe-pulse {
+  0%,
+  100% {
+    stroke-opacity: 0.4;
+  }
+  50% {
+    stroke-opacity: 1;
+  }
+}
+/* 체크포인트 링(세계일주 경유지) — 앰버(--grade-s). scale/opacity는 WAAPI가 구동(펄스 후 자동 제거). */
+.wt-globe__cp-ring {
+  fill: none;
+  stroke: var(--grade-s);
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* 도착 pop 도트(스테이션 squash&stretch 400ms WAAPI) + 파티클(벡터 원). fill은 인라인(대륙색/앰버). */
+.wt-globe__pop-dot {
+  fill: var(--map-station-fill);
+  stroke: var(--continent-color, var(--grade-s));
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.wt-globe__particle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* juice 강등(§3.6)/reduced-motion: 타깃 링 펄스 정지(정보성 아님 — 정적 링은 유지). */
+.wt-globe__overlay[data-juice='1'] .wt-globe__target-ring,
+.wt-globe__overlay[data-juice='2'] .wt-globe__target-ring {
+  animation: none;
+}
+:root[data-reduced] .wt-globe__target-ring {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-globe__target-ring {
     animation: none;
   }
 }

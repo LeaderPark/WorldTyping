@@ -254,6 +254,18 @@
   "home.ticker.myBest": "My best: PI {pi}",
   "home.ticker.top1": "World Tour #1: {nickname} · score {score}",
 
+  "home.menu.navLabel": "Main menu",
+  "home.menu.singleKicker": "SINGLE PLAYER",
+  "home.menu.singleCopy": "A solo trip around the world — records optional",
+  "home.menu.multiKicker": "MULTI PLAYER",
+  "home.menu.multiCopy": "Real-time races — overtake with your fingers",
+  "home.menu.dailyKicker": "DAILY CHALLENGE",
+  "home.menu.dailyCopy": "Today's {count} countries — boarding soon",
+  "home.menu.rankingKicker": "LEADERBOARD",
+  "home.menu.rankingCopy": "Compete with travelers around the world",
+  "home.menu.passportKicker": "PASSPORT",
+  "home.menu.passportCopy": "Your passport fills up, one stamp per finish",
+
   "settings.langLabel": "Language (input/UI)",
   "settings.inputLang": "Typing language",
   "settings.inputLang.ko": "Korean",

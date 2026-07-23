@@ -254,6 +254,18 @@
   "home.ticker.myBest": "내 최고: PI {pi}",
   "home.ticker.top1": "세계일주 전체 1위: {nickname} · 점수 {score}",
 
+  "home.menu.navLabel": "메인 메뉴",
+  "home.menu.singleKicker": "SINGLE PLAYER",
+  "home.menu.singleCopy": "혼자 떠나는 완주 여행, 기록은 덤",
+  "home.menu.multiKicker": "MULTI PLAYER",
+  "home.menu.multiCopy": "실시간 레이스, 손끝으로 추월하기",
+  "home.menu.dailyKicker": "DAILY CHALLENGE",
+  "home.menu.dailyCopy": "오늘의 {count}개국, 탑승 마감 임박",
+  "home.menu.rankingKicker": "LEADERBOARD",
+  "home.menu.rankingCopy": "전 세계 여행자들과 순위 겨루기",
+  "home.menu.passportKicker": "PASSPORT",
+  "home.menu.passportCopy": "완주할 때마다 스탬프가 쌓이는 나만의 여권",
+
   "settings.langLabel": "언어(입력/UI)",
   "settings.inputLang": "타이핑 언어",
   "settings.inputLang.ko": "한국어",

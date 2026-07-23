@@ -18,6 +18,9 @@ METRO TYPING(서울 지하철역 타이핑 게임)의 재미 구조를 계승해
 | `docs/05-multiplayer-protocol.md` | WS 메시지 전문, DO 상태머신, 매치메이킹, 서버 검증 |
 | `docs/06-rankings-ops.md` | 리더보드 스키마, 안티치트 운영, 프라이버시, 런칭 체크리스트 |
 | `docs/07-implementation-prompts.md` | 마일스톤별 구현 태스크 프롬프트 + 모델 라우팅 |
+| `docs/08-progress-handoff.md` | **진행 상태 단일 원천 — 새 세션/새 PC는 이 문서부터 읽을 것.** 완료 태스크↔커밋 매핑, 셋업 절차, 잔여 작업 |
+
+> **진행 상태(2026-07-23)**: docs/07의 42개 태스크(M0~M6) **전부 구현 완료**. 남은 것은 원격/수동 항목(`tooling/ops/launch-checklist.md`)과 백로그뿐 — 상세는 `docs/08`. §11 결정은 D56까지 확정.
 
 ## 모델 사용 정책 (사용자 명시 요구 — 반드시 준수)
 

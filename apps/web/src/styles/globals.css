@@ -169,15 +169,12 @@
   color: inherit;
 }
 
-/* ── 프롬프트 렌더러(features/typing/prompt-renderer.ts) 채색 토큰 ──
-   spec: docs/03 §2.8(음절 상태 4종·오타 색각 이중 부호화), §3.6(레이아웃 프로퍼티 불변 —
-   transform/opacity만). 색 토큰은 WT-M2-04 tokens.css 도입 시 그 변수로 승격한다(지금은 폴백). */
+/* ── 프롬프트 렌더러(features/typing/prompt-renderer.ts) — METRO식 슬롯+입력 에코(D66) ──
+   spec: docs/03 §2.8(슬롯+힌트+입력 에코·오타 색각 이중 부호화·커서), §3.6(레이아웃 프로퍼티
+   불변 — 밑줄 두께 상태 불변·고정 박스·absolute 커서 → 리플로우 0). 색은 전부 변수 경유(원색
+   직접 금지, D50). --wt-prompt-done은 원작 METRO의 정타 적색 계열, --wt-prompt-error는 오타 적색. */
 .wt-prompt {
-  /* WT-UI-03: 프롬프트가 흰 캡슐(--surface) 안에 놓이며 기존 done=#f8fafc(흰색)는 라이트에서
-     비가시였다 — 테마 인식 텍스트 토큰으로 보정(라이트=진한 --text / 다크=밝은 --text 자동 대응).
-     오류색은 라이트/다크 모두 대비가 충분한 적색을 유지(색각 이중 부호화는 물결 밑줄이 담당). */
-  --wt-prompt-done: var(--text);
-  --wt-prompt-pending: var(--text-muted);
+  --wt-prompt-done: #d6402d;
   --wt-prompt-error: #ef4444;
   display: inline-flex;
   flex-direction: column;
@@ -185,42 +182,124 @@
   gap: 0.25rem;
   will-change: transform;
 }
+:root[data-theme='dark'] .wt-prompt {
+  --wt-prompt-done: #ff7a5e;
+}
+/* 슬롯 행: 힌트+글리프 칼럼들을 flex-end(글리프 바닥 = tail 텍스트)로 정렬, 긴 국가명은 wrap. */
 .wt-prompt__glyphs {
   display: inline-flex;
-  letter-spacing: 0.02em;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0.14em;
+  row-gap: 0.3em;
 }
+/* 슬롯 = 세로 칼럼(힌트 위 + 에코 글리프 아래). position:relative = 커서 ::after 앵커. */
+.wt-slot {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* 상단 소형 힌트(목표 유닛 문자, 정적). 높이 0.52em 고정 예약(= 0.34em × 1.53, own-em 표기) —
+   힌트 유무·내용과 무관하게 행 높이 불변(리플로우 0). */
+.wt-slot__hint {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 1.53em;
+  font-size: 0.34em;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-muted);
+  text-align: center;
+}
+/* 에코 글리프 박스 — 폭은 lang별 고정, 높이 1.18em 고정(상태 불변). 밑줄 두께도 상태 불변:
+   색/스타일만 상태에 따라 바뀐다(레이아웃 write 0). */
 .wt-unit {
-  color: var(--wt-prompt-pending);
-  transition: color 80ms linear;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 1.14em;
+  height: 1.18em;
+  color: var(--text-muted);
+  border-bottom: max(2px, 0.088em) solid var(--border);
 }
+.wt-prompt[data-lang='ko'] .wt-unit {
+  border-bottom-style: dashed;
+}
+.wt-prompt[data-lang='en'] .wt-unit {
+  width: 0.78em;
+  border-bottom-style: solid;
+}
+/* 구분자(공백·구두점): 밑줄 없는 좁은 스페이서. 힌트가 원문 문자를 보존한다. */
 .wt-unit--sep {
-  white-space: pre;
+  width: 0.4em;
+  border-bottom: none;
+}
+.wt-prompt[data-lang='ko'] .wt-unit--sep,
+.wt-prompt[data-lang='en'] .wt-unit--sep {
+  border-bottom: none;
 }
 .wt-unit.is-pending {
-  color: var(--wt-prompt-pending);
-}
-.wt-unit.is-partial {
-  color: var(--wt-prompt-done);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
+  color: var(--text-muted);
+  border-bottom-color: var(--border);
 }
 .wt-unit.is-done {
   color: var(--wt-prompt-done);
+  border-bottom-color: var(--wt-prompt-done);
 }
-/* 오타: 적색 + 물결 밑줄(색각 이중 부호화 — 색만으로 구분하지 않는다, GDD §11.2). */
+/* 조합 중(파랑 dashed) — accent 토큰 경유. */
+.wt-unit.is-partial {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  border-bottom-style: dashed;
+}
+/* 오타: 적색 밑줄 + 글리프 물결 밑줄(색각 이중 부호화 — 색만으로 구분하지 않는다, GDD §11.2). */
 .wt-unit.is-error {
   color: var(--wt-prompt-error);
+  border-bottom-color: var(--wt-prompt-error);
   text-decoration: underline wavy var(--wt-prompt-error);
-  text-underline-offset: 0.2em;
+  text-underline-offset: 0.12em;
 }
-.wt-prompt__echo {
-  min-height: 1em;
-  font-size: 0.5em;
-  opacity: 0;
-  color: var(--wt-prompt-pending);
+/* 슬롯 초과 입력(error색). 4.5em로 한정 — 넘치면 잘라낸다(레이아웃 안정). */
+.wt-prompt__tail {
+  position: relative;
+  color: var(--wt-prompt-error);
+  max-width: 4.5em;
+  overflow: hidden;
+  white-space: nowrap;
 }
-.wt-prompt__echo.is-visible {
-  opacity: 0.85;
+/* 타이핑 커서: 첫 빈 슬롯(또는 오버플로 시 tail)의 좌측 엣지에 깜빡이는 세로 바. absolute라
+   레이아웃에 영향 없음(리플로우 0). */
+.wt-slot.is-cursor::after,
+.wt-prompt__tail.is-cursor::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: max(2px, 0.06em);
+  height: 1em;
+  background: var(--text);
+  animation: wt-cursor-blink 1.06s steps(1) infinite;
+}
+@keyframes wt-cursor-blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+/* reduced-motion: 커서 깜빡임 정지(항상 표시). */
+:root[data-reduced] .wt-slot.is-cursor::after,
+:root[data-reduced] .wt-prompt__tail.is-cursor::after {
+  animation: none;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-slot.is-cursor::after,
+  .wt-prompt__tail.is-cursor::after {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* 스케일 팝(확정)·셰이크(오타) — transform만. juice 0이면 JS가 class를 아예 안 붙인다. */

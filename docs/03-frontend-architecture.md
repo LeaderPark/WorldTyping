@@ -322,18 +322,19 @@ export class TypingInputController {
 - `opacity:0.01`+1px (display:none/visibility:hidden은 포커스 불가·iOS IME 미동작). `top:50%`는 iOS가 포커스 요소로 자동 스크롤할 때 화면이 튀지 않게 하기 위함.
 - 인게임 동안 포커스 유지 계약: `document`의 `pointerdown` 캡처 단계에서 인터랙티브 요소(버튼 등)가 아니면 `preventDefault()` 후 `controller.focus()` — 화면 아무 데나 탭해도 키보드가 유지된다.
 
-### 2.8 프롬프트 렌더러 — 조합 중 글자의 시각화
+### 2.8 프롬프트 렌더러 — 슬롯 + 힌트 + 입력 에코 (METRO식, docs/00 §11-D66)
 
-React 리렌더 없이 컨트롤러 이벤트로 직접 DOM을 갱신하는 명령형 모듈.
+React 리렌더 없이 컨트롤러 이벤트로 직접 DOM을 갱신하는 명령형 모듈. **큰 줄은 목표어가 아니라 사용자 입력 에코**다(원작 METRO 계승 — 목표어는 슬롯 위 소형 힌트로만 표시). 판정·점수·프로토콜·엔진 이벤트 계약은 전부 불변이며 이 모듈은 순수 표시 계층이다.
 
-- **마운트 시 1회**: 캐노니컬 표기(`nameKo`)를 음절 단위 `<span data-syllable>` + 내부에 자모 경계 정보(`data-jamo-start`, `data-jamo-len` — `toJamoSeq`를 음절별로 돌려 사전 계산)로 렌더. 영어는 문자 단위 span.
-- **매 `progress`/`miss` 이벤트**: `detail.matchedLen`(정타 자모 길이)과 `detail.inputLen`으로 각 음절의 상태를 계산해 `className`만 토글:
-  - `done`(음절의 모든 자모 ≤ matchedLen): 흰색
-  - `partial`(음절 일부 자모만 정타 — 조합 중): 흰색 + 밑줄 커서. **음절 내부의 부분 채색은 하지 않는다**(한글 음절은 시각적으로 원자적 — 대신 진행 커서 밑줄이 현 음절에 위치)
-  - `error`(matchedLen을 넘어선 자모가 얹힌 첫 음절부터): 적색 + 물결 밑줄(색각 이중 부호화, GDD §11.2)
-  - `pending`: 회색
-- **별칭 입력 중 처리**: `detail.bestTarget`이 캐노니컬이 아니면(고수의 지름길, 예: "usa") 화면 캐노니컬 채색은 동결하고 프롬프트 하단에 실입력 미니 에코 라인을 표시 — 캐노니컬 글자 위에 억지로 매핑하지 않는다(불가능한 매핑).
-- 성능: class 토글은 음절 수(≤10) 회의 `classList` 연산 = 마이크로초 단위. 스케일 팝(GDD §13.3-1)은 `.pop` class + CSS `animation`, 셰이크는 컨테이너 1회 class 토글. **레이아웃 프로퍼티 불변** — transform/opacity만.
+- **마운트 시 1회**: 캐노니컬 표기(ko=`nameKo` / en=`nameEn`)의 표시단위(ko 음절 / en 글자)마다 세로 칼럼 슬롯 `span.wt-slot`을 렌더한다. 각 슬롯 = 위쪽 정적 힌트 `span.wt-slot__hint`(그 유닛의 목표 문자) + 아래쪽 입력 에코 글리프 `span.wt-unit`(초기 빈). 공백·구두점(정규화로 사라지는 자모 len 0 유닛 — `toJamoSeq`/`normalizeEn`을 유닛별로 돌려 판별)은 구분자 슬롯: 힌트에 원문 문자를 보존하고 글리프는 밑줄 없는 좁은 스페이서(`.wt-unit--sep`)다. 슬롯 뒤에 초과 입력용 `span.wt-prompt__tail` 1개. **에코 글리프가 비어 있으므로 `prompt-mount`의 전체 `textContent`는 국가 전환 직후 국가명과 정확히 일치한다**(E2E 계약).
+- **매 `progress`/`miss` 이벤트 `update(detail, rawValue)`**: `rawValue`(실입력)를 코드포인트 유닛으로 쪼개 각 유닛의 자모 구간 `[s,e)`를 얻는다(len 0 입력은 슬롯 미점유). `matched = detail.matchedLen`, `hasError = matched < detail.inputLen`. 유닛 상태(산식 전용 — composition 이벤트로 분기 금지):
+  - `done`(`e ≤ matched`): 정타 접두 안에 완전히 든 유닛 — 정타색(적색 계열) + 밑줄.
+  - `error`(`hasError && e > matched`): 정타 접두를 넘어선 오타 유닛 — 적색 + 글리프 물결 밑줄(색각 이중 부호화, GDD §11.2).
+  - `partial`(`!hasError && e > matched`, 스펙상 `s<matched<e`): 조합 중 꼬리 — 파랑(accent) dashed. 실입력 파이프라인에선 `matched=inputLen`이라 드문 경계다.
+  - 각 typed 유닛 k는 k번째 **비구분자** 슬롯에 글리프 textContent + 상태로 얹힌다. 잔여(미입력) 슬롯은 빈 `pending`(빈 밑줄). 슬롯을 넘어선 초과 입력은 `tail`(최대 4유닛, error색)로 흘러넘친다. 별칭 입력(고수의 지름길, 예: "한국"→대한민국)은 `bestTarget` 기준 matchedLen으로 채색되어 **에코가 실입력을 그대로 표시**한다 — 구 모델의 "별칭 채색 동결 + 하단 에코 라인"은 폐기(D66).
+- **커서**: 첫 빈 비구분자 슬롯(= typed 유닛 수 위치)에 `.is-cursor`로 깜빡이는 세로 바(`::after`, absolute — 레이아웃 불변). 오버플로 중엔 `tail`에. `reduced-motion`이면 깜빡임 정지(항상 표시).
+- **EXACT**: 확정 순간 `rawValue`는 플러시로 비므로(§2.5) 전 슬롯을 **캐노니컬 글리프 done**으로 되메우고 커서·tail을 정리한다(국가명 전체가 done으로 점등 → pop).
+- 성능: 슬롯별 `{char,state}` 캐시를 diff해 **변경된 슬롯만** DOM을 만진다(`update` 1회당 접촉 ≤ 변경 슬롯 + 커서 이동). 밑줄 두께는 상태 불변(색/스타일만 변함)·글리프 박스 치수 고정·커서 absolute → **레이아웃 write 0**. 스케일 팝(GDD §13.3-1)은 `.wt-prompt--pop` class + CSS `animation`, 셰이크는 컨테이너 1회 class 토글 — transform/opacity만.
 
 ### 2.9 영문 입력 경로
 

@@ -7,6 +7,11 @@
 #   docker compose up -d app cron-ping backup     # cloudflared는 WT-HOST-02(터널 배선)까지 제외
 #
 # `version:` 최상위 키는 최신 Docker Compose(v2)에서 obsolete라 생략한다(Compose Specification).
+#
+# [리드 요청] Compose 프로젝트명을 프로젝트 이름 `worldtyping`으로 고정한다 — 디렉터리명(selfhost)
+# 대신 이 이름이 컨테이너/네트워크/볼륨 접두사가 된다(worldtyping_wt-data 등). 주 앱 컨테이너는
+# container_name으로 정확히 `worldtyping`, 나머지는 `worldtyping-<역할>`로 docker ps에서 식별된다.
+name: worldtyping
 
 services:
   # -------------------------------------------------------------------------
@@ -14,6 +19,7 @@ services:
   # 127.0.0.1에만 바인딩 — 외부 비공개, 공개 노출은 WT-HOST-02의 cloudflared 터널을 통해서만.
   # -------------------------------------------------------------------------
   app:
+    container_name: worldtyping
     build:
       context: ../..
       dockerfile: tooling/selfhost/Dockerfile
@@ -47,6 +53,7 @@ services:
   # cloudflared/config.yml(실 UUID·ingress)과 cert.pem/credentials json은 HOST-02 산출물.
   # -------------------------------------------------------------------------
   cloudflared:
+    container_name: worldtyping-cloudflared
     image: cloudflare/cloudflared:2025.8.1
     command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
     restart: unless-stopped
@@ -70,6 +77,7 @@ services:
   # `apk add curl`로 curl도 쉽게 얹을 수 있어 이쪽을 썼다 — crond 동작은 동일하다.
   # -------------------------------------------------------------------------
   cron-ping:
+    container_name: worldtyping-cron-ping
     image: alpine:3.20
     restart: unless-stopped
     environment:
@@ -90,6 +98,7 @@ services:
   # (backup.sh 참고). 수동 1회 실행: `docker compose exec backup /backup.sh`.
   # -------------------------------------------------------------------------
   backup:
+    container_name: worldtyping-backup
     image: alpine:3.20
     restart: unless-stopped
     environment:
@@ -127,6 +136,7 @@ services:
   # 이 마운트를 받도록 이 서비스 하나로 한정한다(app/cron-ping/backup은 소켓을 받지 않는다).
   # -------------------------------------------------------------------------
   autoheal:
+    container_name: worldtyping-autoheal
     image: willfarrell/autoheal
     restart: unless-stopped
     environment:

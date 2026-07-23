@@ -9,6 +9,7 @@
   "packageManager": "pnpm@10.21.0",
   "scripts": {
     "build:data": "tsx tooling/scripts/build-data.ts",
+    "build:flags": "node tooling/scripts/build-flags.mjs",
     "build:og-fonts": "node tooling/scripts/build-og-fonts.mjs",
     "build:web-fonts": "node tooling/scripts/build-web-fonts.mjs",
     "build:moderation-snapshot": "tsx tooling/scripts/build-moderation-snapshot.ts",
@@ -29,6 +30,7 @@
     "d3-geo": "^3.1.1",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.31.0",
+    "flag-icons": "^7.5.0",
     "lighthouse": "^13.4.1",
     "pretendard": "1.3.9",
     "subset-font": "2.5.0",

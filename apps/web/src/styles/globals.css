@@ -2254,8 +2254,11 @@
   opacity: 0.45;
   font-style: italic;
 }
+/* WT-DC-05(⑤): 상대 완주 시 gold(--grade-s) fill 제거 → 디자인대로 blue(--grade-b, 기본 fill색)
+   유지. 완주 1위 구분은 왕관(rank===1, .wt-opponent-track__crown)이 담당한다(OpponentTracks.tsx
+   시맨틱 불변 — rAF/왕관/봇/grace/left/miss 전부 보존). */
 .wt-opponent-track--finished .wt-opponent-track__fill {
-  background: var(--grade-s);
+  background: var(--grade-b);
 }
 .wt-opponent-track--miss {
   animation: wt-opponent-shake 500ms ease-in-out;
@@ -2362,6 +2365,269 @@
   color: var(--grade-d);
   border-color: color-mix(in srgb, var(--grade-d) 45%, transparent);
   background: color-mix(in srgb, var(--grade-d) 12%, transparent);
+}
+
+/* ── WT-DC-05 ── S11 멀티 레이스 정합(디자인 정본 L399~525) ──────────────────────────────
+   ① 퀵매치 매칭 화면 / ② race variant 레이아웃 스코프 / ③ 카운트다운 오버레이 / ④ 결과 정합.
+   전부 멀티 전용 — 싱글([data-variant='single'])·기본 흐름 무영향. 색은 tokens 변수만(딤 스크림
+   rgba·포토피니시 콘솔 텍스트 #f8fafc는 WT-DC-04 전례의 명시 예외 승계). 입장/연속 애니는
+   :root[data-reduced] + @media(prefers-reduced-motion) 양쪽 정지(§7.3). */
+
+/* ① 퀵매치 매칭 화면(LobbyPage, 디자인 L400~414) — 풀스크린 세로 중앙 스택. */
+.wt-lobby-matching {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem; /* 14px */
+  padding: 2rem;
+  text-align: center;
+}
+.wt-lobby-matching__title {
+  margin: 0;
+  font-size: 1.375rem; /* 22px/800 */
+  font-weight: 800;
+}
+.wt-lobby-matching__eta {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.wt-lobby-matching__cancel {
+  margin-top: 0.375rem;
+  display: inline-flex;
+  align-items: center;
+  height: 2.375rem; /* 38px */
+  padding: 0 1.125rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ② race variant 레이아웃(GameView[data-variant='race'], 디자인 L417~470) — 세로 중앙 스택:
+   트랙 패널(640) → 라운드 헤더 밴드(appbar 카드 + 하드캡 칩) → 스트립(r22). 부유 대시보드는
+   디자인 S11에 없어 숨긴다(요소는 DOM 유지 — testid 보존). 싱글 3밴드는 무변경. */
+.wt-game-view[data-variant='race'] {
+  min-height: 100vh;
+  justify-content: center;
+  gap: 0.875rem; /* 14px — 디자인 카드 간격 */
+  padding: 1.5rem 1rem;
+  box-sizing: border-box;
+}
+/* 라운드 헤더 카드(디자인 L432, radius 14) — 앱바를 640 중앙 카드로(하단 라인 대신 전체 보더). */
+.wt-game-view[data-variant='race'] .wt-appbar-game {
+  width: 100%;
+  max-width: 40rem; /* 640px */
+  margin: 0 auto;
+  border: 1px solid var(--map-border);
+  border-radius: 14px;
+}
+/* 진행 레일 max 300(디자인 L436) + 다음국 미리보기 숨김(디자인 헤더엔 rail+count만). */
+.wt-game-view[data-variant='race'] .wt-progress-line__rail {
+  max-width: 18.75rem; /* 300px */
+}
+.wt-game-view[data-variant='race'] .wt-progress-line__next {
+  display: none;
+}
+/* 하드캡 칩 이설 슬롯 — 640 밴드 우측 정렬(디자인 헤더 우측). 음수 마진으로 헤더에 붙인다. */
+.wt-race-hardcap-slot {
+  width: 100%;
+  max-width: 40rem;
+  margin: -0.35rem auto 0;
+  display: flex;
+  justify-content: flex-end;
+}
+.wt-game-view[data-variant='race'] .wt-race-hardcap {
+  margin-top: 0;
+}
+/* 부유 대시보드(CpmDial+비행시간) 숨김 — 디자인 S11 레이스엔 없다(DOM엔 남아 testid 보존). */
+.wt-game-view[data-variant='race'] .wt-game-view__stage {
+  display: none;
+}
+/* 스트립 r22 래퍼(디자인 L445) — 640 중앙, radius 22. 내부 바(r28)·프롬프트·게이지는 불변. */
+.wt-game-view[data-variant='race'] .wt-strip {
+  width: 100%;
+  max-width: 40rem;
+  margin: 0 auto;
+  border-radius: 22px;
+}
+
+/* ③ 레이스 카운트다운 오버레이(RaceView, 디자인 L471~478) — WT-DC-04 싱글 방식과 동일: 전체화면
+   딤 스크림 + 92px 숫자, 숫자색만 파랑(--grade-b). pointer-events:none(입력 포커스 유지). */
+.wt-race-countdown {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem; /* 12px */
+  pointer-events: none;
+  animation: wt-intro-fade 350ms ease-out; /* = 디자인 ttFadeUp 350ms */
+}
+.wt-race-countdown__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.45); /* 리드 확정 딤(WT-DC-04 전례 — 테마무관 예외) */
+  animation: wt-scrim-fade 300ms ease-out;
+}
+.wt-race-countdown__box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1rem 1.75rem;
+  border-radius: var(--radius-card);
+  text-align: center;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-float);
+}
+.wt-race-countdown__title {
+  margin: 0;
+  font-size: clamp(1.375rem, 3.5vw, 1.875rem); /* 22~30px */
+  font-weight: 800;
+}
+.wt-race-countdown__sub {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+.wt-race-countdown__num {
+  position: relative;
+  font-size: 5.75rem; /* 92px */
+  font-weight: 800;
+  line-height: 1;
+  color: var(--grade-b); /* = 디자인 #3b82f6 */
+  text-shadow: 0 2px 12px rgb(255 255 255 / 0.8); /* 딤 위 대비(WT-DC-04 숫자와 동일) */
+  font-variant-numeric: tabular-nums;
+}
+:root[data-reduced] .wt-race-countdown,
+:root[data-reduced] .wt-race-countdown__scrim {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-race-countdown,
+  .wt-race-countdown__scrim {
+    animation: none;
+  }
+}
+
+/* ④ 레이스 결과 정합(RaceResult, 디자인 L486~522) — 순위 pill·착륙 활주로·포토피니시·축포.
+   기존 순위표(table)·리매치·지연 뱃지는 불변(§6.6 서버 값). */
+.wt-race-result__confetti {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 30;
+}
+.wt-race-result__title {
+  animation: wt-intro-fade 300ms ease-out; /* = 디자인 ttFadeUp 300ms */
+}
+/* 순위 pill(디자인 L491, amber) — slideUp 420ms = 기존 wt-result-slide-in(=ttSlideUp) 재사용. */
+.wt-race-result__rank-pill {
+  margin: 0;
+  padding: 0.5rem 1.125rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--grade-s) 25%, var(--surface));
+  border: 1.5px solid var(--grade-s);
+  color: color-mix(in srgb, var(--grade-s) 45%, black); /* 대비 보정(tokens.css continent-*-text와 동일 기법) */
+  font-weight: 800;
+  font-size: 1rem;
+  animation: wt-result-slide-in 420ms ease-out;
+}
+/* 착륙 활주로 카드(디자인 L493~497, 520×62) — ✈는 RaceResult가 WAAPI 1600ms로 구동. */
+.wt-race-result__runway {
+  position: relative;
+  width: 100%;
+  max-width: 32.5rem; /* 520px */
+  height: 3.875rem; /* 62px */
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.wt-race-result__runway-line {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  top: 68%;
+  border-top: 2px dashed var(--map-border);
+}
+.wt-race-result__runway-pad {
+  position: absolute;
+  right: 6%;
+  top: 62%;
+  width: 2.125rem;
+  height: 0.3125rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+.wt-race-result__runway-plane {
+  position: absolute;
+  left: 0;
+  top: 10%;
+  font-size: 1.5rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.25));
+}
+/* 포토피니시 다크 카드(디자인 L499~506) — #f8fafc 콘솔 텍스트는 WT-DC-04 전례 예외 승계. */
+.wt-race-result__photo {
+  width: 100%;
+  max-width: 32.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-card);
+  background: var(--surface-console);
+  color: #f8fafc;
+  box-shadow: var(--shadow-float);
+  box-sizing: border-box;
+}
+.wt-race-result__photo-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--grade-s);
+}
+.wt-race-result__photo-track {
+  position: relative;
+  height: 1.625rem; /* 26px */
+}
+.wt-race-result__photo-line {
+  position: absolute;
+  right: 8%;
+  top: 0;
+  bottom: 0;
+  border-left: 2px dashed #f8fafc;
+  opacity: 0.5;
+}
+.wt-race-result__photo-me {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 0.9375rem;
+}
+.wt-race-result__photo-rival {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  font-size: 0.9375rem;
+  opacity: 0.85;
+}
+.wt-race-result__photo-tag {
+  font-size: 0.65625rem;
+  opacity: 0.8;
 }
 
 /* 대기실 내 채팅/리매치 등에서 재사용하는 필 활성 배선 — 기저 .wt-pill--active(§8, WT-UI-07)를

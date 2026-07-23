@@ -252,7 +252,7 @@ export function GameView({
 
       <GameAppBar
         engine={engine}
-        title={routeLabel}
+        title={race ? t('race.reveal.countries', { count: countryIds.length }) : routeLabel}
         continent={currentContinent}
         countryIds={countryIds}
         currentIndex={currentIndex}
@@ -263,8 +263,24 @@ export function GameView({
         bindLivesEl={bindLivesEl}
       />
 
+      {/* WT-DC-05(②): 하드캡 칩 이설 — 디자인 S11의 라운드 헤더 밴드로 옮긴다(정본 L441). 기존
+          DashboardCard(부유 대시보드) 슬롯에서 빼내(bindHardCapEl 미전달 → DashboardCard의 옵셔널
+          슬롯 미렌더, DashboardCard 소스·계약 무변경) 여기 GameView race 분기가 직접 렌더한다.
+          testid(race-hardcap / race-hardcap-time)와 bindHardCapEl 바인딩은 그대로 보존한다. 스코프
+          CSS([data-variant='race'] .wt-race-hardcap-slot)가 640px 헤더 밴드 우측에 배치한다. */}
+      {race && (
+        <div className="wt-race-hardcap-slot">
+          <div className="wt-race-hardcap" data-testid="race-hardcap">
+            <span ref={race.bindHardCapEl} data-testid="race-hardcap-time" />
+          </div>
+        </div>
+      )}
+
       <div className="wt-game-view__stage">
-        <DashboardCard engine={engine} bindTimerEl={bindTimerEl} bindHardCapEl={race?.bindHardCapEl} />
+        {/* WT-DC-05(②): race variant에선 하드캡을 위 헤더 밴드로 이설했으므로 대시보드엔 넘기지
+            않는다(디자인 S11엔 부유 대시보드 없음 — 스테이지 자체를 스코프 CSS로 숨긴다). 싱글은
+            원래대로 bindHardCapEl 미전달(undefined)이라 동작 불변. */}
+        <DashboardCard engine={engine} bindTimerEl={bindTimerEl} />
         {/* 온보딩 팁은 싱글 전용(§11.1) — 레이스 중엔 상대와의 실시간 대결에 방해된다. */}
         {!race && <FirstRunTips controller={controller} currentIndex={currentIndex} />}
       </div>

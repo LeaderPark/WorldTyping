@@ -53,19 +53,37 @@ function OpponentTrack({ player, total }: { player: RoomPlayer; total: number })
 
   // 부드러운 이동(rAF + DOM 직접 갱신 — React state 미경유). 목표 = idx + ksPct/100.
   const fillRef = useRef<HTMLDivElement | null>(null);
+  // 이동체 노브(WT-UI-08) — fill과 같은 rAF 틱에서 transform만 직접 쓴다(레이아웃 프로퍼티 미사용).
+  // .wt-opponent-track__bar는 overflow:hidden이라(도착 지점에서 노브 절반이 잘림) 그 형제인 이
+  // .track 래퍼 위에 절대배치로 얹는다. 트랙 폭(px)은 프레임마다 읽지 않고 마운트/리사이즈 시에만
+  // 측정해 캐시한다 — 매 프레임 레이아웃 읽기(강제 리플로우) 없이 순수 transform 쓰기만 남긴다.
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const knobRef = useRef<HTMLDivElement | null>(null);
+  const trackWidthRef = useRef(0);
   const posRef = useRef(idx);
   const targetRef = useRef(idx + ksPct / 100);
   useEffect(() => {
     targetRef.current = idx + ksPct / 100;
   }, [idx, ksPct]);
   useEffect(() => {
+    const measure = () => {
+      trackWidthRef.current = trackRef.current?.clientWidth ?? 0;
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  useEffect(() => {
     let raf: number;
     const tick = () => {
       posRef.current += (targetRef.current - posRef.current) * SMOOTHING_FACTOR;
+      const pct = total > 0 ? Math.max(0, Math.min(100, (posRef.current / total) * 100)) : 0;
       const el = fillRef.current;
-      if (el) {
-        const pct = total > 0 ? Math.max(0, Math.min(100, (posRef.current / total) * 100)) : 0;
-        el.style.width = `${pct}%`;
+      if (el) el.style.width = `${pct}%`;
+      const knob = knobRef.current;
+      if (knob) {
+        const x = (pct / 100) * trackWidthRef.current;
+        knob.style.transform = `translate(${x}px, -50%)`;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -107,8 +125,13 @@ function OpponentTrack({ player, total }: { player: RoomPlayer; total: number })
         {player.nickname}
         {player.isBot && <span className="wt-opponent-track__bot-badge">{t('room.player.bot')}</span>}
       </span>
-      <div className="wt-opponent-track__bar" aria-hidden="true">
-        <div ref={fillRef} className="wt-opponent-track__fill" />
+      <div ref={trackRef} className="wt-opponent-track__track" aria-hidden="true">
+        <div className="wt-opponent-track__bar">
+          <div ref={fillRef} className="wt-opponent-track__fill" />
+        </div>
+        <div ref={knobRef} className={`wt-opponent-track__knob${isLeader ? ' wt-opponent-track__knob--leader' : ''}`}>
+          ✈
+        </div>
       </div>
       <span className="wt-opponent-track__meta" data-testid={`opponent-track-meta-${player.playerId}`}>
         {t('game.progress', { current: Math.min(idx, total), total })}

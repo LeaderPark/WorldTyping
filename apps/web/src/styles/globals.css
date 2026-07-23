@@ -1348,16 +1348,19 @@
   text-decoration: none;
   color: inherit;
 }
+/* WT-DC-03: 디자인 정본(L140~152) 모드 카드 타이포 — 제목 17px·메타 14.5px·진행도 13px로
+   정밀 정합(이 클래스는 S3 ModeSelectPage 전용 — S1 홈은 WT-UI-04에서 .wt-home__menu-row로
+   이관해 더 이상 참조하지 않는다). */
 .wt-mode-card__title {
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.0625rem; /* 17px */
 }
 .wt-mode-card__meta {
   opacity: 0.8;
-  font-size: 0.9rem;
+  font-size: 0.90625rem; /* 14.5px */
 }
 .wt-mode-card__progress {
-  font-size: 0.8rem;
+  font-size: 0.8125rem; /* 13px */
   opacity: 0.7;
 }
 
@@ -1368,6 +1371,18 @@
   flex-direction: column;
   gap: 1.5rem;
   padding: 1.5rem;
+}
+/* ── WT-DC-03: 디자인 정본(L128 S3·L159 S4) 컨테이너 상한 폭 + 중앙 정렬. 기존 padding(위
+   1.5rem)이 좌우 여백을 이미 보장하므로 이 폭 미만 뷰포트에서는 max-width가 아무 영향이
+   없다 — 모바일 오버플로 리스크 없음(넓은 데스크톱 뷰포트에서 콘텐츠가 무한히 늘어지지
+   않게 상한만 추가). */
+.wt-mode-select {
+  max-width: 60rem; /* 디자인 정본 960px */
+  margin: 0 auto;
+}
+.wt-track-select {
+  max-width: 53.75rem; /* 디자인 정본 860px */
+  margin: 0 auto;
 }
 .wt-mode-select__header,
 .wt-track-select__header {
@@ -1384,7 +1399,8 @@
    내부 배치를 맡고, 여기서는 그리드 배치만 담당한다. */
 .wt-track-select__list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  /* WT-DC-03: 디자인 정본(L170) minmax(104px,1fr) — 현행 5.5rem(88px)에서 6.5rem(104px)로. */
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
   gap: 1.25rem 0.75rem;
   list-style: none;
   padding: 0;
@@ -1406,7 +1422,8 @@
 }
 .wt-track-item__best {
   opacity: 0.75;
-  font-size: 0.9rem;
+  /* WT-DC-03: 디자인 정본(L176) 12.5px — 현행 0.9rem(14.4px)에서 0.78125rem(12.5px)로. */
+  font-size: 0.78125rem;
 }
 /* [WT-UI-05] .wt-pill과 함께 쓴다(TrackSelectPage) — 그리드 칩 안에 들어가므로 전역 .wt-pill의
    46px 고정 높이를 축소한다. 결합 셀렉터(.wt-pill.wt-track-item__cta)로 명시도를 올려 파일
@@ -1467,7 +1484,10 @@
 .wt-track-select__console {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.25rem; /* 디자인 정본(L164) 20px — 전역 .wt-console과 이미 일치, 확인만 */
+  /* WT-DC-03: 디자인 정본(L164) padding: 18px 20px 22px — 전역 .wt-console(1rem 1.25rem =
+     16px 20px)보다 상하가 더 크다. 결합 셀렉터라 소스 순서 무관하게 전역 규칙을 이긴다. */
+  padding: 1.125rem 1.25rem 1.375rem;
 }
 .wt-track-select__console-head {
   display: flex;

@@ -21,6 +21,10 @@
   "mode.worldtour.title": "세계일주",
   "mode.worldtour.desc": "50개국 마라톤",
   "mode.worldtour.progress": "최고: {location} 도달",
+  "mode.hero.kicker": "TYPETRIP · 싱글플레이",
+  "mode.hero.headline": "오늘은 어디로 떠날까?",
+  "mode.hero.subhead": "노선을 고르고 여권에 도장을 채워보세요",
+  "mode.hero.rankCta": "랭킹 보기 →",
 
   "continent.asia": "아시아",
   "continent.europe": "유럽",
@@ -215,6 +219,7 @@
   "lang.select.hint": "나중에 언제든 바꿀 수 있어요",
 
   "route.select.title": "노선을 고르세요",
+  "route.console.title": "여행 설정",
   "route.list.name": "{continent}선({count})",
   "route.color.red": "레드",
   "route.color.blue": "블루",

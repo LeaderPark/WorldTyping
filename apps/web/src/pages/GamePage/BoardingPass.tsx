@@ -36,6 +36,15 @@ export interface BoardingPassProps {
  *  연출을 화면에 완주시킨다. */
 const PUNCH_MS = 200;
 
+/** 티켓 억센트 색(순수 장식 — 판정/점수와 무관, 대륙은 노선색, 그 외는 등급색으로 대체). 클래스는
+ *  globals.css `.wt-boarding__card--*`(WT-UI-05)가 `--wt-boarding-accent`를 설정한다. */
+function ticketAccentClass(mode: GameMode, trackId: string): string {
+  if (mode === 'continent') return `wt-boarding__card--${trackId}`;
+  if (mode === 'worldtour') return 'wt-boarding__card--worldtour';
+  if (mode === 'daily') return 'wt-boarding__card--daily';
+  return 'wt-boarding__card--tier'; // tier · race(이 화면 도달 불가 — 안전 폴백)
+}
+
 export function BoardingPass({
   mode,
   trackId,
@@ -97,6 +106,10 @@ export function BoardingPass({
   const ruleType = t(ruleTypeKey(mode));
   const displayName = nickname || `GUEST_${guestId.slice(0, 4).toUpperCase()}`;
 
+  // 기존 testid/속성/핸들러(§7.2 동기 focus 계약 포함)는 전부 그대로 — 클래스 조합만 티켓
+  // 억센트(trackId별 노선색)를 더한다.
+  const cardClassName = `wt-boarding__card ${ticketAccentClass(mode, trackId)}${punching ? ' wt-boarding__card--punch' : ''}${locked ? ' wt-boarding__card--locked' : ''}`;
+
   return (
     <div className="wt-boarding" data-testid="boarding-pass">
       {showLongModeWarning && (
@@ -113,7 +126,7 @@ export function BoardingPass({
         </p>
       )}
       <div
-        className={`wt-boarding__card${punching ? ' wt-boarding__card--punch' : ''}${locked ? ' wt-boarding__card--locked' : ''}`}
+        className={cardClassName}
         role="button"
         tabIndex={locked ? -1 : 0}
         aria-disabled={locked}
@@ -123,16 +136,29 @@ export function BoardingPass({
         onClick={depart}
         onKeyDown={onKeyDown}
       >
-        <p className="wt-boarding__label">{t('boarding.label')}</p>
-        <p className="wt-boarding__route" data-testid="boarding-route">
-          {routeLabel}
-        </p>
-        <p className="wt-boarding__count">{t('boarding.countries', { count: countries.length })}</p>
-        <p className="wt-boarding__passenger">{t('boarding.passenger', { nickname: displayName })}</p>
-        <p className="wt-boarding__rules">
-          {t('boarding.rules', { ruleType, parTime: formatMMSS(parMs) })}
-        </p>
-        <p className="wt-boarding__cta">{locked ? t('boarding.connecting') : t('boarding.cta')}</p>
+        {/* 노선색 억센트 바 — 순수 장식(§9.3 코스메틱과 동일 성격), 정보 없음. */}
+        <span className="wt-boarding__accent" aria-hidden="true" />
+
+        <div className="wt-boarding__main">
+          <p className="wt-boarding__label">{t('boarding.label')}</p>
+          <p className="wt-boarding__route" data-testid="boarding-route">
+            {routeLabel}
+          </p>
+          <p className="wt-boarding__count">{t('boarding.countries', { count: countries.length })}</p>
+          <p className="wt-boarding__passenger">{t('boarding.passenger', { nickname: displayName })}</p>
+          <p className="wt-boarding__rules">
+            {t('boarding.rules', { ruleType, parTime: formatMMSS(parMs) })}
+          </p>
+          <p className="wt-boarding__cta">{locked ? t('boarding.connecting') : t('boarding.cta')}</p>
+        </div>
+
+        {/* 절취선 너머 티켓 스텁 — 실물 보딩패스의 계승(§10.2 "여권을 탭해서 출국하기"의 시각적
+            은유). 라벨/매수 반복 표기는 메인과 중복이라 스크린리더에서는 숨긴다. */}
+        <div className="wt-boarding__stub" aria-hidden="true">
+          <span className="wt-boarding__stub-text">{t('boarding.label')}</span>
+          <span className="wt-boarding__stub-count">{countries.length}</span>
+          <span className="wt-boarding__barcode" />
+        </div>
       </div>
 
       {/* 카드 클릭(depart) 영역 밖에 둔다 — 토글 클릭이 출국 탭으로 오인되지 않게(§9.3). */}
@@ -159,9 +185,13 @@ export function BoardingBlocked() {
   const { t } = useTranslation();
   return (
     <div className="wt-boarding" data-testid="boarding-blocked">
+      {/* 티켓 스텁/절취선 없이 본문만(WT-UI-05) — 오프라인 안내는 "출국 불가" 상태라 티켓 룩의
+          축제 분위기를 재현하지 않는다(globals.css의 --blocked 수식자가 억센트·절취선을 숨긴다). */}
       <div className="wt-boarding__card wt-boarding__card--blocked">
-        <p className="wt-boarding__label">{t('boarding.blocked.title')}</p>
-        <p className="wt-boarding__rules">{t('boarding.blocked.body')}</p>
+        <div className="wt-boarding__main">
+          <p className="wt-boarding__label">{t('boarding.blocked.title')}</p>
+          <p className="wt-boarding__rules">{t('boarding.blocked.body')}</p>
+        </div>
       </div>
     </div>
   );

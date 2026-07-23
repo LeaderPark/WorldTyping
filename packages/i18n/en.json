@@ -21,6 +21,10 @@
   "mode.worldtour.title": "World Tour",
   "mode.worldtour.desc": "50-country marathon",
   "mode.worldtour.progress": "Best: reached {location}",
+  "mode.hero.kicker": "TYPETRIP · SINGLE PLAYER",
+  "mode.hero.headline": "Where to today?",
+  "mode.hero.subhead": "Pick a route and start stamping your passport",
+  "mode.hero.rankCta": "View rankings →",
 
   "continent.asia": "Asia",
   "continent.europe": "Europe",
@@ -215,6 +219,7 @@
   "lang.select.hint": "You can always change this later",
 
   "route.select.title": "Choose a route",
+  "route.console.title": "Trip Settings",
   "route.list.name": "{continent} Line ({count})",
   "route.color.red": "Red",
   "route.color.blue": "Blue",

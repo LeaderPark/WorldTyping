@@ -12,6 +12,7 @@
 import { geoNaturalEarth1, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import type { Country, CountryId, Continent } from '@wt/shared';
+import { buildCountryFeatureBinding, featureKeyOf, type GeoFeature } from './feature-binding';
 
 /** 기준 뷰포트(고정). 리사이즈는 SVG viewBox 스케일로만 흡수한다(path 재계산 금지). */
 export const MAP_WIDTH = 960;
@@ -53,19 +54,6 @@ export interface TopologyLike {
   [k: string]: unknown;
 }
 
-interface GeoFeature {
-  id?: string | number;
-  properties?: { name?: string } | null;
-  [k: string]: unknown;
-}
-
-/** feature.id 또는 (id 부재 시) name 기반 안정적 합성 키. 무-id feature 간 키 충돌 방지. */
-function featureKeyOf(f: GeoFeature, index: number): string {
-  if (f.id !== undefined && f.id !== null && f.id !== '') return String(f.id);
-  const name = f.properties?.name;
-  return name ? `x:${name}` : `x:__${index}`;
-}
-
 /**
  * docs/03 §3.1: 기준 뷰포트에서 전 폴리곤 d를 1회 계산해 GeoIndex로 동결한다.
  * @param topology world-atlas countries-110m.json 파싱 결과
@@ -92,20 +80,9 @@ export function buildGeoIndex(topology: TopologyLike, countries: readonly Countr
     featureByKey.set(key, f);
   });
 
-  // mapFeatureId → CountryId (폴리곤 바인딩). numeric id 문자열 그대로.
-  const countryByFeatureKey = new Map<string, CountryId>();
-  for (const c of countries) {
-    if (c.mapFeatureId !== null) countryByFeatureKey.set(c.mapFeatureId, c.id);
-  }
-
-  // 코소보 수동 바인딩(02 §7c, 03 §3.1). XK가 미바인딩(null)이고 Kosovo feature가 있으면 폴리곤 연결.
-  const xk = countries.find((c) => c.id === 'XK');
-  if (xk && xk.mapFeatureId === null) {
-    const kosovoEntry = [...featureByKey.entries()].find(
-      ([, f]) => f.properties?.name === 'Kosovo',
-    );
-    if (kosovoEntry) countryByFeatureKey.set(kosovoEntry[0], 'XK');
-  }
+  // mapFeatureId → CountryId (폴리곤 바인딩) + 코소보 수동 바인딩(02 §7c). feature-binding.ts로
+  // 추출해 지구본(globe-index)과 규칙을 공유한다(D67) — 동작은 기존 인라인과 동일.
+  const countryByFeatureKey = buildCountryFeatureBinding(featureByKey, countries);
 
   // CountryId → featureKey 역인덱스(코소보 수동 바인딩 포함). O(n) 조회용.
   const keyByCountry = new Map<CountryId, string>();

@@ -12,7 +12,7 @@ import type { RunGrade, RunLang } from "../db/types";
 import { isValidShareId } from "../lib/share-id";
 import { renderShareCardPng, type ShareCardData } from "../og/render";
 import { fallbackOgPng } from "../og/fallback-og";
-import { routeLabel } from "../og/layout";
+import { OG_COLORS, routeLabel } from "../og/layout";
 import { normalizeRoomCode } from "../lib/room-code";
 import { trackShareClick } from "../lib/telemetry";
 import { logWarn } from "../lib/log";
@@ -23,6 +23,20 @@ export const share = new Hono<{ Bindings: Env }>();
 const IMMUTABLE = "public, max-age=31536000, immutable";
 /** 폴백/미존재는 짧게만 캐시(추후 발급 반영 여지) — 스크레이퍼 재요청 폭주 방지 정도. */
 const SHORT_CACHE = "public, max-age=60";
+
+/**
+ * /r/ 랜딩·404 셸의 톤을 OG 카드(og/layout.ts OG_COLORS)와 맞춘다(WT-UI-09 후속 정합 —
+ * 이 파일은 그때 다크 리터럴 #0b1220(배경)/#f8fafc(텍스트)/#38bdf8(액센트)인 채로 남아 있었다). 본문 배경/텍스트는
+ * OG_COLORS.bg0/OG_COLORS.text를 그대로 쓰고, 액센트(OG_COLORS.route = tokens.css --accent
+ * #0a84ff)는 본문 크기 텍스트·버튼 배경에 원색 그대로 쓰면 대비가 부족해(§ tooling/ci/
+ * contrast-check.ts 실측 3.65:1, 본문 기준 4.5:1 미달) globals.css .wt-pill/.wt-btn--primary와
+ * 동일한 color-mix 보정을 리터럴로 못박는다(index.html #wt-shell-gate__btn과 동일 관례):
+ *  - ACCENT_TEXT   = color-mix(in srgb, OG_COLORS.route 80%, black) — 링크 텍스트용(#086acc).
+ *  - ACCENT_BUTTON_BG = color-mix(in srgb, OG_COLORS.route 85%, black) — 흰 텍스트 버튼 배경용
+ *    (.wt-pill--active/.wt-daily-page__cta와 동일 기법, 실측 4.85:1).
+ */
+const ACCENT_TEXT = "#086acc";
+const ACCENT_BUTTON_BG = "#0970d9";
 
 interface ShareJoinRow {
   mode_key: string;
@@ -269,11 +283,11 @@ function landingShell(origin: string, shareId: string, row: ShareJoinRow): strin
     `<title>${escapeHtml(title)}</title>` +
     ogMetaTags({ title, description, image, url: shareUrl }) +
     `<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;` +
-    `background:#0b1220;color:#f8fafc;display:flex;min-height:100vh;align-items:center;justify-content:center;}` +
+    `background:${OG_COLORS.bg0};color:${OG_COLORS.text};display:flex;min-height:100vh;align-items:center;justify-content:center;}` +
     `.wt-r{max-width:680px;padding:32px;text-align:center;}` +
     `.wt-r img{max-width:100%;height:auto;border-radius:12px;}` +
-    `.wt-r a{display:inline-block;margin-top:24px;padding:14px 28px;border-radius:9999px;background:#38bdf8;` +
-    `color:#0b1220;font-weight:700;text-decoration:none;}</style></head>` +
+    `.wt-r a{display:inline-block;margin-top:24px;padding:14px 28px;border-radius:9999px;background:${ACCENT_BUTTON_BG};` +
+    `color:#fff;font-weight:700;text-decoration:none;}</style></head>` +
     `<body><div class="wt-r">` +
     `<img src="${escapeHtml(image)}" width="1200" height="630" alt="${escapeHtml(description)}" />` +
     `<div><a href="${escapeHtml(cta)}">${escapeHtml(ctaText)}</a></div>` +
@@ -292,8 +306,8 @@ function notFoundShell(origin: string): string {
     `<meta property="og:description" content="세계를 타이핑하다 · Type the world" />` +
     `<meta name="twitter:card" content="summary" />` +
     `<style>body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;` +
-    `background:#0b1220;color:#f8fafc;display:flex;min-height:100vh;align-items:center;justify-content:center;}` +
-    `a{color:#38bdf8;}</style></head>` +
+    `background:${OG_COLORS.bg0};color:${OG_COLORS.text};display:flex;min-height:100vh;align-items:center;justify-content:center;}` +
+    `a{color:${ACCENT_TEXT};}</style></head>` +
     `<body><div style="text-align:center;padding:32px;">` +
     `<h1>TypeTrip</h1><p>이 기록을 찾을 수 없어요 · This record was not found.</p>` +
     `<p><a href="${escapeHtml(cta)}">홈으로 · Go home</a></p>` +

@@ -53,7 +53,9 @@ export function AppShell() {
   }, [fontScale]);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-900 dark:text-white">
+    // WT-UI-01(D57): bg-white/dark:bg-slate-900 하드코딩 → --bg/--text 시맨틱 토큰(tailwind.config.ts
+    // var() 매핑). 토큰 자체가 [data-theme='dark']에서 반전되므로 dark: 변형이 더 이상 필요 없다.
+    <div className="min-h-screen bg-bg text-text">
       {/* WT-M6-06: 라우트별 SEO 메타(title/description/OG/Twitter/hreflang) — 시각 출력 없음. */}
       <RouteMeta />
       {/* WT-M6-06: KV config:banner 장애 배너(docs/06 §10-4). */}

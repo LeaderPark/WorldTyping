@@ -2,14 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── 셀프호스트 폰트 (docs/03 §8.2, WT-M5-01) ──
-   JetBrains Mono만 self-host(tooling/scripts/copy-fonts.mjs가 build/dev 전에 이 파일을
-   apps/web/public/fonts/에 채워 넣는다 — 파일 부재 시에도 이 규칙 자체는 안전하다, 브라우저가
-   src 로드 실패 시 tailwind.config.ts의 폴백 스택으로 자연히 넘어간다).
-   Pretendard Variable은 이번 태스크 범위에서 제외(최종 보고 escalations) — @font-face 없이
-   기존 시스템 폰트 폴백 스택 그대로 둔다. font-display: optional — 프롬프트 렌더 중 폰트
-   스왑에 의한 레이아웃 튐을 금지하는 §8.2 원문 그대로(캐시에 없으면 이번 페인트는 폴백 폰트로
-   확정하고, 이후 방문부터 적용). */
+/* ── 셀프호스트 폰트 (docs/03 §8.2, docs/00 §11-D58, WT-M5-01 + WT-UI-01) ──
+   JetBrains Mono + Pretendard 서브셋(400/700) 둘 다 self-host.
+
+   [D58, WT-UI-01 갱신] 이전(WT-M5-01)에는 npm 레지스트리에 예산 내 한글 서브셋 Pretendard가
+   없어(pretendard 패키지는 미서브셋 2.0MB, @fontsource/pretendard는 한글 서브셋 자체가 없음)
+   웹 UI에서 Pretendard를 제외했다. D58로 이 결정을 뒤집는다 — M6-02(OG 렌더러)에서 이미 구축한
+   subset-font(harfbuzzjs) 파이프라인을 웹용으로 확장(tooling/scripts/build-web-fonts.mjs)해
+   KS 완성형 한글 + 라틴/숫자/기호만 남긴 woff2(400/700)를 결정적으로 생성한다. 산출물은
+   apps/web/public/fonts/pretendard-subset-{400,700}.woff2(커밋, 재실행으로만 갱신 — 손편집 금지).
+
+   Pretendard ⓒ Kil Hyung-jin — SIL Open Font License 1.1(OFL-1.1) 배포.
+   원본: https://github.com/orioncactus/pretendard (LICENSE: OFL-1.1, npm "pretendard"
+   패키지 동봉). 서브셋 재배포는 OFL 4조(임베딩/서브셋 허용, 폰트명 변경 없이 재배포 가능)를
+   따른다 — 폰트 패밀리명 "Pretendard" 그대로 유지.
+
+   JetBrains Mono는 copy-fonts.mjs가 build/dev 전에 이 파일을 apps/web/public/fonts/에 채워
+   넣는다 — 파일 부재 시에도 이 규칙 자체는 안전하다(브라우저가 src 로드 실패 시
+   tailwind.config.ts의 폴백 스택으로 자연히 넘어간다). font-display: optional — 프롬프트 렌더
+   중 폰트 스왑에 의한 레이아웃 튐을 금지하는 §8.2 원문 그대로(캐시에 없으면 이번 페인트는 폴백
+   폰트로 확정하고, 이후 방문부터 적용). */
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/pretendard-subset-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: optional;
+}
+@font-face {
+  font-family: "Pretendard";
+  src: url("/fonts/pretendard-subset-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: optional;
+}
 @font-face {
   font-family: "JetBrains Mono";
   src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
@@ -96,7 +122,10 @@
   padding: 0.5rem 1rem;
   border-radius: 999px;
   border: 1px solid var(--map-border);
-  background: color-mix(in srgb, var(--map-idle) 80%, transparent);
+  /* WT-UI-01: color-mix(--map-idle …)는 --map-idle이 라이트에서 흰색(#fff)으로 재정의되며 이
+     오버레이 배경의 의도(맵 위 반투명 칩)와 충돌해 탁색 회귀를 만든다 — 일반 UI 칩 배경은
+     --surface 계열로 치환(D50/구현 세부 지시 3). */
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   color: inherit;
   font-weight: 700;
 }
@@ -357,7 +386,8 @@
   padding: 1.5rem 2rem;
   border-radius: 0.75rem;
   border: 1px solid var(--map-border);
-  background: color-mix(in srgb, var(--map-idle) 60%, transparent);
+  /* WT-UI-01: --surface 계열로 치환(구현 세부 지시 3) — 회귀 사유는 .wt-mobile-skip 주석 참조. */
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
   backdrop-filter: blur(4px);
   transition: transform 200ms ease-out, opacity 200ms ease-out;
 }
@@ -405,7 +435,8 @@
   padding: 1.5rem 2rem;
   border-radius: 0.75rem;
   border: 1px solid var(--map-border);
-  background: color-mix(in srgb, var(--map-idle) 70%, transparent);
+  /* WT-UI-01: --surface 계열로 치환(구현 세부 지시 3) — 회귀 사유는 .wt-mobile-skip 주석 참조. */
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   animation: wt-result-slide-in 400ms ease-out;
 }
 @keyframes wt-result-slide-in {
@@ -507,7 +538,8 @@
   min-width: 18rem;
   padding: 1.5rem;
   border-radius: 0.75rem;
-  background: var(--map-idle);
+  /* WT-UI-01: 진짜 모달 박스(뒤 스크림 있음) — 불투명 --surface(구현 세부 지시 3). */
+  background: var(--surface);
 }
 .wt-confirm-leave__actions {
   display: flex;
@@ -600,7 +632,8 @@
   padding: 1.25rem;
   border-radius: 0.75rem;
   border: 1px solid var(--map-border);
-  background: color-mix(in srgb, var(--map-idle) 60%, transparent);
+  /* WT-UI-01: --surface 계열로 치환(구현 세부 지시 3) — 회귀 사유는 .wt-mobile-skip 주석 참조. */
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
   text-decoration: none;
   color: inherit;
 }
@@ -728,7 +761,8 @@
   padding: 1rem;
   border-radius: 0.75rem;
   border: 1px solid var(--map-border);
-  background: color-mix(in srgb, var(--map-idle) 55%, transparent);
+  /* WT-UI-01: --surface 계열로 치환(구현 세부 지시 3) — 회귀 사유는 .wt-mobile-skip 주석 참조. */
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
 }
 .wt-lobby__row {
   display: flex;
@@ -944,7 +978,8 @@
   min-width: 18rem;
   padding: 1.5rem;
   border-radius: 0.75rem;
-  background: var(--map-idle);
+  /* WT-UI-01: 진짜 모달 박스(뒤 스크림 있음) — 불투명 --surface(구현 세부 지시 3). */
+  background: var(--surface);
   text-align: center;
 }
 .wt-bot-offer__badge {
@@ -960,4 +995,189 @@
   display: flex;
   gap: 0.75rem;
   margin-top: 0.5rem;
+}
+
+/* ── 전역 컴포넌트 클래스(WT-UI-01 §2.3) ──────────────────────────────────
+   spec: 이 태스크 지시문 §2.3. 라이트(#f4f5ef 크림) 기본 테마의 공용 셸/카드/행/필/토큰/콘솔/
+   대시보드/아이콘 타일/킥커 — tokens.css의 시맨틱 토큰만 참조하므로 다크 토글에서도 자동
+   대응한다(별도 dark: 규칙 불필요, --*는 [data-theme='dark']에서 이미 반전됨). 화면 배선(어느
+   페이지가 이 클래스를 실제로 쓰는지)은 후속 태스크 소관 — 여기서는 클래스 정의만 제공한다. */
+
+/* 상단 앱바: 흰 바 + blur + 하단 보더. sticky로 스크롤 시 고정(콘텐츠 위 레이어). */
+.wt-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 기본 카드: surface + radius-card + shadow-card. */
+.wt-card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+}
+
+/* 메뉴 행: 좌 4px 색 바(::before, 기본 --accent — 소비처가 --wt-menu-row-accent로 대륙색 등을
+   인라인 지정) + 44px 아이콘 타일(.wt-icon-tile 조합 사용) + 킥커/제목/카피 + 우측 셰브런. */
+.wt-menu-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem 0.875rem 1.25rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  color: var(--text);
+}
+.wt-menu-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.6rem;
+  bottom: 0.6rem;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--wt-menu-row-accent, var(--accent));
+}
+.wt-menu-row__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.wt-menu-row__title {
+  font-size: 1.25rem; /* 20px */
+  font-weight: 700;
+  line-height: 1.25;
+}
+.wt-menu-row__copy {
+  font-size: 0.9375rem; /* 15px 본문 */
+  color: var(--text-muted);
+}
+.wt-menu-row__chevron {
+  flex: none;
+  color: var(--text-muted);
+}
+
+/* 필: accent 텍스트/보더 + 흰 pill, 높이 46px(§2.1 --radius-pill 참조 반경).
+   [대비 메모] --accent(#0a84ff) 원색은 --surface(#fff) 위에서 실측 3.65:1로 WCAG AA 본문
+   텍스트(4.5:1)에 못 미친다(large text 3:1은 통과). WT-M5-02(.wt-btn--primary)와 동일한
+   기법으로 텍스트만 color-mix(accent 80%, black)로 살짝 어둡게 보정(실측 5.32:1) — 보더는
+   텍스트가 아니므로(WCAG 1.4.11 비텍스트 3:1) 원색 그대로 둔다. */
+.wt-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 46px;
+  padding: 0 1.25rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--accent);
+  background: var(--surface);
+  color: color-mix(in srgb, var(--accent) 80%, black);
+  font-weight: 700;
+  font-size: 0.9375rem; /* 15px */
+  white-space: nowrap;
+}
+
+/* 토큰: 원 배지 그리드 아이템(스탬프/업적 등 후속 태스크가 채울 그리드 슬롯). */
+.wt-token {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  text-align: center;
+}
+.wt-token__circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  font-size: 1.5rem;
+}
+.wt-token__label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.wt-token--locked .wt-token__circle {
+  opacity: 0.4;
+}
+
+/* 콘솔: surface-console 다크 카드 — 테마 무관 "항상 다크"(--surface-console은 라이트/다크
+   동일값). 이 카드 안 텍스트는 시맨틱 --text(테마에 따라 반전)를 쓰면 라이트에서 거의 검정이
+   되어 다크 배경 위에서 안 보인다 — 그래서 고정 밝은 텍스트색을 직접 지정한다. */
+.wt-console {
+  background: var(--surface-console);
+  color: #f8fafc;
+  border-radius: var(--radius-card);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-card);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 대시보드: 부유 흰 카드 + shadow-float(그림자가 더 크고 진함 — 페이지 위에 "뜬" 느낌). */
+.wt-dashboard {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+  padding: 1.25rem;
+  color: var(--text);
+}
+
+/* 아이콘 타일: 44px 정사각 타일(메뉴 행·대시보드 등에서 재사용). */
+.wt-icon-tile {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-tile);
+  background: var(--surface-sunken);
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+/* 킥커: 11px/700/tracking .18em, 기본은 --text-muted. 대륙색 텍스트가 필요하면 수정자 클래스로
+   --continent-*-text 토큰을 사용한다(원색 직접 사용 금지 — D50). */
+.wt-kicker {
+  display: inline-block;
+  font-size: 0.6875rem; /* 11px */
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.wt-kicker--asia {
+  color: var(--continent-asia-text);
+}
+.wt-kicker--europe {
+  color: var(--continent-europe-text);
+}
+.wt-kicker--africa {
+  color: var(--continent-africa-text);
+}
+.wt-kicker--north-america {
+  color: var(--continent-north-america-text);
+}
+.wt-kicker--south-america {
+  color: var(--continent-south-america-text);
+}
+.wt-kicker--oceania {
+  color: var(--continent-oceania-text);
 }

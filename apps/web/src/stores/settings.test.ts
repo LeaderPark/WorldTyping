@@ -43,9 +43,9 @@ describe('settings store', () => {
     expect(localStorage.getItem('wt:theme')).toBe('light');
   });
 
-  it('defaults theme to dark (docs/01 §13.2)', async () => {
+  it('defaults theme to light (docs/00 §11-D57 — docs/01 §13.2 "다크 기본" 개정)', async () => {
     const { useSettingsStore } = await import('./settings');
-    expect(useSettingsStore.getState().theme).toBe('dark');
+    expect(useSettingsStore.getState().theme).toBe('light');
   });
 
   it('setVolume merges partial updates', async () => {

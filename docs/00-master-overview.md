@@ -448,6 +448,8 @@ flowchart LR
 | D54 | 부하 테스트 레이트리밋 우회 | 06 §10-5: "세션 발급 IP 상한 우회" 요구하나 메커니즘 미정의 | **KV `config:loadtest` 확정**: 존재 시 mw/ratelimit.ts 전 스코프 우회(부하 테스트 창 전용, 종료 즉시 delete 원복 — 절차는 tooling/ops/launch-checklist.md). 04 §6.5 LIMITS 표는 이 예외를 포함해 읽는다 (M6 확정, 2026-07-22) |
 | D55 | LIMITS.leaderboard 배선 | 04 §6.5: lb 60/60s/IP 적용 서술 ↔ 구현: 정의만 있고 라우트 미배선(M6-05 감사에서 발견) | **배선 확정**: GET /lb·/lb/me에 rateLimit('leaderboard') 적용(keyset D1 경로 보호). 부하 테스트는 D54 플래그로 우회되므로 충돌 없음 (M6 확정) |
 | D56 | 런칭 마감 세부 3건 | ① 06 §10-2가 /daily 독립 라우트 전제 ↔ 실 플레이는 /play/daily/:date ② robots의 /api/ 처리 모호 ③ sitemap 도메인 미확정(Q1) | **일괄 확정**: ① `/daily`는 순수 SEO 랜딩(오늘 챌린지 CTA → /play/daily/:date로 유도)으로 신설 ② robots.txt는 /api/·/multi/* Disallow(07 블록 지시 채택) ③ sitemap `<loc>`은 typetrip.example(RFC 2606) 플레이스홀더 — 도메인 확정 시 치환(절차는 launch-checklist) (M6 확정, 2026-07-23) |
+| D57 | 기본 테마 라이트/다크 | 01 §13.2: "다크 모드 기본, 라이트는 옵션" ↔ WT-UI-01: 라이트(크림 #f4f5ef) 기본 전환 지시 | **기본 테마 라이트(:root) 확정**: 다크는 `[data-theme='dark']` 옵션으로 강등(삭제 아님 — 설정 토글 동작 보존, tokens.css 전 시맨틱 토큰이 다크 대응값을 유지). 01 §13.2 "다크 기본" 서술은 이 결정으로 개정된 것으로 읽는다 (WT-UI-01 확정, 2026-07-23) |
+| D58 | Pretendard 웹폰트 v1 (D46 갱신) | D46: "웹 UI는 v1 시스템 폰트 스택 확정(Pretendard 웹폰트 셀프호스트는 백로그)" ↔ WT-UI-01: 웹 서브셋 self-host 지시 | **Pretendard 웹 서브셋 woff2 셀프호스트 허용 확정**: M6-02(OG 렌더러)에서 구축한 subset-font(harfbuzzjs) 파이프라인을 웹용으로 확장(`tooling/scripts/build-web-fonts.mjs`, KS 완성형 + 라틴/숫자, 400/700 두 벌 woff2). `font-display: optional` 유지(§8.2 레이아웃 튐 금지 불변식). 폰트 자산은 JS 예산(entry <170KB gzip) 밖 — size-limit 영향 없음. D46은 이 결정으로 대체된다(웹 UI 한정 — OG 렌더러 서브셋 파이프라인 자체는 D46 그대로 유지) (WT-UI-01 확정, 2026-07-23) |
 
 ### 11.2 오픈 퀘스천 (결정 기한 명시)
 

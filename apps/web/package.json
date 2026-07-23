@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node ../../tooling/scripts/copy-fonts.mjs",
+    "predev": "node ../../tooling/scripts/copy-fonts.mjs && node ../../tooling/scripts/build-web-fonts.mjs",
     "dev": "vite",
-    "prebuild": "node ../../tooling/scripts/copy-fonts.mjs",
+    "prebuild": "node ../../tooling/scripts/copy-fonts.mjs && node ../../tooling/scripts/build-web-fonts.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",

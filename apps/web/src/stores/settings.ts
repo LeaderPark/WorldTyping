@@ -80,7 +80,9 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
       lang: detectDefaultLang(),
-      theme: 'dark', // 다크 모드 기본(docs/01 §13.2)
+      theme: 'light', // 라이트 모드 기본(docs/00 §11-D57 — docs/01 §13.2 "다크 기본"을 개정,
+      // 다크는 옵션으로 존치·토글 동작 보존). 기존 localStorage에 저장된 값(예: 'dark')은
+      // zustand persist 하이드레이션이 그대로 존중한다 — 이 기본값은 최초 방문자에게만 적용.
       reducedMotion: 'auto',
       highContrast: false,
       keySound: 'off',

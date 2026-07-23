@@ -1,16 +1,23 @@
 // spec: docs/03 §7.3("대비/색각 … 대륙색 위 텍스트는 WCAG AA(4.5:1) 검사 CI(§11 축소판: 토큰
 //       조합 정적 검사 스크립트)"), docs/00 §11(세션 특이 조정 3: "contrast-check(tokens.css
-//       WCAG AA 4.5:1) + ci.yml 스텝 추가"), WT-M5-02
+//       WCAG AA 4.5:1) + ci.yml 스텝 추가"), §11-D50(브랜드 색 텍스트 사용 제한 — 텍스트 토큰
+//       추가 시 라이트 조합도 등록), §11-D57(WT-UI-01 — 기본 테마 라이트 전환), WT-M5-02 + WT-UI-01
 //
 // 브라우저 없이(CSS color-mix()/data-theme 스위칭을 실행 엔진 없이) 정적으로 검사한다. 방식:
 // (1) apps/web/src/styles/tokens.css의 :root 색 토큰(hex)을 파싱, (2) 실제 코드에서 함께 쓰이는
 // "전경 텍스트/배경" 조합만 하드코딩된 목록으로 검사한다(globals.css의 실제 규칙과 대조해
 // 작성 — 각 항목에 출처 주석을 남겼다. CSS 셀렉터를 통째로 해석하는 범용 파서가 아니다).
 //
-// 범위: 기본(다크) 테마만 강제 검사한다 — 제품 기본값이자 유일하게 규범적으로 확정된 테마다
-// (docs/01 §13.2 "다크 모드 기본, 라이트는 옵션"). 라이트 테마의 장식용 팔레트(대륙색 등)는
-// 이 스크립트가 검사하지 않는다 — GDD가 정한 브랜드 색을 이 태스크가 임의로 재정의하지 않기
-// 위함(발견한 사항은 최종 보고 escalations에 기재, docs/00 §11 에스컬레이션 원칙).
+// 범위(D57로 갱신): tokens.css의 :root는 이제 **라이트**가 기본이다(구 다크 기본 — docs/01
+// §13.2는 D57로 개정됨). 이 스크립트는 두 갈래를 병행 검사한다 —
+//   ① 라이트(:root, 제품 기본값): --text/--text-muted on --bg/--surface, --continent-*-text on
+//      --surface, .wt-pill의 accent 텍스트. 전부 WT-UI-01에서 신설.
+//   ② 다크(옵션, [data-theme='dark']): 등급색·대륙 원색을 다크 페이지 배경 위에서 검사하는
+//      기존 WT-M5-02 하드코딩 목록을 그대로 유지한다(다크가 삭제되지 않고 옵션으로 존치되므로
+//      회귀 가드도 유지 — PAGE_BG_DARK 등은 tokens.css를 파싱하지 않는 리터럴 상수라 :root의
+//      기본 테마가 바뀌어도 그대로 유효하다).
+// 대륙색 "원색"(장식·지도 fill 전용, --continent-*)은 여전히 이 스크립트가 텍스트 용도로
+// 검사하지 않는다 — GDD가 정한 브랜드 색을 임의로 재정의하지 않기 위함(D50).
 //
 // 임계값: WCAG 2.1 AA — 일반 텍스트 4.5:1, "large text"(≥24px, 또는 ≥19px굵게) 3:1. 각 항목에
 // 실제 렌더 크기 근거를 주석으로 남겨 임계값 선택을 정당화한다.
@@ -24,8 +31,8 @@ const TOKENS_CSS_PATH = path.join(REPO_ROOT, 'apps/web/src/styles/tokens.css');
 
 type TokenMap = Map<string, string>;
 
-/** `:root { ... }` 최초 블록(다크 기본값, `:root[data-theme=...]` 오버라이드 이전)만 파싱한다 —
- *  이 스크립트가 검사하는 건 그 기본(다크) 값이다. */
+/** `:root { ... }` 최초 블록(D57 이후 라이트 기본값, `:root[data-theme=...]` 오버라이드 이전)만
+ *  파싱한다 — 이 함수가 반환하는 건 그 기본(라이트) 값이다. */
 function parseRootTokens(css: string): TokenMap {
   const rootBlockMatch = /:root\s*\{([^}]*)\}/.exec(css);
   if (!rootBlockMatch) throw new Error('tokens.css: :root 블록을 찾지 못했다');
@@ -117,6 +124,13 @@ function buildChecks(tokens: TokenMap): Check[] {
   const promptError = '#ef4444'; // globals.css .wt-prompt { --wt-prompt-error }
   const promptPending = '#64748b'; // globals.css .wt-prompt { --wt-prompt-pending }
 
+  // WT-UI-01(D57) — 라이트 기본 시맨틱 토큰. 전부 tokens.css :root(라이트) 리터럴.
+  const bg = requireToken(tokens, 'bg');
+  const surface = requireToken(tokens, 'surface');
+  const text = requireToken(tokens, 'text');
+  const textMuted = requireToken(tokens, 'text-muted');
+  const accent = requireToken(tokens, 'accent');
+
   return [
     // ResultCard(.wt-result-card__grade, font-size:1.5rem/24px font-weight:800) — large text.
     { label: '.wt-grade--S on dark page bg', fg: gradeS, bg: PAGE_BG_DARK, minRatio: 3 },
@@ -165,6 +179,83 @@ function buildChecks(tokens: TokenMap): Check[] {
       label: '.wt-bot-offer__badge white text on color-mix(grade-a 70%, black)',
       fg: WHITE,
       bg: mix(gradeA, BLACK, 70),
+      minRatio: 4.5,
+    },
+
+    // ── WT-UI-01(D57) 라이트 기본 조합 ──────────────────────────────────────
+    // .wt-card/.wt-menu-row 본문(15px 규모) — --text on --bg/--surface.
+    { label: '--text on --bg (라이트 페이지 배경, 본문)', fg: text, bg, minRatio: 4.5 },
+    { label: '--text on --surface (라이트 카드, 본문)', fg: text, bg: surface, minRatio: 4.5 },
+    // .wt-menu-row__copy/.wt-token__label(캡션, ~14~15px) — --text-muted on --bg/--surface.
+    {
+      label: '--text-muted on --surface (카드 캡션, 본문)',
+      fg: textMuted,
+      bg: surface,
+      minRatio: 4.5,
+    },
+    // [D62, 독립 검증 FAIL 수정] 원 리터럴(#6f766f)은 --bg(#f4f5ef) 위에서 실측 4.26:1로 본문
+    // 기준(4.5:1) 미달이었고, pnpm e2e(e10-a11y.spec.ts, axe color-contrast)가 이 값을 그대로
+    // 쓰는 하드코딩 text-slate-500 노드(PrivacyPage/CreditsPage — 카드 밖, --bg 위 직접 배치)
+    // 에서 실제로 이를 검출했다. --text-muted 라이트 값을 color-mix(85%, black)로 재조정해
+    // (tokens.css) 이 조합도 정상(4.5:1) 등급으로 통과하도록 만들었다 — large-text 완화가
+    // 아니라 리터럴 자체를 고쳤다.
+    {
+      label: '--text-muted on --bg (카드 밖 직접 배치, 본문 — PrivacyPage/CreditsPage 실사용)',
+      fg: textMuted,
+      bg,
+      minRatio: 4.5,
+    },
+
+    // .wt-kicker(11px/700, large text 아님 → 4.5:1 필요) on --surface, 대륙 6종.
+    // [구현 조정, 최종 보고 escalations 참조] 지시문 리터럴 "72% + black" 균일 계수는 3/6
+    // 대륙(oceania/north-america/south-america)에서 미달해 대륙별 계수(58~85%)로 대체했다 —
+    // tokens.css의 --continent-*-text 정의 및 그 위 주석 참조. 아래는 그 실제 계수를 그대로
+    // 재현해 검사한다(색상 자체는 불변, 보정 비율만 대륙별).
+    {
+      label: '--continent-asia-text (kicker 11px/700) on --surface',
+      fg: mix(continentAsia, BLACK, 85),
+      bg: surface,
+      minRatio: 4.5,
+    },
+    {
+      label: '--continent-europe-text (kicker 11px/700) on --surface',
+      fg: mix(continentEurope, BLACK, 82),
+      bg: surface,
+      minRatio: 4.5,
+    },
+    {
+      label: '--continent-africa-text (kicker 11px/700) on --surface',
+      fg: mix(continentAfrica, BLACK, 70),
+      bg: surface,
+      minRatio: 4.5,
+    },
+    {
+      label: '--continent-north-america-text (kicker 11px/700) on --surface',
+      fg: mix(continentNA, BLACK, 62),
+      bg: surface,
+      minRatio: 4.5,
+    },
+    {
+      label: '--continent-south-america-text (kicker 11px/700) on --surface',
+      fg: mix(continentSA, BLACK, 58),
+      bg: surface,
+      minRatio: 4.5,
+    },
+    {
+      label: '--continent-oceania-text (kicker 11px/700) on --surface',
+      fg: mix(continentOceania, BLACK, 65),
+      bg: surface,
+      minRatio: 4.5,
+    },
+
+    // .wt-pill(15px/700) — accent 원색(#0a84ff)은 --surface 위에서 실측 3.65:1로 본문 기준
+    // 미달(large text 3:1은 통과). WT-M5-02(.wt-btn--primary)와 동일 기법으로 텍스트만
+    // color-mix(accent 80%, black) 보정(globals.css .wt-pill) — 보더는 비텍스트 3:1(WCAG
+    // 1.4.11)만 필요해 원색 그대로 둔다(여기서는 텍스트 조합만 검사).
+    {
+      label: '.wt-pill text color-mix(accent 80%, black) on --surface',
+      fg: mix(accent, BLACK, 80),
+      bg: surface,
       minRatio: 4.5,
     },
   ];

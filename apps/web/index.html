@@ -23,32 +23,38 @@
     <meta name="twitter:title" content="TypeTrip — 세계를 타이핑하다 · Type the world" />
     <meta name="twitter:description" content="세계 지도 위 국가 이름을 타이핑하는 웹 게임. 로그인 없이 바로 플레이하세요." />
     <meta name="twitter:image" content="/og/default.png" />
-    <!-- 테마 FOUC 방지 스니펫 (docs/03 §8.1): localStorage 저장 테마를 페인트 전에 적용.
-         기본값은 시스템 설정이 아니라 다크 고정(docs/01 §13.2 "다크 모드 기본, 라이트는 옵션"). -->
+    <!-- 테마 FOUC 방지 스니펫 (docs/03 §8.1, docs/00 §11-D57): localStorage 저장 테마를 페인트
+         전에 적용. 기본값은 이제 라이트 고정(D57 — 구 "다크 모드 기본"을 반전, docs/01 §13.2
+         개정). 다크는 삭제되지 않고 설정에서 여전히 선택 가능(옵션으로 존치). -->
     <script>
       (function () {
         try {
           var stored = localStorage.getItem("wt:theme");
-          var theme = stored === "light" || stored === "dark" ? stored : "dark";
+          var theme = stored === "light" || stored === "dark" ? stored : "light";
           document.documentElement.setAttribute("data-theme", theme);
         } catch (e) {
-          /* localStorage 접근 불가 환경(사생활 모드 등) — 기본 다크로 진행 */
-          document.documentElement.setAttribute("data-theme", "dark");
+          /* localStorage 접근 불가 환경(사생활 모드 등) — 기본 라이트로 진행 */
+          document.documentElement.setAttribute("data-theme", "light");
         }
       })();
     </script>
-    <!-- 정적 크리티컬 셸 스타일 (docs/00 §11-D47, WT-M5-01c).
+    <!-- 정적 크리티컬 셸 스타일 (docs/00 §11-D47·D57, WT-M5-01c + WT-UI-01).
          D47 실측: 지도 lazy 분리(D45) 후에도 홈 LCP가 2640ms로 불변 — LCP 요소는 CSR 첫
          페인트 자체가 아니라 S2 언어 게이트 문구였고, 게이트를 통째로 지워도 동일했다(=
          "React가 부팅해 뭔가를 그리기까지"의 JS 총비용이 상한). 그래서 #root 안에 게이트+
          히어로 타이틀을 정적 HTML/CSS로 박아 넣어 JS 실행을 기다리지 않고 즉시 페인트되게
          한다. 이 <style> 블록은 빌드 산출물이 <head>에 주입하는 컴파일된 스타일시트
          (Tailwind 등, dist/index.html 참고)의 도착도 기다리지 않도록 일부러 자체 완결시켰다
-         — 색만 tokens.css 팔레트·AppShell.tsx의 bg-white/dark:bg-slate-900 배색에 맞추고
-         그 변수를 참조하지는 않는다. 셀렉터는 #wt-shell-* 전용 id/class로 스코프해 실제 앱
-         클래스(.wt-home 등)와 절대 충돌하지 않는다 — React가 createRoot로 마운트되면(아래
-         본문 주석) 이 스타일이 적용되던 DOM 자체가 통째로 사라지므로 핸드오프 후엔 그냥 죽은
-         CSS다. -->
+         — 색만 tokens.css 팔레트·AppShell.tsx의 bg-bg/text-text 배색에 맞추고 그 변수를
+         참조하지는 않는다(리터럴 동기 관례 — D47). 셀렉터는 #wt-shell-* 전용 id/class로
+         스코프해 실제 앱 클래스(.wt-home 등)와 절대 충돌하지 않는다 — React가 createRoot로
+         마운트되면(아래 본문 주석) 이 스타일이 적용되던 DOM 자체가 통째로 사라지므로 핸드오프
+         후엔 그냥 죽은 CSS다.
+
+         [D57 갱신] 기본 테마가 라이트로 반전되며 body 배색 리터럴을 tokens.css의 새 --bg/--text
+         라이트 값(#f4f5ef/#171b19)과 동기했다. 다크 값(#0f172a/#f8fafc)도 tokens.css
+         [data-theme='dark'] --bg/--text와 동일하게 유지 — 이 파일이 바뀌면 이 리터럴도 같이
+         갱신해야 한다(자동 동기 아님, 사람이 맞추는 관례). -->
     <style>
       #wt-shell-hero,
       #wt-shell-gate {
@@ -56,12 +62,12 @@
       }
       body {
         margin: 0;
-        background: #ffffff;
-        color: #0f172a;
+        background: #f4f5ef; /* = tokens.css :root --bg (라이트 기본) */
+        color: #171b19; /* = tokens.css :root --text (라이트 기본) */
       }
       :root[data-theme="dark"] body {
-        background: #0f172a;
-        color: #ffffff;
+        background: #0f172a; /* = tokens.css [data-theme='dark'] --bg */
+        color: #f8fafc; /* = tokens.css [data-theme='dark'] --text */
       }
       #wt-shell-hero {
         padding: 1.5rem;
@@ -120,13 +126,15 @@
         opacity: 0.7;
       }
     </style>
-    <!-- 폰트 프리로드 (docs/03 §8.2): Pretendard Variable subset + JetBrains Mono.
-         WT-M5-01 세션 특이 조정 결과 — Pretendard는 npm 후보 두 종 모두 예산/한글 서브셋
-         요건을 만족하지 못해(tooling/scripts/copy-fonts.mjs 상단 주석, 최종 보고 escalations)
-         이번 태스크에서 제외하고 시스템 폰트 스택 폴백을 유지한다. JetBrains Mono만
-         self-host(tooling/scripts/copy-fonts.mjs가 build/dev 전에 apps/web/public/fonts/에
-         복사) — font-display: optional(globals.css @font-face)이라 늦게 도착해도 레이아웃
-         튐이 없다. -->
+    <!-- 폰트 프리로드 (docs/03 §8.2, docs/00 §11-D58): Pretendard 서브셋(400/700) + JetBrains Mono.
+         [D58, WT-UI-01 갱신] WT-M5-01 당시엔 npm 후보 두 종 모두 예산/한글 서브셋 요건을
+         만족하지 못해(tooling/scripts/copy-fonts.mjs 상단 주석) 시스템 폰트 폴백만 썼다. D58로
+         이 결정을 뒤집어 tooling/scripts/build-web-fonts.mjs가 subset-font(harfbuzzjs)로 KS
+         완성형 한글 + 라틴/숫자만 남긴 woff2(400/700)를 결정적으로 생성해 self-host한다.
+         font-display: optional(globals.css @font-face)이라 프리로드가 늦게 도착해도 레이아웃
+         튐이 없다(캐시 없으면 이번 페인트는 폴백 폰트로 확정, 다음 방문부터 적용). -->
+    <link rel="preload" href="/fonts/pretendard-subset-400.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/pretendard-subset-700.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/JetBrainsMono-Regular.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>

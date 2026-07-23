@@ -98,6 +98,11 @@ function MarkdownBody({ source, testId }: { source: string; testId: string }) {
 export function PrivacyPage() {
   const { t } = useTranslation();
 
+  // WT-UI-01 독립 검증 FAIL 수정: 하드코딩 text-slate-500/dark:text-slate-400(#64748b on
+  // --bg #f4f5ef = 4.34:1, WCAG AA 4.5:1 미달 — pnpm e2e의 e10-a11y.spec.ts가 axe
+  // color-contrast serious로 실측 검출)를 --text-muted 토큰(tailwind.config.ts var() 매핑)으로
+  // 교체한다. --text-muted 라이트 값 자체도 이 검증으로 재조정됨(tokens.css 주석 참조, D62) —
+  // dark: 변형은 더 이상 필요 없다(토큰이 [data-theme='dark']에서 이미 반전).
   return (
     <div className="mx-auto max-w-2xl p-6">
       <h1 className="text-2xl font-bold" tabIndex={-1}>
@@ -105,7 +110,7 @@ export function PrivacyPage() {
       </h1>
 
       <section aria-label={t('privacy.lang.ko')}>
-        <h2 className="mt-4 text-base font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <h2 className="mt-4 text-base font-semibold uppercase tracking-wide text-text-muted">
           {t('privacy.lang.ko')}
         </h2>
         <MarkdownBody source={privacyKo} testId="privacy-body-ko" />
@@ -114,7 +119,7 @@ export function PrivacyPage() {
       <hr className="my-8 border-slate-300 dark:border-slate-700" />
 
       <section aria-label={t('privacy.lang.en')}>
-        <h2 className="mt-4 text-base font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        <h2 className="mt-4 text-base font-semibold uppercase tracking-wide text-text-muted">
           {t('privacy.lang.en')}
         </h2>
         <MarkdownBody source={privacyEn} testId="privacy-body-en" />
@@ -132,7 +137,7 @@ export function PrivacyPage() {
           <li>{t('privacy.credits.naturalEarth')}</li>
           <li>{t('privacy.credits.flagIcons')}</li>
         </ul>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{t('notice.disputed')}</p>
+        <p className="mt-2 text-sm text-text-muted">{t('notice.disputed')}</p>
         <p className="mt-1 text-sm">
           <Link to="/credits" data-testid="privacy-credits-link" className="underline">
             {t('credits.title')}

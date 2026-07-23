@@ -51,7 +51,9 @@ export function CreditsPage() {
         ))}
       </ul>
 
-      <p className="mt-4 text-sm text-slate-500 dark:text-slate-400" data-testid="credits-disputed-notice">
+      {/* WT-UI-01 독립 검증 FAIL 수정: 하드코딩 text-slate-500(#64748b) on --bg(#f4f5ef) =
+          4.34:1로 WCAG AA 4.5:1 미달 — --text-muted 토큰으로 교체(PrivacyPage와 동일 사유). */}
+      <p className="mt-4 text-sm text-text-muted" data-testid="credits-disputed-notice">
         {t('notice.disputed')}
       </p>
     </div>

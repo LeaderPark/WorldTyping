@@ -10,6 +10,7 @@
   "scripts": {
     "build:data": "tsx tooling/scripts/build-data.ts",
     "build:og-fonts": "node tooling/scripts/build-og-fonts.mjs",
+    "build:web-fonts": "node tooling/scripts/build-web-fonts.mjs",
     "build:moderation-snapshot": "tsx tooling/scripts/build-moderation-snapshot.ts",
     "contrast-check": "tsx tooling/ci/contrast-check.ts",
     "ops:rescore": "tsx tooling/ops/scripts/rescore.ts",

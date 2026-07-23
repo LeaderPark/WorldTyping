@@ -1,13 +1,40 @@
 /* spec: docs/01 §1.3(대륙 6색 — 지하철 노선색 감성), §13.2(등급색 S/A/B/C/D),
-   docs/03 §3.3(지도 상태색 --map-*), §3.4(카메라 non-scaling-stroke), WT-M2-04.
+   docs/03 §3.3(지도 상태색 --map-*), §3.4(카메라 non-scaling-stroke), §7.3(고대비), §8.2(폰트),
+   docs/00 §11-D46~D50(OG 서브셋 폰트/고대비 data-contrast/브랜드 색 텍스트 사용 제한),
+   §11-D57·D58(WT-UI-01: 기본 테마 라이트 전환, Pretendard 웹 서브셋 셀프호스트 허용), WT-UI-01.
 
-   이 파일은 색 토큰(변수)과 그 변수만 참조하는 지도 레이어 스타일을 담는다. 지도 코드(SVG)는
-   색을 직접 쓰지 않고 CSS 변수만 참조하므로 테마(다크/라이트) 전환 시 지도 로직 무수정이다.
-   기본은 다크(docs/01 §13.2 "다크 모드 기본"). index.html FOUC 스니펫이 <html data-theme>를 페인트
-   전에 세팅한다. */
+   이 파일은 색·타이포·형태(radius/shadow) 시맨틱 토큰과 그 변수만 참조하는 지도 레이어 스타일을
+   담는다. 지도 코드(SVG)는 색을 직접 쓰지 않고 CSS 변수만 참조하므로 테마(라이트/다크) 전환 시
+   지도 로직 무수정이다.
+
+   [D57] 기본 테마는 이제 **라이트**(:root)다(구 다크 기본 — docs/01 §13.2는 이 결정으로 개정).
+   다크는 삭제하지 않고 `:root[data-theme='dark']` 옵션으로 존치한다(설정 토글 동작 보존) —
+   index.html FOUC 스니펫이 <html data-theme>를 페인트 전에 라이트 기본으로 세팅하고, 사용자가
+   설정에서 다크를 고르면 그 즉시 이 선택자가 모든 신설 시맨틱 토큰을 반전한다. */
 
 :root {
-  /* ── 대륙 6색(docs/01 §1.3, §3.1) — 노선 시그니처. 테마 불변. ── */
+  /* ── 시맨틱 라이트 토큰(기본, D57 — 리드 확정 리터럴 그대로) ── */
+  --bg: #f4f5ef;
+  --surface: #ffffff;
+  --surface-sunken: #eceee6;
+  --surface-console: #14201a; /* 테마 무관 "항상 다크" 카드(.wt-console) 전용 — 라이트/다크 동일값 */
+  --text: #171b19;
+  /* [독립 검증 FAIL 수정, D62] 원 지시 리터럴(#6f766f)은 --bg(#f4f5ef) 위에서 실측 4.26:1로
+     본문 텍스트 AA(4.5:1) 미달 — pnpm e2e(e10-a11y.spec.ts, axe color-contrast)가 실제로
+     이 값을 그대로 쓰는 하드코딩 text-slate-500 노드(PrivacyPage/CreditsPage)에서 이를 잡아냈다.
+     원색과의 색상(hue)은 유지한 채 color-mix(85%, black)로 어둡게 보정 — 실측 --bg 5.54:1 /
+     --surface 6.07:1(여유 마진 확보). 다크 대응값(#94a3b8)은 다크 배경에서 이미 AA를 만족해
+     (bg 6.96:1 / surface 5.71:1) 그대로 유지한다. */
+  --text-muted: #5e645e;
+  --border: #e3e6db;
+  --accent: #0a84ff;
+  --shadow-card: 0 1px 2px rgb(23 27 25 / 0.05), 0 8px 24px rgb(23 27 25 / 0.08);
+  --shadow-float: 0 2px 4px rgb(23 27 25 / 0.08), 0 12px 32px rgb(23 27 25 / 0.14);
+  --radius-card: 16px;
+  --radius-tile: 12px;
+  --radius-pill: 999px; /* .wt-pill 실제 높이는 46px(구현 세부 §2.3) — radius 자체는 반경값 */
+
+  /* ── 대륙 6색(docs/01 §1.3, §3.1) — 노선 시그니처. 테마 불변, 장식·지도 fill 전용(D50). ── */
   --continent-asia: #e5484d; /* 레드 */
   --continent-europe: #3b82f6; /* 블루 */
   --continent-africa: #f97316; /* 오렌지 */
@@ -15,30 +42,76 @@
   --continent-south-america: #eab308; /* 옐로 */
   --continent-oceania: #06b6d4; /* 시안 */
 
-  /* ── 등급색(docs/01 §13.2: S=골드 A=퍼플 B=블루 C=그린 D=그레이) ── */
+  /* ── 대륙 텍스트 토큰(D50) — 원색을 라이트 흰 배경에 텍스트로 직접 쓰면 WCAG AA(4.5:1) 미달
+     (실측: 원색 그대로 최저 south-america 1.92:1). 대비 보정한 본문/킥커 전용 파생값 — 장식·지도
+     fill에는 항상 원색(--continent-*)을 쓴다.
+
+     [구현 조정 — 최종 보고 escalations 참조] 이 태스크 지시문의 리터럴 "72% + black" 균일 계수는
+     6개 대륙 중 3개(oceania 4.46:1, north-america 4.21:1, south-america 3.62:1)에서 AA 4.5:1에
+     미달함을 실측으로 확인했다(tooling/ci/contrast-check.ts 실행 결과). 원색마다 명도가 달라
+     균일 계수로는 전부를 만족시킬 수 없어(전부 만족시키려면 63% 이하로 낮춰야 하고, 그러면
+     asia/europe가 불필요하게 어두워진다) 대륙별로 계수를 개별 조정했다(58~85%, 전부 실측
+     ≥4.85:1). 색상 자체(대륙 원색)는 변경하지 않았다 — 텍스트 파생값의 보정 비율만 대륙별로
+     다르다. 리드 검토용 §11 추가 결정 제안(D62 — 오케스트레이터 지정 번호, D59는 카메라 정책
+     WT-UI-02로 예약됨)을 최종 보고에 남긴다. */
+  --continent-asia-text: color-mix(in srgb, var(--continent-asia) 85%, black);
+  --continent-europe-text: color-mix(in srgb, var(--continent-europe) 82%, black);
+  --continent-africa-text: color-mix(in srgb, var(--continent-africa) 70%, black);
+  --continent-north-america-text: color-mix(in srgb, var(--continent-north-america) 62%, black);
+  --continent-south-america-text: color-mix(in srgb, var(--continent-south-america) 58%, black);
+  --continent-oceania-text: color-mix(in srgb, var(--continent-oceania) 65%, black);
+
+  /* ── 등급색(docs/01 §13.2: S=골드 A=퍼플 B=블루 C=그린 D=그레이) — 테마 불변. ── */
   --grade-s: #fbbf24;
   --grade-a: #a855f7;
   --grade-b: #3b82f6;
   --grade-c: #22c55e;
   --grade-d: #94a3b8;
 
-  /* ── 지도 상태색(docs/03 §3.3) — 다크 기본값 ── */
-  --map-pending: #2a3340; /* 미해결(출제 세트 내) */
-  --map-idle: #222a35; /* 출제 세트 외 */
-  --map-neutral: #1b222c; /* 중립 feature(속령 등) — 인터랙션 없음 */
-  --map-skipped: #3a424e; /* 스킵(회색+빗금) */
-  --map-border: #0f141a; /* 폴리곤 경계선 */
-  --map-dot: #64748b; /* 초소국 circle 기본 */
+  /* ── 지도 라이트 무대 팔레트(docs/03 §3.3, D57) — :root 기본이 라이트가 되었으므로 이 값들이
+     이제 기본으로 페인트된다. ── */
+  --map-idle: #ffffff; /* 출제 세트 외 */
+  --map-pending: #f7f8f2; /* 미해결(출제 세트 내) */
+  --map-neutral: #f0f2ea; /* 중립 feature(속령 등) — 인터랙션 없음 */
+  --map-border: #d9ddd0; /* 폴리곤 경계선 */
+  --map-skipped: #cfd4c9; /* 스킵(회색+빗금) */
+  --map-route-casing: #ffffff; /* 노선 라인(§3.5) — 기존 하드코딩(#f8fafc 근사) 값을 토큰화 */
+  --map-dot: #94a3b8; /* 초소국 circle 기본 */
 }
 
-/* 라이트 테마: 지도 상태색만 반전(대륙/등급색은 채도가 충분해 공용). docs/01 §13.2 라이트=옵션. */
-:root[data-theme='light'] {
-  --map-pending: #cbd5e1;
-  --map-idle: #e2e8f0;
-  --map-neutral: #edf1f5;
-  --map-skipped: #b4bcc7;
-  --map-border: #ffffff;
-  --map-dot: #94a3b8;
+/* 다크 테마(옵션, D57 — "삭제 금지, 토글 보존"). 신설 시맨틱 토큰 전부 다크 대응값을 정의한다.
+   docs/01 §13.2 라이트=옵션 서술은 D57로 반전됐지만 다크 값 자체는 기존 팔레트를 그대로 이관해
+   시각 델타가 없다(구현 승 — 리터럴 재발명 아님). */
+:root[data-theme='dark'] {
+  --bg: #0f172a; /* 구 기본(AppShell bg-slate-900)과 동일 */
+  --surface: #1e293b; /* 구 다크 모달/카드 배경(dark:bg-slate-800)과 동일 */
+  --surface-sunken: #0b1220;
+  --surface-console: #14201a; /* 라이트와 동일 — .wt-console은 테마 무관 "항상 다크" 카드 */
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --border: #334155; /* 구 dark:border-slate-700과 동일 */
+  --accent: #0a84ff; /* 라이트와 동일값 — Apple 다크 시스템 블루가 두 테마 모두 통용 */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.5);
+  --shadow-float: 0 2px 4px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.6);
+
+  /* 대륙 텍스트: 다크 배경에서는 원색 대부분이 이미 AA를 만족한다(실측 surfaceDark #1e293b
+     기준 africa 5.22/north-america 6.42/south-america 7.63/oceania 6.03 — 보정 불필요).
+     asia(3.74)·europe(3.98)만 미달이라 흰색 쪽으로 소폭 보정(라이트의 "black 쪽 보정"과 대칭). */
+  --continent-asia-text: color-mix(in srgb, var(--continent-asia) 80%, white);
+  --continent-europe-text: color-mix(in srgb, var(--continent-europe) 85%, white);
+  --continent-africa-text: var(--continent-africa);
+  --continent-north-america-text: var(--continent-north-america);
+  --continent-south-america-text: var(--continent-south-america);
+  --continent-oceania-text: var(--continent-oceania);
+
+  /* 지도 상태색 — 구 다크 기본값 그대로 이관(시각 델타 0). */
+  --map-idle: #222a35;
+  --map-pending: #2a3340;
+  --map-neutral: #1b222c;
+  --map-border: #0f141a;
+  --map-skipped: #3a424e;
+  --map-route-casing: #f8fafc; /* 구 .wt-map__route 하드코딩값과 동일 — 토큰화만, 시각 델타 0 */
+  --map-dot: #64748b;
 }
 
 /* ── 지도 레이어 스타일(§3.2 계층) — .wt-map 아래 5 레이어. 모든 색은 위 변수만 참조. ── */
@@ -83,10 +156,11 @@
   stroke-width: 0.5;
   opacity: 0.85;
 }
-/* 노선 라인(§3.5): 드로잉은 dashoffset(animateDash), 색은 흰빛 반투명. transform/opacity만 애니메이션. */
+/* 노선 라인(§3.5): 드로잉은 dashoffset(animateDash), 색은 --map-route-casing(WT-UI-01에서
+   하드코딩 #f8fafc를 토큰화 — 두 테마 모두 이전과 동일한 색으로 렌더돼 시각 델타 없음). */
 .wt-map__route {
   fill: none;
-  stroke: #f8fafc;
+  stroke: var(--map-route-casing);
   stroke-width: 1.5;
   stroke-linecap: round;
   opacity: 0.9;

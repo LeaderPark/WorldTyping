@@ -20,6 +20,11 @@ export const WORLD_CAMERA: Readonly<Camera> = { x: 0, y: 0, k: 1 };
 /** 줌 상한. docs/03 §3.4 "k = min(..., K_MAX=8)". 초소국 단일 타깃이 과확대되지 않게. */
 export const K_MAX = 8;
 
+/** 현 구간(prev·cur·next) 추적 카메라 패딩 프리셋(§11-D63 — 대륙/세계일주 leg 추적). */
+export const LEG_PADDING = 70;
+/** 현 구간 추적 카메라 전이 시간(ms) 프리셋(§11-D63). 800ms 기본보다 짧게 — 국가 전환마다 도는 팬. */
+export const LEG_DURATION_MS = 600;
+
 /**
  * docs/03 §3.4: 국가 집합의 projected bounds 합집합을 viewBox 960×500에 맞추는 카메라 산출.
  * k = min((960-2p)/bw, (500-2p)/bh, K_MAX), 중심 정렬. 빈 집합/영차원 bounds는 안전 폴백.
@@ -60,6 +65,35 @@ export function computeCamera(index: GeoIndex, ids: readonly CountryId[], paddin
   const x = MAP_WIDTH / 2 - k * cx;
   const y = MAP_HEIGHT / 2 - k * cy;
   return { x, y, k };
+}
+
+/**
+ * §11-D63 현 구간 추적 카메라. computeCamera 산식은 그대로 재사용하되(불변), leg가 날짜변경선을
+ * 걸치면(leg centroid들의 x 폭 > 뷰포트 절반, §3.5 래핑 판정과 동일 임계) bounds 합집합이 지도
+ * 전폭을 덮어 멀미성 확대·중심 어긋남이 되므로 **월드 고정으로 폴백**한다. 비-래핑 leg는
+ * computeCamera와 동일 결과다(대륙/세계일주 현 구간 추적, D63).
+ *
+ * flyTo가 이 함수를 쓰므로 티어/데일리의 "전체 세트 1회 flyTo"(전 지구 산발)나 세계일주 완주
+ * 리빌(전 지구)도 자연히 월드 폴백으로 귀결된다 — 별도 분기 없이 "세트가 seam을 걸치면 월드"라는
+ * 단일 규칙으로 통일된다.
+ */
+export function computeLegCamera(
+  index: GeoIndex,
+  ids: readonly CountryId[],
+  padding = 40,
+): Camera {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  for (const id of ids) {
+    const geo = index.byCountry.get(id);
+    if (!geo) continue;
+    const cx = geo.centroid[0];
+    if (cx < minX) minX = cx;
+    if (cx > maxX) maxX = cx;
+  }
+  if (!Number.isFinite(minX)) return { ...WORLD_CAMERA };
+  if (maxX - minX > MAP_WIDTH / 2) return { ...WORLD_CAMERA };
+  return computeCamera(index, ids, padding);
 }
 
 /** transform 문자열. SVG는 vector-effect:non-scaling-stroke로 국경선 두께를 보정한다(§3.4). */

@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBlocker, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { GameMode } from '@wt/shared';
+import type { Country, GameMode } from '@wt/shared';
 import type { RunResult as EngineRunResult, SessionPhase } from '@wt/engine';
 import { useGameSession } from '../../features/typing/useGameSession';
 import { useTypingEngine } from '../../features/typing/useTypingEngine';
@@ -28,6 +28,7 @@ import { isGhostUnlocked, loadGhost, useGhostProgress } from '../../features/typ
 import { useSoundManager } from '../../audio/useSoundManager';
 import { WorldMap } from '../../features/map/WorldMap';
 import { useWorldGeoIndex } from '../../features/map/useWorldGeoIndex';
+import { LEG_DURATION_MS, LEG_PADDING } from '../../features/map/camera';
 import type { WorldMapHandle } from '../../features/map/map-handle';
 import { useSessionStore } from '../../stores/session';
 import { useSettingsStore } from '../../stores/settings';
@@ -86,6 +87,11 @@ export function GamePage() {
     mapHandleRef.current = h;
   }, []);
 
+  // 웨이포인트 라벨명(§11-D63)은 현지화된 국가명(countries.json nameKo|nameEn)이다. lang을 ref로
+  // 잡아 지도 배선 effect의 구독을 재생성하지 않고(재구독은 reset을 유발) 최신 lang을 읽는다.
+  const langRef = useRef(lang);
+  langRef.current = lang;
+
   const [phase, setPhase] = useState<SessionPhase>(() => engine.getSnapshot().phase);
   const [currentIndex, setCurrentIndex] = useState(() => engine.getSnapshot().currentIndex);
   const [lives, setLives] = useState<number | null>(() => engine.getSnapshot().lives);
@@ -115,6 +121,11 @@ export function GamePage() {
     setResult(snap.result);
     mapHandleRef.current?.reset();
 
+    // 현지화 국가명(웨이포인트 라벨용). langRef로 최신 lang을 읽는다(§11-D63).
+    const nameOf = (c: Country): string => (langRef.current === 'ko' ? c.nameKo : c.nameEn);
+    // 현 구간 추적 카메라 모드(§11-D63): 대륙·세계일주만 추적, 티어·데일리는 월드 고정.
+    const legTracking = mode === 'continent' || mode === 'worldtour';
+
     const unsub = engine.subscribe((e) => {
       switch (e.type) {
         case 'phase': {
@@ -135,8 +146,29 @@ export function GamePage() {
           const c = countries[e.index];
           if (c) {
             controller?.setCountry(c);
-            mapHandleRef.current?.setTarget(c.id);
-            mapHandleRef.current?.flyTo([c.id]);
+            const h = mapHandleRef.current;
+            h?.setTarget(c.id);
+            // 출발역(첫 국가)에는 이동체를 스냅 배치한다(이후 이동은 확정 시 flyIn).
+            if (e.index === 0) h?.moveVehicle(c.id, c.id, { durationMs: 0 });
+            if (legTracking) {
+              // §11-D63: 현 구간(prev·cur·next) 추적 카메라 + 웨이포인트 라벨.
+              const prev = countries[e.index - 1];
+              const next = countries[e.index + 1];
+              const leg = [prev, c, next].filter((x): x is Country => Boolean(x));
+              h?.flyTo(
+                leg.map((x) => x.id),
+                { padding: LEG_PADDING, durationMs: LEG_DURATION_MS },
+              );
+              h?.setWaypointLabels({
+                prev: prev ? { id: prev.id, label: nameOf(prev) } : null,
+                cur: { id: c.id, label: nameOf(c) },
+                next: next ? { id: next.id, label: nameOf(next) } : null,
+              });
+            } else if (e.index === 0) {
+              // §11-D63: 티어/데일리/멀티 = 월드 고정. 시작 시 전체 세트를 1회 프레이밍하고 이후
+              // 카메라는 이동하지 않는다(매 국가 대륙 점프 팬은 시각 소음).
+              h?.flyTo(countryIds);
+            }
           }
           break;
         }
@@ -144,14 +176,18 @@ export function GamePage() {
           const c = countries[e.index];
           if (c) {
             if (e.skipped) {
-              // ESC 스킵(docs/03 §10.2 E3, GDD §5.5): 축하 연출·노선 세그먼트 없이 회색 빗금
-              // (--map-skipped)으로만 표시한다 — 스킵은 방문한 경유지가 아니다.
+              // ESC 스킵(docs/03 §10.2 E3, GDD §5.5): 축하 연출·노선 세그먼트·이동체 이동 없이
+              // 회색 빗금(--map-skipped)으로만 표시한다 — 스킵은 방문한 경유지가 아니다.
               mapHandleRef.current?.markSkipped(c.id);
             } else {
-              // juice #2: 폴리곤이 대륙(노선)색으로 채워진다(§13.3-2).
+              // juice #2: 폴리곤이 대륙(노선)색으로 채워지고, 노선 세그먼트가 이전 국가에서 그려져
+              // 들어오며(§13.3-2), 그 경로를 따라 이동체가 날아 들어온다(§11-D63).
               mapHandleRef.current?.markSolved(c.id, `var(--continent-${c.continent})`);
               const prev = countries[e.index - 1];
-              if (prev) mapHandleRef.current?.drawRouteSegment(prev.id, c.id);
+              if (prev) {
+                mapHandleRef.current?.drawRouteSegment(prev.id, c.id);
+                mapHandleRef.current?.moveVehicle(prev.id, c.id);
+              }
             }
           }
           break;
@@ -168,6 +204,9 @@ export function GamePage() {
           setFinalLives(engine.getSnapshot().lives);
           storeFinish(e.result.score);
           // juice #6: 카메라를 완주(또는 진행분) 노선 전체 bounds로 리빌(1.2s) — ResultView 주석 참조.
+          // 현 구간 웨이포인트 라벨은 완주 리트레이스/썸네일에 남지 않도록 비운다(§11-D63) —
+          // 노선·스테이션 도트·이동체(마지막 종점)는 완성된 여정으로 유지한다.
+          mapHandleRef.current?.setWaypointLabels({ prev: null, cur: null, next: null });
           const clearedIds = countryIds.slice(0, e.result.stats.perCountry.length);
           if (clearedIds.length > 0) {
             mapHandleRef.current?.flyTo(clearedIds, { durationMs: 1200 });

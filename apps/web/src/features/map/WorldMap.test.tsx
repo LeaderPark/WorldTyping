@@ -47,13 +47,28 @@ function renderMap(): { handle: WorldMapHandle; container: HTMLElement } {
 }
 
 describe('1회 렌더 구조(§3.2)', () => {
-  it('5개 레이어 + base 폴리곤 + dots circle 렌더', () => {
+  it('전 레이어 + base 폴리곤 + dots circle 렌더(§11-D63 stations/vehicle/labels 포함)', () => {
     const { container } = renderMap();
-    for (const layer of ['camera', 'base', 'route', 'solved', 'skipped', 'target', 'dots']) {
+    for (const layer of [
+      'camera',
+      'base',
+      'route',
+      'solved',
+      'skipped',
+      'target',
+      'dots',
+      'stations',
+      'vehicle',
+      'labels',
+    ]) {
       expect(container.querySelector(`[data-layer="${layer}"]`)).not.toBeNull();
     }
     expect(container.querySelectorAll('[data-layer="base"] path').length).toBeGreaterThan(100);
     expect(container.querySelectorAll('[data-layer="dots"] circle').length).toBeGreaterThan(0);
+    // 이동체는 마운트 시 숨김(display:none) + labels 3개 텍스트 노드(초기 숨김).
+    const vehicle = container.querySelector('[data-layer="vehicle"]') as SVGGElement;
+    expect(vehicle.style.display).toBe('none');
+    expect(container.querySelectorAll('[data-layer="labels"] text')).toHaveLength(3);
   });
   it('svg viewBox 고정·aria-hidden·전 path에 non-scaling-stroke', () => {
     const { container } = renderMap();
@@ -118,13 +133,19 @@ describe('핸들 명령형 조작(§3.2)', () => {
     const el = container.querySelector('[data-layer="target"] [data-country="MC"]')!;
     expect(el.tagName.toLowerCase()).toBe('circle');
   });
-  it('markSolved: solved 레이어에 색 지정 도형 추가·타깃 해제', () => {
+  it('markSolved: solved 레이어에 색 지정 도형 추가·타깃 해제 + 스테이션 도트(§11-D63)', () => {
     const { handle, container } = renderMap();
     handle.setTarget('KR');
     handle.markSolved('KR', 'var(--continent-asia)');
     const solved = container.querySelector('[data-layer="solved"] [data-country="KR"]') as SVGElement;
     expect(solved).not.toBeNull();
     expect(solved.style.fill).toBe('var(--continent-asia)');
+    // §11-D63: 방문국 스테이션 도트가 stations 레이어에 추가된다(흰 fill + 대륙색 ring).
+    const stations = container.querySelectorAll('[data-layer="stations"] circle.wt-map__station');
+    expect(stations).toHaveLength(1);
+    expect((stations[0] as SVGElement).style.getPropertyValue('--continent-color')).toBe(
+      'var(--continent-asia)',
+    );
     // 같은 국가 확정 시 타깃 하이라이트 제거.
     expect(container.querySelector('[data-layer="target"]')!.children).toHaveLength(0);
   });
@@ -149,10 +170,18 @@ describe('핸들 명령형 조작(§3.2)', () => {
     expect(el.tagName.toLowerCase()).toBe('circle');
     expect(el.getAttribute('class')).toBe('wt-map__skipped');
   });
-  it('drawRouteSegment: 비래핑은 route 레이어에 path 1개', () => {
+  it('drawRouteSegment: 비래핑은 2-스트로크(케이싱+대륙색 라인) path 2개(§11-D63)', () => {
     const { handle, container } = renderMap();
     handle.drawRouteSegment('KR', 'JP');
-    expect(container.querySelectorAll('[data-layer="route"] path')).toHaveLength(1);
+    const paths = container.querySelectorAll('[data-layer="route"] path');
+    expect(paths).toHaveLength(2);
+    expect(container.querySelector('[data-layer="route"] path.wt-map__route-casing')).not.toBeNull();
+    const line = container.querySelector(
+      '[data-layer="route"] path.wt-map__route-line',
+    ) as SVGElement;
+    expect(line).not.toBeNull();
+    // 대륙색은 도착국(JP=asia) 기준.
+    expect(line.style.getPropertyValue('--continent-color')).toBe('var(--continent-asia)');
   });
   it('flyTo: 카메라 transform이 월드 고정에서 변한다', () => {
     const { handle, container } = renderMap();
@@ -161,18 +190,31 @@ describe('핸들 명령형 조작(§3.2)', () => {
     handle.flyTo(['KR']);
     expect(cam.getAttribute('transform')).not.toBe('translate(0 0) scale(1)');
   });
-  it('reset: target/solved/route 비우고 카메라 월드 복귀', () => {
+  it('reset: target/solved/skipped/route/stations 비우고 이동체·라벨 숨김·카메라 월드 복귀', () => {
     const { handle, container } = renderMap();
     handle.setTarget('KR');
     handle.markSolved('JP', 'var(--continent-asia)');
     handle.markSkipped('CN');
     handle.drawRouteSegment('KR', 'JP');
+    handle.moveVehicle('KR', 'JP');
+    handle.setWaypointLabels({
+      prev: { id: 'KR', label: '대한민국' },
+      cur: { id: 'JP', label: '일본' },
+      next: null,
+    });
     handle.flyTo(['KR']);
     handle.reset();
     expect(container.querySelector('[data-layer="target"]')!.children).toHaveLength(0);
     expect(container.querySelector('[data-layer="solved"]')!.children).toHaveLength(0);
     expect(container.querySelector('[data-layer="skipped"]')!.children).toHaveLength(0);
     expect(container.querySelector('[data-layer="route"]')!.children).toHaveLength(0);
+    expect(container.querySelector('[data-layer="stations"]')!.children).toHaveLength(0);
+    const vehicle = container.querySelector('[data-layer="vehicle"]') as SVGGElement;
+    expect(vehicle.style.display).toBe('none');
+    for (const text of container.querySelectorAll('[data-layer="labels"] text')) {
+      expect(text.textContent).toBe('');
+      expect((text as SVGElement).style.display).toBe('none');
+    }
     expect(container.querySelector('[data-layer="camera"]')!.getAttribute('transform')).toBe(
       'translate(0 0) scale(1)',
     );
@@ -181,6 +223,57 @@ describe('핸들 명령형 조작(§3.2)', () => {
     const { handle, container } = renderMap();
     handle.setJuiceLevel(1);
     expect(container.querySelector('svg')!.getAttribute('data-juice')).toBe('1');
+  });
+});
+
+describe('이동체·웨이포인트 라벨(§11-D63)', () => {
+  // jsdom은 getPointAtLength/getTotalLength/animate 미구현 → moveVehicle은 종점 스냅으로 폴백한다.
+  it('setVehicleVisible: display 토글', () => {
+    const { handle, container } = renderMap();
+    const g = container.querySelector('[data-layer="vehicle"]') as SVGGElement;
+    expect(g.style.display).toBe('none');
+    handle.setVehicleVisible(true);
+    expect(g.style.display).toBe('');
+    handle.setVehicleVisible(false);
+    expect(g.style.display).toBe('none');
+  });
+
+  it('moveVehicle: 이동체를 표시하고 transform(종점 스냅)을 세팅', () => {
+    const { handle, container } = renderMap();
+    const g = container.querySelector('[data-layer="vehicle"]') as SVGGElement;
+    handle.moveVehicle('KR', 'JP');
+    expect(g.style.display).toBe('');
+    const t = g.getAttribute('transform');
+    expect(t).toMatch(/^translate\(/);
+    expect(t).toMatch(/rotate\(/);
+    expect(t).toMatch(/scale\(/);
+  });
+
+  it('moveVehicle: from===to(출발역)는 rotate 0으로 스냅', () => {
+    const { handle, container } = renderMap();
+    const g = container.querySelector('[data-layer="vehicle"]') as SVGGElement;
+    handle.moveVehicle('KR', 'KR', { durationMs: 0 });
+    expect(g.style.display).toBe('');
+    expect(g.getAttribute('transform')).toContain('rotate(0)');
+  });
+
+  it('setWaypointLabels: prev/cur/next textContent·위치 세팅, null은 숨김', () => {
+    const { handle, container } = renderMap();
+    handle.setWaypointLabels({
+      prev: { id: 'KR', label: '대한민국' },
+      cur: { id: 'JP', label: '일본' },
+      next: null,
+    });
+    const prev = container.querySelector('.wt-map__label--prev') as SVGTextElement;
+    const cur = container.querySelector('.wt-map__label--cur') as SVGTextElement;
+    const next = container.querySelector('.wt-map__label--next') as SVGTextElement;
+    expect(prev.textContent).toBe('대한민국');
+    expect(prev.style.display).toBe('');
+    expect(prev.getAttribute('x')).not.toBeNull();
+    expect(cur.textContent).toBe('일본');
+    // next=null → 숨김.
+    expect(next.textContent).toBe('');
+    expect(next.style.display).toBe('none');
   });
 });
 

@@ -18,12 +18,50 @@ import {
   WORLD_CAMERA,
   applyCamera,
   cameraTransform,
-  computeCamera,
+  computeLegCamera,
 } from './camera';
-import { animateDash, routeSegmentPaths } from './route-layer';
-import type { FlyToOptions, JuiceLevel, WorldMapHandle } from './map-handle';
+import {
+  animateDash,
+  createStationDot,
+  popInStation,
+  routeSegmentPaths,
+  samplePathFrames,
+  unwrapAngles,
+} from './route-layer';
+import type {
+  FlyToOptions,
+  JuiceLevel,
+  MoveVehicleOptions,
+  Waypoint,
+  WorldMapHandle,
+} from './map-handle';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// ── §11-D63(WT-UI-02) 이동체·라벨 튜닝 상수 ────────────────────────────────
+/** 이동체 기본 배율(카메라 k로 나눠 화면상 크기를 대략 일정하게 유지 — 줌 시 비대 방지). */
+const VEHICLE_BASE_SCALE = 1;
+/** 세그먼트당 경로 샘플 수(8~16 권장). transform 키프레임 개수. */
+const VEHICLE_SAMPLES = 14;
+/** 이동체 비행 시간(ms) — 노선 드로잉(animateDash 300ms)과 동기. */
+const VEHICLE_DURATION_MS = 300;
+/** 웨이포인트 라벨 목표 화면 폰트(px) — 카메라 k로 역보정한 user 단위 폰트로 환산. */
+const LABEL_BASE_PX = 12;
+/** 라벨을 centroid 위로 띄우는 화면상 오프셋(px) — k로 역보정. */
+const LABEL_OFFSET_PX = 10;
+
+function round(v: number, digits: number): number {
+  const f = 10 ** digits;
+  return Math.round(v * f) / f;
+}
+
+/** 이동체 transform: 위치 이동 + 진행 방향 회전 + 배율(스케일 원점은 plane path 원점). */
+function vehicleTransform(x: number, y: number, angleDeg: number, scale: number): string {
+  return `translate(${round(x, 2)} ${round(y, 2)}) rotate(${round(angleDeg, 2)}) scale(${round(
+    scale,
+    3,
+  )})`;
+}
 
 export interface WorldMapProps {
   /** 마운트 시점 상수. 부팅 시 1회 구축·동결된 GeoIndex(getGeoIndex). 이후 변경 금지. */
@@ -75,6 +113,16 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
   const solvedRef = useRef<SVGGElement>(null);
   const skippedRef = useRef<SVGGElement>(null);
   const targetRef = useRef<SVGGElement>(null);
+  // §11-D63 여정 무대 레이어.
+  const stationsRef = useRef<SVGGElement>(null);
+  const vehicleRef = useRef<SVGGElement>(null);
+  const labelPrevRef = useRef<SVGTextElement>(null);
+  const labelCurRef = useRef<SVGTextElement>(null);
+  const labelNextRef = useRef<SVGTextElement>(null);
+  // 이동체 경로 샘플용 비-부착 측정 path(getPointAtLength) — 마운트 시 1회 생성.
+  const measurePathRef = useRef<SVGPathElement | null>(null);
+  // 현재 카메라 배율 k(이동체/라벨 역보정용). flyTo/reset가 갱신.
+  const cameraKRef = useRef(1);
   const juiceRef = useRef<JuiceLevel>(0);
   const targetIdRef = useRef<CountryId | null>(null);
   // onReady를 ref로 잡아 마운트 1회 effect에서 최신 참조를 쓴다(deps 최소화 → 재실행 회피).
@@ -82,6 +130,10 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
   onReadyRef.current = onReady;
 
   useEffect(() => {
+    // 이동체 경로 측정용 path 1회 생성(부착하지 않음 — getPointAtLength는 path 데이터만 필요).
+    if (typeof document !== 'undefined' && !measurePathRef.current) {
+      measurePathRef.current = document.createElementNS(SVG_NS, 'path');
+    }
     const handle: WorldMapHandle = {
       setTarget(id) {
         clearLayer(targetRef.current);
@@ -111,6 +163,14 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
           });
         }
         shape.style.opacity = '1';
+        // §11-D63: 방문국 centroid 스테이션 도트(흰 fill + 대륙색 stroke) + 팝인. 스킵은 방문이
+        // 아니므로 도트 없음(markSkipped 경로 분리).
+        const geo = index.byCountry.get(id);
+        if (geo && stationsRef.current) {
+          const dot = createStationDot(geo.centroid[0], geo.centroid[1], colorVar);
+          stationsRef.current.appendChild(dot);
+          popInStation(dot, 200, immediate);
+        }
         // 확정된 국가가 현재 타깃이면 타깃 하이라이트 해제(중복 점등 방지).
         if (targetIdRef.current === id) {
           clearLayer(targetRef.current);
@@ -136,18 +196,32 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
         if (!a || !b || !routeRef.current) return;
         const ds = routeSegmentPaths(a.centroid, b.centroid);
         const immediate = juiceRef.current > 0 || prefersReducedMotion();
+        // §11-D63: 세그먼트당 2-스트로크 — 아래 흰 케이싱(굵게) + 위 대륙색 라인. 색은 도착국(to)의
+        // 대륙색. 둘 다 non-scaling-stroke + 동일 dash 드로잉(원작 노선 2-스트로크 감성).
+        const colorVar = `var(--continent-${b.continent})`;
         for (const d of ds) {
-          const el = document.createElementNS(SVG_NS, 'path');
-          el.setAttribute('d', d);
-          el.setAttribute('class', 'wt-map__route');
-          el.setAttribute('vector-effect', 'non-scaling-stroke');
-          routeRef.current.appendChild(el);
-          animateDash(el, 300, immediate);
+          const casing = document.createElementNS(SVG_NS, 'path');
+          casing.setAttribute('d', d);
+          casing.setAttribute('class', 'wt-map__route-casing');
+          casing.setAttribute('vector-effect', 'non-scaling-stroke');
+          routeRef.current.appendChild(casing);
+          animateDash(casing, 300, immediate);
+
+          const line = document.createElementNS(SVG_NS, 'path');
+          line.setAttribute('d', d);
+          line.setAttribute('class', 'wt-map__route-line');
+          line.setAttribute('vector-effect', 'non-scaling-stroke');
+          line.style.setProperty('--continent-color', colorVar);
+          routeRef.current.appendChild(line);
+          animateDash(line, 300, immediate);
         }
       },
       flyTo(ids, opts?: FlyToOptions) {
         if (!cameraRef.current) return;
-        const cam = computeCamera(index, ids, opts?.padding ?? 40);
+        // §11-D63: computeLegCamera — 비-래핑 집합은 computeCamera와 동일, 날짜변경선을 걸치는
+        // 집합(대륙/일주 leg의 seam 교차, 티어/데일리 전 지구 세트, 일주 완주 리빌)은 월드 폴백.
+        const cam = computeLegCamera(index, ids, opts?.padding ?? 40);
+        cameraKRef.current = cam.k;
         const immediate = juiceRef.current > 0 || prefersReducedMotion();
         applyCamera(cameraRef.current, cam, {
           durationMs: opts?.durationMs ?? 800,
@@ -159,12 +233,124 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
         clearLayer(solvedRef.current);
         clearLayer(skippedRef.current);
         clearLayer(targetRef.current);
+        clearLayer(stationsRef.current);
         targetIdRef.current = null;
+        cameraKRef.current = 1;
+        // 이동체 숨김 + 웨이포인트 라벨 비우기(§11-D63).
+        if (vehicleRef.current) {
+          vehicleRef.current.style.display = 'none';
+          vehicleRef.current.style.opacity = '1';
+        }
+        for (const el of [labelPrevRef.current, labelCurRef.current, labelNextRef.current]) {
+          if (el) {
+            el.textContent = '';
+            el.style.display = 'none';
+          }
+        }
         if (cameraRef.current) applyCamera(cameraRef.current, WORLD_CAMERA, { immediate: true });
       },
       setJuiceLevel(level) {
         juiceRef.current = level;
         svgRef.current?.setAttribute('data-juice', String(level));
+      },
+      moveVehicle(from, to, opts?: MoveVehicleOptions) {
+        const a = index.byCountry.get(from);
+        const b = index.byCountry.get(to);
+        const g = vehicleRef.current;
+        if (!a || !b || !g) return;
+        g.style.display = ''; // 호출 시 자동 표시.
+        g.style.opacity = '1';
+        const k = cameraKRef.current || 1;
+        const s = VEHICLE_BASE_SCALE / k;
+
+        // 출발역(from===to)은 이동 없이 스냅만.
+        if (from === to) {
+          g.setAttribute('transform', vehicleTransform(b.centroid[0], b.centroid[1], 0, s));
+          return;
+        }
+
+        const immediate = juiceRef.current > 0 || prefersReducedMotion();
+        const measure = measurePathRef.current;
+        const ds = routeSegmentPaths(a.centroid, b.centroid);
+        // 각 하위 path(날짜변경선 2-패스)마다 프레임 수집 + 각도 연속화.
+        const segFrames: ReturnType<typeof unwrapAngles>[] = [];
+        if (measure) {
+          for (const d of ds) {
+            measure.setAttribute('d', d);
+            const f = samplePathFrames(measure, VEHICLE_SAMPLES);
+            if (f.length >= 2) segFrames.push(unwrapAngles(f));
+          }
+        }
+        const lastSeg = segFrames[segFrames.length - 1];
+        const lastFrame = lastSeg ? lastSeg[lastSeg.length - 1] : undefined;
+        const finalAngle = lastFrame ? lastFrame.angle : 0;
+
+        // 샘플 불가(jsdom/미지원)·즉시(reduced-motion/juice 강등)·WAAPI 미지원 → 종점 스냅.
+        if (immediate || segFrames.length === 0 || typeof g.animate !== 'function') {
+          g.setAttribute(
+            'transform',
+            vehicleTransform(b.centroid[0], b.centroid[1], finalAngle, s),
+          );
+          return;
+        }
+
+        // 키프레임: 단일 패스는 등간격 보간. 다중 패스는 패스 사이에 opacity 0 프레임을 넣어
+        // "첫 패스 종점에서 사라지고 둘째 패스 시점에서 재등장"(화면 밖 텔레포트 은폐)을 표현.
+        const keyframes: Keyframe[] = [];
+        segFrames.forEach((frames, si) => {
+          if (si > 0) {
+            const prevSeg = segFrames[si - 1];
+            const prevLast = prevSeg ? prevSeg[prevSeg.length - 1] : undefined;
+            const first = frames[0];
+            if (prevLast && first) {
+              keyframes.push({
+                transform: vehicleTransform(prevLast.x, prevLast.y, prevLast.angle, s),
+                opacity: 0,
+              });
+              keyframes.push({
+                transform: vehicleTransform(first.x, first.y, first.angle, s),
+                opacity: 0,
+              });
+            }
+          }
+          for (const fr of frames) {
+            keyframes.push({ transform: vehicleTransform(fr.x, fr.y, fr.angle, s), opacity: 1 });
+          }
+        });
+        g.animate(keyframes, {
+          duration: opts?.durationMs ?? VEHICLE_DURATION_MS,
+          easing: 'ease-in-out',
+          fill: 'none',
+        });
+        // 최종 확정(fill:none이므로 애니메이션 종료 후 이 attribute 값으로 안착).
+        g.setAttribute('transform', vehicleTransform(b.centroid[0], b.centroid[1], finalAngle, s));
+      },
+      setVehicleVisible(visible) {
+        const g = vehicleRef.current;
+        if (!g) return;
+        g.style.display = visible ? '' : 'none';
+      },
+      setWaypointLabels(labels) {
+        const k = cameraKRef.current || 1;
+        const fontSize = LABEL_BASE_PX / k;
+        const offsetY = LABEL_OFFSET_PX / k;
+        const apply = (el: SVGTextElement | null, wp: Waypoint | null): void => {
+          if (!el) return;
+          const geo = wp ? index.byCountry.get(wp.id) : undefined;
+          if (!wp || !geo) {
+            el.textContent = '';
+            el.style.display = 'none';
+            return;
+          }
+          el.textContent = wp.label;
+          el.setAttribute('x', String(round(geo.centroid[0], 2)));
+          el.setAttribute('y', String(round(geo.centroid[1] - offsetY, 2)));
+          el.style.fontSize = `${round(fontSize, 2)}px`;
+          el.style.display = '';
+        };
+        apply(labelPrevRef.current, labels.prev);
+        apply(labelCurRef.current, labels.cur);
+        apply(labelNextRef.current, labels.next);
       },
     };
     onReadyRef.current?.(handle);
@@ -231,6 +417,37 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
           <g ref={skippedRef} data-layer="skipped" />
           <g ref={targetRef} data-layer="target" />
           <g data-layer="dots">{dots}</g>
+          {/* §11-D63 여정 무대 레이어(전부 명령형 갱신 — 마운트 후 리렌더 0). 노선 위에 도트,
+              그 위에 라벨·이동체 순으로 겹친다. */}
+          <g ref={stationsRef} data-layer="stations" />
+          <g data-layer="labels" aria-hidden="true">
+            <text
+              ref={labelPrevRef}
+              className="wt-map__label wt-map__label--prev"
+              textAnchor="middle"
+              style={{ display: 'none' }}
+            />
+            <text
+              ref={labelNextRef}
+              className="wt-map__label wt-map__label--next"
+              textAnchor="middle"
+              style={{ display: 'none' }}
+            />
+            <text
+              ref={labelCurRef}
+              className="wt-map__label wt-map__label--cur"
+              textAnchor="middle"
+              style={{ display: 'none' }}
+            />
+          </g>
+          <g ref={vehicleRef} data-layer="vehicle" aria-hidden="true" style={{ display: 'none' }}>
+            {/* 동쪽(+x)을 향하는 비행기 실루엣 — moveVehicle의 rotate가 진행 방향에 정렬한다. */}
+            <path
+              className="wt-map__vehicle"
+              vectorEffect="non-scaling-stroke"
+              d="M9 0 L-7 -6 L-3 0 L-7 6 Z"
+            />
+          </g>
         </g>
       </svg>
     </div>

@@ -77,6 +77,7 @@
   --map-skipped: #cfd4c9; /* 스킵(회색+빗금) */
   --map-route-casing: #ffffff; /* 노선 라인(§3.5) — 기존 하드코딩(#f8fafc 근사) 값을 토큰화 */
   --map-dot: #94a3b8; /* 초소국 circle 기본 */
+  --map-station-fill: #ffffff; /* 방문국 스테이션 도트 흰 fill(§11-D63) */
 }
 
 /* 다크 테마(옵션, D57 — "삭제 금지, 토글 보존"). 신설 시맨틱 토큰 전부 다크 대응값을 정의한다.
@@ -112,6 +113,7 @@
   --map-skipped: #3a424e;
   --map-route-casing: #f8fafc; /* 구 .wt-map__route 하드코딩값과 동일 — 토큰화만, 시각 델타 0 */
   --map-dot: #64748b;
+  --map-station-fill: #e2e8f0; /* 다크 무대에서도 대륙색 ring과 대비되는 밝은 도트 fill(§11-D63) */
 }
 
 /* ── 지도 레이어 스타일(§3.2 계층) — .wt-map 아래 5 레이어. 모든 색은 위 변수만 참조. ── */
@@ -156,14 +158,62 @@
   stroke-width: 0.5;
   opacity: 0.85;
 }
-/* 노선 라인(§3.5): 드로잉은 dashoffset(animateDash), 색은 --map-route-casing(WT-UI-01에서
-   하드코딩 #f8fafc를 토큰화 — 두 테마 모두 이전과 동일한 색으로 렌더돼 시각 델타 없음). */
-.wt-map__route {
+/* 노선 라인(§3.5 + §11-D63 여정 무대): 원작 METRO 노선 감성의 2-스트로크. 아래 흰 케이싱(굵게)
+   + 위 대륙색 라인(가늘게)을 겹쳐 라이트 무대에서 노선이 또렷이 떠 보이게 한다. 드로잉은
+   dashoffset(animateDash), 둘 다 non-scaling-stroke(카메라 줌에도 두께 일정). --continent-color는
+   drawRouteSegment가 도착국 대륙색으로 인라인 지정한다. */
+.wt-map__route-casing {
   fill: none;
   stroke: var(--map-route-casing);
-  stroke-width: 1.5;
+  stroke-width: 4;
   stroke-linecap: round;
-  opacity: 0.9;
+  stroke-linejoin: round;
+}
+.wt-map__route-line {
+  fill: none;
+  stroke: var(--continent-color);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 방문국 스테이션 도트(§11-D63): 흰 fill + 대륙색 ring. 팝인 scale은 도트 중심 기준(fill-box). */
+.wt-map__station {
+  fill: var(--map-station-fill);
+  stroke: var(--continent-color);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* 이동체(§11-D63): 진행 경로를 따라 나는 비행기. 어두운 fill + 크림 halo로 채색 노선 위에서도
+   또렷하게. transform은 moveVehicle이 WAAPI/attribute로 갱신(레이아웃 불변). */
+.wt-map__vehicle {
+  fill: var(--text);
+  stroke: var(--map-route-casing);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+/* 웨이포인트 라벨(§11-D63): prev/cur/next 역명. font-size는 setWaypointLabels가 카메라 k 역보정한
+   user 단위로 인라인 지정. non-scaling-stroke halo(크림)로 폴리곤 위 가독성 확보(paint-order). */
+.wt-map__label {
+  fill: var(--text);
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  user-select: none;
+}
+.wt-map__label--cur {
+  font-weight: 800;
+}
+.wt-map__label--prev,
+.wt-map__label--next {
+  opacity: 0.75;
 }
 @keyframes wt-map-pulse {
   0%,

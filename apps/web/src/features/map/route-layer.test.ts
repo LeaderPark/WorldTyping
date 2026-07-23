@@ -5,10 +5,12 @@ import { describe, expect, it } from 'vitest';
 import type { Country } from '@wt/shared';
 import { buildGeoIndex, type TopologyLike } from './geo-index';
 import {
+  STATION_RADIUS,
   compositeRoutePath,
   needsAntimeridianWrap,
   quadraticBezierPath,
   routeSegmentPaths,
+  unwrapAngles,
 } from './route-layer';
 
 function load(name: string): unknown {
@@ -96,5 +98,25 @@ describe('compositeRoutePath', () => {
   it('점 1개 이하면 빈 문자열', () => {
     expect(compositeRoutePath([])).toBe('');
     expect(compositeRoutePath([[0, 0]])).toBe('');
+  });
+});
+
+describe('unwrapAngles(§11-D63) — 이동체 각도 연속화', () => {
+  it('±180 경계에서 역회전(스핀) 없이 연속화', () => {
+    // 179 → -179는 원래 358° 점프 → -2°로 보정되어야 한다.
+    const out = unwrapAngles([
+      { x: 0, y: 0, angle: 179 },
+      { x: 1, y: 0, angle: -179 },
+    ]);
+    expect(out[0]!.angle).toBe(179);
+    expect(out[1]!.angle).toBeCloseTo(181, 6); // -179 + 360
+    expect(Math.abs(out[1]!.angle - out[0]!.angle)).toBeLessThanOrEqual(180);
+  });
+  it('위치는 보존하고 각도만 보정', () => {
+    const out = unwrapAngles([{ x: 3, y: 4, angle: 10 }]);
+    expect(out[0]).toEqual({ x: 3, y: 4, angle: 10 });
+  });
+  it('STATION_RADIUS는 양수 상수', () => {
+    expect(STATION_RADIUS).toBeGreaterThan(0);
   });
 });

@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import type { Continent, CountryId } from '@wt/shared';
 import {
   K_MAX,
+  LEG_DURATION_MS,
+  LEG_PADDING,
   WORLD_CAMERA,
   cameraTransform,
   computeCamera,
+  computeLegCamera,
 } from './camera';
 import type { CountryGeo, GeoIndex } from './geo-index';
 
@@ -89,5 +92,37 @@ describe('cameraTransform', () => {
   it('translate+scale 문자열', () => {
     expect(cameraTransform({ x: 10, y: 20, k: 2 })).toBe('translate(10 20) scale(2)');
     expect(cameraTransform(WORLD_CAMERA)).toBe('translate(0 0) scale(1)');
+  });
+});
+
+describe('computeLegCamera(§11-D63) — 현 구간 추적 + 날짜변경선 월드 폴백', () => {
+  it('비-래핑 leg는 computeCamera와 동일 결과', () => {
+    const idx = mkIndex([
+      ['A', [[100, 100], [180, 180]]],
+      ['B', [[200, 120], [260, 200]]],
+    ]);
+    const leg = computeLegCamera(idx, ['A', 'B'], LEG_PADDING);
+    const plain = computeCamera(idx, ['A', 'B'], LEG_PADDING);
+    expect(leg).toEqual(plain);
+  });
+
+  it('leg centroid x 폭이 뷰포트 절반(480) 초과면 월드 고정 폴백', () => {
+    // A centroid x≈50, B centroid x≈900 → 폭 850 > 480 → 월드 폴백.
+    const idx = mkIndex([
+      ['A', [[0, 100], [100, 200]]],
+      ['B', [[850, 100], [950, 200]]],
+    ]);
+    expect(computeLegCamera(idx, ['A', 'B'])).toEqual(WORLD_CAMERA);
+  });
+
+  it('빈/미존재 집합은 월드 고정', () => {
+    const idx = mkIndex([['A', [[100, 100], [200, 200]]]]);
+    expect(computeLegCamera(idx, [])).toEqual(WORLD_CAMERA);
+    expect(computeLegCamera(idx, ['ZZ'])).toEqual(WORLD_CAMERA);
+  });
+
+  it('LEG 프리셋 상수 노출(padding 70·duration 600)', () => {
+    expect(LEG_PADDING).toBe(70);
+    expect(LEG_DURATION_MS).toBe(600);
   });
 });

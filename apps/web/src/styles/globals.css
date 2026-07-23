@@ -234,11 +234,13 @@
   min-height: 100vh;
   overflow: hidden;
 }
+/* WT-UI-02(§11-D63): 인게임 지도를 배경 소품에서 "여정 무대"로 승격 — opacity 0.55 제거(라이트
+   전면 불투명). 바다(폴리곤 밖)는 --bg 크림으로 채운다(AppShell bg-bg와 동일 톤 — 이음매 없음). */
 .wt-game-page__map {
   position: absolute;
   inset: 0;
   z-index: 0;
-  opacity: 0.55;
+  background: var(--bg);
 }
 .wt-game-page__content {
   position: relative;

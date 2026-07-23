@@ -122,7 +122,9 @@ function buildChecks(tokens: TokenMap): Check[] {
   const continentSA = requireToken(tokens, 'continent-south-america');
   const continentOceania = requireToken(tokens, 'continent-oceania');
   const promptError = '#ef4444'; // globals.css .wt-prompt { --wt-prompt-error }
-  const promptPending = '#64748b'; // globals.css .wt-prompt { --wt-prompt-pending }
+  // WT-DC-07(D66): pending 글리프는 텍스트가 비고 색은 var(--text-muted)를 상속한다(구
+  // --wt-prompt-pending 토큰 폐기). 다크 --text-muted(#94a3b8)를 회귀 가드로 유지한다.
+  const promptPending = '#94a3b8'; // globals.css .wt-unit.is-pending { color: var(--text-muted) } (dark)
 
   // WT-UI-01(D57) — 라이트 기본 시맨틱 토큰. 전부 tokens.css :root(라이트) 리터럴.
   const bg = requireToken(tokens, 'bg');

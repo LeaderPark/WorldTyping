@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 //
-// spec: docs/03 §2.7(컨트롤러 파이프·hidden input·포커스 유지), §2.8(채색), §2.10 #1(가나 무오타),
-//       §4.4(useTypingEngine). WT-M2-03.
+// spec: docs/03 §2.7(컨트롤러 파이프·hidden input·포커스 유지), §2.8(METRO식 슬롯+입력 에코,
+//       docs/00 §11-D66), §2.10 #1(가나 무오타), §4.4(useTypingEngine). WT-M2-03 / WT-DC-07.
 //
 // 실제 컨트롤러→엔진→렌더러 파이프라인을 조립해 값-스냅샷 입력을 흘려보내며 검증한다(단위 렌더러
-// 테스트가 커버 못 하는 배선·hidden input 계약·포커스 유지까지 포함).
+// 테스트가 커버 못 하는 배선·hidden input 계약·포커스 유지까지 포함). 이벤트 브리지: progress/miss→
+// update, miss→shake, exact→update(캐노니컬 done)+pop, getInputValue로 실입력 에코 전달.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { useEffect, useState } from 'react';
@@ -141,6 +142,8 @@ describe('파이프라인 — 가나 도깨비불 무오타 후 다음 국가로
     }
     // "간" 시점: 받침이 둘째 음절 커서로 흡수 → 오타 아님
     expect(mount.querySelectorAll('.is-error').length).toBe(0);
+    // 입력 에코(D66): 첫 슬롯 글리프에 실입력 '간'이 표시된다(캐노니컬 '가'가 아님).
+    expect(mount.querySelector<HTMLElement>('.wt-unit')!.textContent).toBe('간');
 
     // 확정 → 다음 국가(몽골) 마운트
     type(input, '가나');
@@ -160,6 +163,8 @@ describe('파이프라인 — 가나 도깨비불 무오타 후 다음 국가로
     type(input, '가바'); // 가 뒤 오타 ㅂ
     const mount = screen.getByTestId('prompt-mount');
     expect(mount.querySelectorAll('.is-error').length).toBe(1);
+    // 오타 슬롯은 실입력 '바'를 error로 에코(캐노니컬 '나'가 아님, D66).
+    expect(mount.querySelector<HTMLElement>('.wt-unit.is-error')!.textContent).toBe('바');
     // 렌더러는 마운트 요소 자신에 wt-prompt(+ --shake)를 붙인다.
     expect(mount.classList.contains('wt-prompt')).toBe(true);
     expect(mount.classList.contains('wt-prompt--shake')).toBe(true);

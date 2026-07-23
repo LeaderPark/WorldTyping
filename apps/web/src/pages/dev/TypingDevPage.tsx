@@ -2,8 +2,8 @@
 //       [작업 특이 조정] 이 라우트는 import.meta.env.DEV에서만 router children에 합류한다(main.tsx).
 //
 // 리드 육안 확인용 진단 하니스: 실제 컨트롤러→렌더러 파이프라인을 조립해 "가나" 도깨비불 무오타,
-// "몽골" 음절 전이, 별칭("한국") 캐노니컬 동결을 눈으로 볼 수 있게 한다. 자동 검증은
-// prompt-renderer.test.ts / PromptArea.test.tsx가 담당한다. 프로덕션 번들에는 포함되지 않는다.
+// "몽골" 음절 전이, 별칭("한국") 입력 에코(D66 — 슬롯+힌트+입력 에코)를 눈으로 볼 수 있게 한다.
+// 자동 검증은 prompt-renderer.test.ts / PromptArea.test.tsx가 담당한다. 프로덕션 번들 제외.
 import { useEffect, useMemo, useState } from 'react';
 import {
   GameSessionEngine,
@@ -76,8 +76,9 @@ export function TypingDevPage() {
     <div style={{ padding: 24, fontFamily: 'sans-serif' }} onClick={focusInput}>
       <h1 style={{ fontSize: 20, fontWeight: 700 }}>/dev/typing — 타이핑 렌더러 하니스 (DEV)</h1>
       <p style={{ opacity: 0.7, fontSize: 13 }}>
-        도깨비불 "가나": ㄱ→가→간→가나 를 쳐도 오타(적색) 표시가 없어야 한다. "대한민국"은 "한국"만
-        쳐도 캐노니컬 채색이 동결되고 하단 에코에 실입력이 뜬다.
+        슬롯 위 소형 힌트=목표어, 아래=입력 에코(D66). 도깨비불 "가나": ㄱ→가→간→가나 를 쳐도
+        오타(적색) 표시가 없어야 한다. "대한민국"은 "한국"만 쳐도 첫 슬롯에 "한"이 에코되고, 확정
+        순간 캐노니컬 전체가 done으로 채워진다. 빈 슬롯엔 밑줄과 깜빡이는 커서가 보인다.
       </p>
 
       <div style={{ margin: '12px 0', display: 'flex', gap: 8, alignItems: 'center' }}>

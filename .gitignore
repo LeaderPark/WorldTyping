@@ -22,3 +22,11 @@ e2e/artifacts/
 # WT-M6-05: k6 부하 테스트가 매 실행마다 로컬 wrangler dev 대상으로 새로 발급하는 세션/runToken
 # 픽스처(ephemeral, 30분 TTL) — 커밋 대상 아님(tooling/ops/loadtest-report.md에 결과만 남긴다).
 tooling/ops/loadtest/.out/
+
+# WT-HOST-01: Docker 자기호스팅 스택의 실 시크릿/터널 자격증명/백업 산출물 — 위 .env·.dev.vars
+# 패턴과 일부 겹치지만(경로 무관 매치) 자기호스팅 전용 산출물임을 명시적으로 남겨둔다.
+tooling/selfhost/.env
+tooling/selfhost/cloudflared/*.json
+tooling/selfhost/cloudflared/cert.pem
+tooling/selfhost/backups/
+tooling/selfhost/migration/

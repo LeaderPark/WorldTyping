@@ -1,0 +1,5 @@
+# WT-HOST-01: 이 디렉터리는 전부 Linux 컨테이너(node:24-bookworm-slim, alpine, busybox)가
+# 직접 실행/파싱하는 텍스트다(entrypoint.sh, backup.sh, crontab, Dockerfile 등). 개발 호스트가
+# Windows이고 git core.autocrlf=true인 경우 체크아웃 시 LF→CRLF로 변환되면 셰뱅(#!)/crond
+# 파싱이 깨진다 — 이 디렉터리 하위는 core.autocrlf 설정과 무관하게 항상 LF로 고정한다.
+* text=auto eol=lf

@@ -1,0 +1,39 @@
+# spec: WT-HOST-01 — Cloudflare Cron Triggers 로컬 대체.
+#
+# *** workers/api/wrangler.toml [triggers].crons 가 바뀌면 이 파일도, 이 파일이 바뀌면 그
+# *** wrangler.toml도 반드시 함께 수정할 것. 아래 4행은 그 배열의 4개 문자열과 1:1 대응이며,
+# *** 좌측 5필드(crond 자체 스케줄)도 우측 cron= 쿼리값(URL 인코딩된 동일 문자열, workers/api/
+# *** src/index.ts의 scheduled() event.cron switch가 그대로 비교한다)도 둘 다 그 문자열과
+# *** 정확히 같아야 한다.
+#
+# [WT-HOST-01 실측 + 리드 승인] 엔드포인트는 `/__scheduled`가 아니라 `/cdn-cgi/handler/scheduled`.
+# `/__scheduled`(wrangler `--test-scheduled` 문서상 경로)는 `workers/api/wrangler.toml`의
+# `[assets].run_worker_first`(`/api/*`,`/ws/*`,`/r/*`,`/og/*`,`/multi/*`)에 없어서 assets 우선순위
+# 판단이 Worker보다 먼저 개입해 `not_found_handling: single-page-application` 폴백으로 SPA
+# index.html만 돌려주고 event.cron 디스패치가 아예 실행되지 않는다(실측: `wrangler:info` 로그에
+# `` GET /__scheduled 200 OK ... `Sec-Fetch-Mode: navigate` header present - using
+# `not_found_handling` behavior `` 만 찍히고 D1/KV에 어떤 부작용도 없었다). `/cdn-cgi/handler/scheduled`
+# (wrangler dev의 실제 스케줄 트리거 엔드포인트, assets 라우팅보다 아래 계층에서 처리)는 실제로
+# `scheduled()`를 실행함을 D1 kpi_daily INSERT 등 부작용으로 직접 증명했다 — 이 경로만 유효하다.
+# wrangler.toml/앱 코드는 건드리지 않고 self-host 툴링(이 파일)만 바꾼 것으로 리드 승인 완료.
+#
+# [실측 — Host 헤더 필수] wrangler dev는 `/cdn-cgi/handler/scheduled`에 Host 헤더 검증을 건다
+# (DNS 리바인딩 방지 목적으로 추정) — Docker 내부 네트워크 호스트명(`app:8787`)을 Host로
+# 보내면 `403 Invalid Host header`로 거부된다(cron-ping 컨테이너에서 직접 재현). `-H "Host:
+# localhost:8787"`로 덮어써야 200이 된다(app 컨테이너 자신은 8787에서 리슨 중이라 어떤 이름으로
+# 커넥션을 열었든 상관없고, HTTP 계층의 Host 헤더 값만 문제였다).
+#
+# 인코딩: 공백 → "+", "/" → "%2F" (그 외 문자는 cron 표현식에 없어 인코딩 불필요).
+#   "0 15 * * *"   -> "0+15+*+*+*"
+#   "*/1 * * * *"  -> "*%2F1+*+*+*+*"
+#   "*/5 * * * *"  -> "*%2F5+*+*+*+*"
+#   "30 16 * * *"  -> "30+16+*+*+*"
+#
+# 각 잡의 stdout/stderr를 /proc/1/fd/{1,2}(crond 자신의 스트림, PID 1 -f 포그라운드)로 리다이렉트
+# 해서 `docker compose logs cron-ping`에 매 curl 결과가 그대로 찍히게 한다.
+#
+# m   h   dom mon dow  command
+0   15  *   *   *    curl -fsS --max-time 50 -H "Host: localhost:8787" "http://app:8787/cdn-cgi/handler/scheduled?cron=0+15+*+*+*" >>/proc/1/fd/1 2>>/proc/1/fd/2
+*   *   *   *   *    curl -fsS --max-time 50 -H "Host: localhost:8787" "http://app:8787/cdn-cgi/handler/scheduled?cron=*%2F1+*+*+*+*" >>/proc/1/fd/1 2>>/proc/1/fd/2
+*/5 *   *   *   *    curl -fsS --max-time 50 -H "Host: localhost:8787" "http://app:8787/cdn-cgi/handler/scheduled?cron=*%2F5+*+*+*+*" >>/proc/1/fd/1 2>>/proc/1/fd/2
+30  16  *   *   *    curl -fsS --max-time 50 -H "Host: localhost:8787" "http://app:8787/cdn-cgi/handler/scheduled?cron=30+16+*+*+*" >>/proc/1/fd/1 2>>/proc/1/fd/2

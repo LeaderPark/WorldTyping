@@ -1,0 +1,33 @@
+# spec: WT-HOST-01 (Fable 5 승인, 리드 승인 완료) — cloudflared 터널 ingress 예시.
+#
+# 이 파일은 예시일 뿐이다. 실제 터널 UUID·credentials-file·도메인 배선은 WT-HOST-02
+# (cloudflared 인증 후)에서 채운다. 실사용 시 이 파일을 같은 디렉터리에 `config.yml`로 복사한 뒤
+# 아래 <placeholder>를 실값으로 채운다 — `config.yml`과 자격증명 JSON/cert.pem은
+# .gitignore/.dockerignore 대상이라 커밋되지 않는다.
+#
+# docker-compose.yml의 `cloudflared` 서비스가 `./cloudflared:/etc/cloudflared:ro`로 이 디렉터리
+# 전체를 마운트하고 `cloudflared tunnel --config /etc/cloudflared/config.yml run`을 실행한다.
+
+tunnel: <tunnel-uuid>
+credentials-file: /etc/cloudflared/<tunnel-uuid>.json
+
+ingress:
+  # wrangler dev --test-scheduled가 여는 수동 크론 발화 엔드포인트 — cron-ping 컨테이너만
+  # 내부 네트워크(app:8787)로 직접 호출해야 한다. 외부에서 두드려 크론 잡을 임의로 재실행하는
+  # 것을 막기 위해 터널 바깥으로는 절대 노출하지 않는다.
+  # [WT-HOST-01 실측] 실제로 동작하는 경로는 /__scheduled가 아니라 /cdn-cgi/handler/scheduled다
+  # (cron-ping/crontab 상단 주석 참고 — /__scheduled는 assets에 가로채져 이미 무해하지만, 방어
+  # 심층화 차원에서 둘 다 막는다). /cdn-cgi/handler/scheduled 쪽은 wrangler dev 자체의 Host
+  # 헤더 검증(localhost/127.0.0.1 패턴만 허용, 실측: 403 Invalid Host header)이 터널 경유
+  # 요청(Host: worldtyping.leaderpark.net)을 어차피 걸러낼 가능성이 높지만, 그 내부 동작에
+  # 기대지 않고 엣지(cloudflared)에서 명시적으로 차단한다.
+  - hostname: worldtyping.leaderpark.net
+    path: /(__scheduled|cdn-cgi/handler/scheduled).*
+    service: http_status:404
+
+  # 실제 앱 트래픽 — Docker 내부 네트워크에서 app 서비스명:포트로 프록시.
+  - hostname: worldtyping.leaderpark.net
+    service: http://app:8787
+
+  # ingress 규칙에 매칭되는 hostname이 위에 하나도 없으면 반드시 필요한 catch-all.
+  - service: http_status:404

@@ -1,0 +1,18 @@
+# spec: WT-HOST-01 (Fable 5 승인, 리드 승인 완료) — tooling/selfhost/Dockerfile 빌드 컨텍스트
+# (= 레포 루트)에서 제외할 항목. 호스트 node_modules/상태를 이미지에 그대로 복사하면 안 된다
+# (플랫폼 불일치 네이티브 바이너리, 캐시 신선도 문제) — Dockerfile은 컨테이너 안에서
+# `pnpm install`을 새로 실행한다.
+
+node_modules
+**/node_modules
+
+.wrangler
+**/.wrangler
+
+.git
+
+e2e/artifacts
+
+tooling/selfhost/.env
+tooling/selfhost/cloudflared/*.json
+tooling/selfhost/backups

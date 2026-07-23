@@ -1,0 +1,138 @@
+# spec: WT-HOST-01 (Fable 5 승인, 리드 승인 완료) — Cloudflare Workers 자기호스팅 Docker 스택.
+# 실행 위치: 이 디렉터리(tooling/selfhost)에서 `docker compose ...` (compose가 이 파일과 같은
+# 디렉터리의 .env를 변수 치환 + `env_file: .env` 양쪽으로 자동 사용한다).
+#
+# 기동:
+#   cp .env.example .env && <값 채우기> && docker compose build
+#   docker compose up -d app cron-ping backup     # cloudflared는 WT-HOST-02(터널 배선)까지 제외
+#
+# `version:` 최상위 키는 최신 Docker Compose(v2)에서 obsolete라 생략한다(Compose Specification).
+
+services:
+  # -------------------------------------------------------------------------
+  # app — wrangler dev(miniflare)가 D1/KV/DO/Queues/AE/R2/WS를 전부 로컬 시뮬레이션.
+  # 127.0.0.1에만 바인딩 — 외부 비공개, 공개 노출은 WT-HOST-02의 cloudflared 터널을 통해서만.
+  # -------------------------------------------------------------------------
+  app:
+    build:
+      context: ../..
+      dockerfile: tooling/selfhost/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - wt-data:/data
+    ports:
+      - "127.0.0.1:8787:8787"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8787/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    mem_limit: 4g
+    cpus: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    # willfarrell/autoheal(아래)이 기본으로 찾는 라벨 — unhealthy 판정 시 자동 재시작 대상.
+    labels:
+      autoheal: "true"
+
+  # -------------------------------------------------------------------------
+  # cloudflared — WT-HOST-02(터널 인증·config.yml 실값 배선) 전까지 비활성.
+  # profiles: ["tunnel"]이라 `docker compose up`(기본 프로파일)에는 절대 포함되지 않는다 —
+  # 명시적으로 `docker compose --profile tunnel up -d cloudflared`를 호출해야만 뜬다.
+  # cloudflared/config.yml(실 UUID·ingress)과 cert.pem/credentials json은 HOST-02 산출물.
+  # -------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:2025.8.1
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    restart: unless-stopped
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    profiles: ["tunnel"]
+
+  # -------------------------------------------------------------------------
+  # cron-ping — Cloudflare Cron Triggers 대체. workers/api/wrangler.toml [triggers].crons의
+  # 4개 문자열과 동일한 주기로 `/cdn-cgi/handler/scheduled?cron=<url-encoded>`를 curl로 두드려
+  # index.ts scheduled()의 event.cron 스위치를 태운다(문서: cron-ping/crontab 파일 상단 주석).
+  # [리드 승인, WT-HOST-01] `/__scheduled`(문서상 --test-scheduled 경로)는 run_worker_first에
+  # 없어 assets가 먼저 가로채 무동작이었다 — /cdn-cgi/handler/scheduled로 교체, D1 side-effect로
+  # 실제 동작 검증 완료.
+  #
+  # [베이스 이미지 참고] 공식 `busybox` 이미지는 crond는 있어도 curl이 없다(curl은 busybox
+  # applet이 아니라 별도 프로젝트). alpine은 자체가 busybox 기반이라 crond를 그대로 제공하면서
+  # `apk add curl`로 curl도 쉽게 얹을 수 있어 이쪽을 썼다 — crond 동작은 동일하다.
+  # -------------------------------------------------------------------------
+  cron-ping:
+    image: alpine:3.20
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+    volumes:
+      - ./cron-ping/crontab:/etc/crontabs/root:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - apk add --no-cache curl >/dev/null 2>&1 && echo "[cron-ping] curl installed, starting crond" && exec crond -f -l 2
+
+  # -------------------------------------------------------------------------
+  # backup — 일 1회(17:30 UTC = KST 02:30) /data → tooling/selfhost/backups/wt-data-YYYYMMDD.tar.gz.
+  # *.sqlite는 `sqlite3 -readonly .backup`으로 WAL 정합 스냅샷(원본이 :ro 마운트 + wrangler dev가
+  # 쓰기 중일 수 있어 raw cp 금지), 그 외 파일은 단순 cp. 14일 초과 아카이브는 자동 삭제
+  # (backup.sh 참고). 수동 1회 실행: `docker compose exec backup /backup.sh`.
+  # -------------------------------------------------------------------------
+  backup:
+    image: alpine:3.20
+    restart: unless-stopped
+    environment:
+      TZ: UTC
+      BACKUP_RETAIN_DAYS: "14"
+    volumes:
+      - wt-data:/data:ro
+      # backup.sh 자체는 :ro로 마운트하지 않는다 — chmod +x가 그 마운트에 직접 걸려야 하는데
+      # (acceptance의 `docker compose exec backup /backup.sh`가 실행 비트를 요구), 바인드
+      # 마운트를 :ro로 걸면 chmod 자체가 "Read-only file system"으로 실패해 컨테이너가
+      # crash-loop한다(실측). 컨테이너가 어차피 /data에도 그 아래 backups/에도 쓰기 권한을
+      # 이미 가지고 있어(위/아래 볼륨) 이 파일 하나의 쓰기 권한을 추가로 여는 것은 유의미한
+      # 공격면 증가가 아니다.
+      - ./backup/backup.sh:/backup.sh
+      - ./backups:/backups
+    depends_on:
+      app:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        apk add --no-cache sqlite tar coreutils >/dev/null 2>&1
+        chmod +x /backup.sh
+        echo "30 17 * * * /backup.sh >>/proc/1/fd/1 2>>/proc/1/fd/2" > /etc/crontabs/root
+        echo "[backup] apk deps ready, scheduled 17:30 UTC daily (KST 02:30) via crond -f"
+        exec crond -f -l 2
+
+  # -------------------------------------------------------------------------
+  # autoheal — app의 Docker HEALTHCHECK가 unhealthy로 넘어가면 자동으로 `docker restart`.
+  # [보안 트레이드오프] docker.sock 마운트는 이 컨테이너에 호스트 Docker 데몬 전체 제어권(사실상
+  # root 동등 권한)을 준다 — autoheal 자체는 라벨(autoheal=true)이 붙은 컨테이너만 재시작하도록
+  # 스코프되어 있지만, 소켓 접근 자체는 컨테이너 탈출 없이도 호스트의 다른 모든 컨테이너를
+  # 조작할 수 있는 능력이다. 신뢰할 수 있는 공식 이미지(willfarrell/autoheal, 최소 기능)만
+  # 이 마운트를 받도록 이 서비스 하나로 한정한다(app/cron-ping/backup은 소켓을 받지 않는다).
+  # -------------------------------------------------------------------------
+  autoheal:
+    image: willfarrell/autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  wt-data:

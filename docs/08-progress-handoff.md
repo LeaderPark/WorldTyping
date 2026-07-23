@@ -195,6 +195,6 @@ env `CLOUDFLARE_API_TOKEN`(Zone)** 로 나눠 사용(OAuth는 DNS 403, env는 Wo
 **운영 주의**: ① **Docker Desktop 부팅 시 자동 시작** 설정 필수(24/7 전제; 미설정 시 재부팅=다운타임).
 ② 전 서비스 `restart: unless-stopped`. ③ `/data` 일 1회 백업(내구성은 이제 우리 책임 — backup 서비스).
 ④ 커밋: `23b2525`(UI-01 라이트) `c211bf7`(OPT-01 낭비) `a4db199`(HOST-01 스택) `7dc3215`(명명) `246151a`(HOST-02 터널).
-⑤ §11 D57~D62 정식 행은 후속 문서 정리에서 반영 예정.
+⑤ §11 D57~D65 정식 행 반영 완료(docs/00 §11 표) — 자기호스팅·lb최적화·geo·대비·카메라·국기·TAB.
 
 **라이브 스모크(터널 경유, 전부 통과)**: 세션(geo=KR)·config·daily(no=1)·lb·멀티(방 생성→WS `welcome`).

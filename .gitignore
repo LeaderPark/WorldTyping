@@ -30,3 +30,6 @@ tooling/selfhost/cloudflared/*.json
 tooling/selfhost/cloudflared/cert.pem
 tooling/selfhost/backups/
 tooling/selfhost/migration/
+
+# Claude Code 격리 worktree(전이적)
+.claude/worktrees/

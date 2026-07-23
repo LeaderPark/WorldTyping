@@ -128,16 +128,25 @@ bindings = [
 binding = "AE"
 dataset = "wt_telemetry"
 
-# ---------- prod ----------
+# ---------- prod (worldtyping.leaderpark.net — Workers Free 플랜) ----------
+# 도메인 확정: worldtyping.leaderpark.net (존 leaderpark.net, 리드 운영 결정 — launch-checklist §1.4).
+# Free 플랜 제약으로 Queues·Analytics Engine·R2 바인딩을 prod에서만 제거했다. 코드는 전부
+# 미바인딩 가드가 있어 no-op으로 안전하게 동작한다:
+#   - EVENTS(Queue): report.ts `if (c.env.EVENTS)`, MatchRoom.ts `if (!this.env.EVENTS)` 가드
+#   - AE(Analytics Engine): telemetry.ts `if (!env.AE) return;`, retention.ts는 CF_AE_API_TOKEN 있을 때만
+#   - BUCKET(R2): 코드 사용처 0 (env.ts "v1 필수 아님 — 바인딩만")
+# 텔레메트리·신고 큐 처리·고스트 수집은 prod에서 비활성(허용된 저하). Workers Paid 전환 시
+# top-level/staging과 동일한 queues·analytics_engine_datasets·r2_buckets 블록을 여기 되살리면
+# 코드 변경 없이 재활성화된다. (top-level dev·staging은 테스트/로컬용으로 그대로 둔다 —
+# vitest는 top-level 설정을 쓰므로 Queue/AE 시뮬레이션 유지.)
 [env.prod]
 name = "typetrip-prod"
-# 도메인 미확정 — PUBLIC_ORIGIN 확정 후 routes를 채운다(docs/00 §7 gotcha 7, 코드에 오리진 하드코딩 금지).
-routes = [
-  { pattern = "<PUBLIC_ORIGIN placeholder>", custom_domain = true },
-]
+workers_dev = false
+routes = [{ pattern = "worldtyping.leaderpark.net", custom_domain = true }]
 
 [env.prod.vars]
 ENVIRONMENT = "prod"
+PUBLIC_ORIGIN = "https://worldtyping.leaderpark.net"
 
 [[env.prod.d1_databases]]
 binding = "DB"
@@ -148,25 +157,8 @@ database_id = "<prod-uuid>"
 binding = "KV"
 id = "<prod-kv-id>"
 
-[[env.prod.r2_buckets]]
-binding = "BUCKET"
-bucket_name = "wt-prod"
-
-[[env.prod.queues.producers]]
-queue = "wt-events-prod"
-binding = "EVENTS"
-
-[[env.prod.queues.consumers]]
-queue = "wt-events-prod"
-max_batch_size = 50
-max_batch_timeout = 5
-
 [env.prod.durable_objects]
 bindings = [
   { name = "MATCH_ROOM",  class_name = "MatchRoomDO" },
   { name = "MATCHMAKER",  class_name = "MatchmakerDO" },
 ]
-
-[[env.prod.analytics_engine_datasets]]
-binding = "AE"
-dataset = "wt_telemetry"

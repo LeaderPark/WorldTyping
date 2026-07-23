@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { computeScore, requiredKeystrokes, type CountryId, type ScoreCountry } from "@wt/shared";
 import { COUNTRIES } from "@wt/data";
 import { renderShareCardPng } from "../src/og/render";
+import { OG_COLORS } from "../src/og/layout";
 
 const BASE = "http://local/api/v1";
 const BY_ID = new Map(COUNTRIES.map((c) => [c.id, c] as const));
@@ -232,6 +233,36 @@ describe("renderShareCardPng 직접 렌더", () => {
       countryCodes: ["__nonexistent__"],
     });
     expect(isPng(png)).toBe(true);
+  });
+});
+
+describe("OG_COLORS 라이트 팔레트 (WT-UI-09, docs/00 §11-D57)", () => {
+  // og/layout.ts는 Worker(satori)가 CSS 변수를 참조할 수 없어 apps/web/src/styles/tokens.css의
+  // :root(라이트 기본) 리터럴을 손으로 옮겨 적는다("리터럴 동기 관례", index.html 정적 셸과 동일
+  // 원칙) — WT-M6-02의 구 다크 고정 팔레트(#0b1220 등)를 D57(기본 테마 라이트 전환)에 맞춰
+  // 대체했다. 이 테스트는 그 리터럴이 다시 다크로 되돌아가는 회귀를 잡는 가드다(수치 자체가
+  // tokens.css를 파싱해 검증하지는 않는다 — og/layout.ts는 apps/web을 import할 수 없는 별도
+  // 워크스페이스라 tooling/ci/contrast-check.ts처럼 파일을 직접 파싱하지 않고, 값을 사람이
+  // 확인해 리터럴로 못 박는다).
+  it("카드 배경·텍스트·강조색이 tokens.css :root 라이트 리터럴과 일치한다", () => {
+    expect(OG_COLORS.bg0).toBe("#f4f5ef");
+    expect(OG_COLORS.bg1).toBe("#eceee6");
+    expect(OG_COLORS.panel).toBe("#ffffff");
+    expect(OG_COLORS.land).toBe("#ffffff");
+    expect(OG_COLORS.landStroke).toBe("#d9ddd0");
+    expect(OG_COLORS.text).toBe("#171b19");
+    expect(OG_COLORS.subtext).toBe("#5e645e");
+    expect(OG_COLORS.route).toBe("#0a84ff");
+    expect(OG_COLORS.node).toBe("#94a3b8");
+    expect(OG_COLORS.nodeStart).toBe("#0a84ff");
+    expect(OG_COLORS.logo).toBe("#0a84ff");
+  });
+
+  it("더 이상 WT-M6-02의 다크 고정 리터럴(#0b1220 배경/#38bdf8 강조)을 쓰지 않는다", () => {
+    const values = Object.values(OG_COLORS);
+    expect(values).not.toContain("#0b1220");
+    expect(values).not.toContain("#111c33");
+    expect(values).not.toContain("#38bdf8");
   });
 });
 

@@ -7,6 +7,12 @@
 // 조정 지시). 라우팅은 이전과 동일하게 non-lazy `element`(router.tsx, router-config.test.ts
 // "Home/ModeSelect/TrackSelect/Privacy는 eager" 불변식 유지) — 텍스트 위주 페이지라 엔트리
 // 예산(<170KB gzip)에 미치는 영향이 미미해 별도 청크 분리 이득이 적다.
+//
+// [WT-UI-09 라이트 스킴 점검] 구분선 두 곳이 border-slate-300/dark:border-slate-700 원색을
+// 직접 하드코딩하고 있었다(D57 이전 잔재 — 다른 하드코딩은 이미 WT-UI-01/D62가 --text-muted로
+// 정리했지만 이 두 <hr>은 그때 누락됐다). tokens.css --border(라이트 #e3e6db/다크 #334155)를
+// 참조하는 border-border 유틸로 교체 — 값 자체는 슬레이트와 육안상 거의 동일해 시각 델타는
+// 미세하지만, 토큰 회귀 가드(테마 전환·향후 팔레트 조정)에 편입된다는 점이 핵심이다.
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import privacyKo from './privacy.ko.md?raw';
@@ -116,7 +122,7 @@ export function PrivacyPage() {
         <MarkdownBody source={privacyKo} testId="privacy-body-ko" />
       </section>
 
-      <hr className="my-8 border-slate-300 dark:border-slate-700" />
+      <hr className="my-8 border-border" />
 
       <section aria-label={t('privacy.lang.en')}>
         <h2 className="mt-4 text-base font-semibold uppercase tracking-wide text-text-muted">
@@ -125,7 +131,7 @@ export function PrivacyPage() {
         <MarkdownBody source={privacyEn} testId="privacy-body-en" />
       </section>
 
-      <hr className="my-8 border-slate-300 dark:border-slate-700" />
+      <hr className="my-8 border-border" />
 
       {/* 크레딧: notice.disputed(i18n) + ODbL/Natural Earth/flag-icons 고지(docs/02 §2·§12).
           전체 크레딧 페이지(라이선스 전문 링크 포함)는 WT-M6-06이 /credits로 신설했다 — 여기는

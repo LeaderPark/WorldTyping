@@ -1,6 +1,7 @@
 // spec: docs/06 §9.1(카드 구성: 대륙 지도+등급 스탬프+닉네임/PI/CPM/ACC/시간+로고), docs/00 §11-D52-⑦
-//       (IG 캔버스 재렌더는 이 OG 레이아웃을 재사용 — M6-02로 이연), docs/01 §1.3/§13.2·D50(브랜드
-//       색은 장식·지도 fill 전용, 텍스트 원색 직접 사용 금지), WT-M6-02
+//       (IG 캔버스 재렌더는 이 OG 레이아웃을 재사용 — M6-02로 이연)·D57(WT-UI-01 기본 테마 라이트
+//       전환), docs/01 §1.3/§13.2·D50(브랜드 색은 장식·지도 fill 전용, 텍스트 원색 직접 사용 금지),
+//       WT-M6-02, WT-UI-09(런칭 마감 — OG 이미지 라이트 정합)
 //
 // OG 결과 카드의 레이아웃 상수 단일 원천. Worker 의존(satori/wasm/D1)이 전혀 없는 순수 상수·순수
 // 함수만 둔다 — D52-⑦의 클라 IG 캔버스 재렌더가 나중에 "이 파일만" 재사용(또는 packages/shared로
@@ -17,19 +18,29 @@ export const OG_MAP = { x: 40, y: 92, w: 1120, h: 396 } as const;
 /** og-maps.json의 기준 뷰포트(geo-index.ts와 동일). */
 export const OG_MAP_VIEWBOX: [number, number] = [960, 500];
 
-/** 카드 팔레트(다크 고정 — OG 미리보기는 뷰어 테마와 무관하게 항상 다크 브랜드로). */
+/**
+ * 카드 팔레트(WT-UI-09 — 라이트 전환, D57). Worker(satori/workers-og)는 인라인 style 문자열만
+ * 소비해 apps/web/src/styles/tokens.css의 CSS 커스텀 프로퍼티를 참조할 수 없다 — 그래서 아래는
+ * 전부 그 파일 :root(라이트 기본) 리터럴을 사람이 손으로 옮겨 적은 것이다(자동 동기 아님,
+ * index.html 정적 셸과 동일한 "리터럴 동기 관례" — tokens.css 라이트 값이 바뀌면 이 표도 같이
+ * 갱신해야 한다). 이전(WT-M6-02) 팔레트는 뷰어 테마와 무관한 다크 고정이었다 — D57로 웹 UI
+ * 기본 테마가 라이트로 반전된 뒤에도 OG만 다크로 남아 있으면 공유 카드가 실제 앱 배색과
+ * 어긋나 보이므로, OG도 라이트 브랜드로 고정한다(뷰어의 다크 옵션 테마와 무관 — OG는 항상
+ * 이 표 그대로 렌더되는 단일 고정 스킴). render.ts/satori/폰트 파이프라인 로직은 무수정 —
+ * 이 파일이 내보내는 리터럴 값만 바뀐다.
+ */
 export const OG_COLORS = {
-  bg0: "#0b1220",
-  bg1: "#111c33",
-  panel: "#0e1830",
-  land: "#243352",
-  landStroke: "#33456b",
-  text: "#f8fafc",
-  subtext: "#94a3b8",
-  route: "#38bdf8",
-  node: "#e2e8f0",
-  nodeStart: "#38bdf8",
-  logo: "#38bdf8",
+  bg0: "#f4f5ef", // tokens.css :root --bg
+  bg1: "#eceee6", // tokens.css :root --surface-sunken
+  panel: "#ffffff", // tokens.css :root --surface
+  land: "#ffffff", // tokens.css :root --map-idle
+  landStroke: "#d9ddd0", // tokens.css :root --map-border
+  text: "#171b19", // tokens.css :root --text
+  subtext: "#5e645e", // tokens.css :root --text-muted
+  route: "#0a84ff", // tokens.css :root --accent (비대륙 모드 기본 노선색)
+  node: "#94a3b8", // tokens.css :root --map-dot
+  nodeStart: "#0a84ff", // tokens.css :root --accent
+  logo: "#0a84ff", // tokens.css :root --accent
 } as const;
 
 /** 등급 스탬프 색(장식 전용 — D50). S=금, 이하 등급 하강. */

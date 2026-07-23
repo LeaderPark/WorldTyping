@@ -113,7 +113,11 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
 
 ## 8. 배포 기록 (2026-07-23 — 최초 prod 라이브)
 
-**라이브 URL: <https://worldtyping.leaderpark.net>** (Cloudflare Workers Free 플랜, prod 환경).
+**라이브 URL: <https://worldtyping.leaderpark.net>**
+
+> ⚠️ **최신 상태(2026-07-23): §8.6 자기호스팅으로 이전 완료.** 아래 §8.1~8.5는 **최초 Cloudflare
+> Workers 배포 이력**이며, **그 Worker(`typetrip-prod`)는 삭제됨**(KV 무료 한도 소진 → 자기호스팅
+> 전환). 현재 prod는 서버 Docker(wrangler dev/miniflare) + Cloudflare Tunnel로 서빙된다 — §8.6이 현재 진실.
 
 ### 8.1 무엇이 어떻게 배포됐나
 
@@ -159,3 +163,38 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
   (`.github/workflows/README.md`). 현재는 로컬 wrangler 수동 배포.
 - HSTS preload 제출 · 실기기 IME 스모크 · 링크 미리보기 3종(launch-checklist).
 - (선택) Workers Paid 전환 시 Queue/AE/R2 재활성화.
+
+---
+
+## 8.6 자기호스팅 이전 (2026-07-23 — 현재 prod 진실)
+
+**계기**: §8.1 Workers 배포의 KV 무료 한도(쓰기/삭제/목록 각 1,000/일)를 `lb-refresher` 크론 낭비
+버그(빈 보드 삭제 스톰 ≈6,900/일 + 매분 list 1,440/일)가 트래픽 0에서도 소진 → 리드가 자기호스팅 결정.
+
+**현재 아키텍처**: `worldtyping.leaderpark.net` → Cloudflare Edge(TLS+`CF-IPCountry`) → **Cloudflare Tunnel
+(remotely-managed, token)** → 24/7 서버 Docker. 앱 코드 재작성 없음 — `wrangler dev`(miniflare)가
+D1/KV/DO/Queues/AE/R2/WS를 전부 로컬 시뮬레이션(**KV/D1 무료 한도 자체가 없음**; Queues/AE/R2도 자동 부활).
+
+| 항목 | 값 |
+|---|---|
+| 코드/스택 | `tooling/selfhost/`(Dockerfile·docker-compose·entrypoint·cron-ping·backup·autoheal) |
+| Compose 프로젝트 | `worldtyping` (컨테이너: `worldtyping`(app) + `worldtyping-{cloudflared,cron-ping,backup,autoheal}`), 볼륨 `worldtyping_wt-data`(/data = D1/KV/DO SQLite) |
+| 구동 | `cd tooling/selfhost && docker compose --profile tunnel up -d --build` |
+| 터널 | id `dc4baecc-430c-44af-891c-955daac82b5f`, remotely-managed(token, `.env`의 `CLOUDFLARE_TUNNEL_TOKEN`), ingress/DNS는 CF API 설정(proxied CNAME → `<id>.cfargotunnel.com`) |
+| 시크릿 | `tooling/selfhost/.env`(gitignore) — 새 랜덤 32B(새로 시작, 데이터 이행 없음) |
+| 크론 | cron-ping 컨테이너가 `/cdn-cgi/handler/scheduled?cron=...`+`Host:localhost:8787` 핑(`/__scheduled`는 assets가 가로채 무동작) |
+| geo | `CF-IPCountry` 헤더 우선(§11-D61) — 라이브 `geo=KR` 검증됨 |
+
+**터널을 브라우저 로그인 없이 만든 방법(다음 세션 참고)**: `cloudflared tunnel login`(브라우저)은 불요.
+CF API로 터널 생성/ingress/DNS 처리 — **터널 API = wrangler OAuth 토큰(`connectivity:admin`), DNS API =
+env `CLOUDFLARE_API_TOKEN`(Zone)** 로 나눠 사용(OAuth는 DNS 403, env는 Workers 403이라 역할 분담).
+
+**옛 Cloudflare 리소스**: Worker `typetrip-prod` **삭제됨**. D1 `wt-main-prod`·KV `wt-kv-prod`는
+**고아 상태로 유휴 잔존**(연산 0 → 쿼터/비용 0) — 선택적으로 삭제 가능(새로 시작이라 데이터 불요).
+
+**운영 주의**: ① **Docker Desktop 부팅 시 자동 시작** 설정 필수(24/7 전제; 미설정 시 재부팅=다운타임).
+② 전 서비스 `restart: unless-stopped`. ③ `/data` 일 1회 백업(내구성은 이제 우리 책임 — backup 서비스).
+④ 커밋: `23b2525`(UI-01 라이트) `c211bf7`(OPT-01 낭비) `a4db199`(HOST-01 스택) `7dc3215`(명명) `246151a`(HOST-02 터널).
+⑤ §11 D57~D62 정식 행은 후속 문서 정리에서 반영 예정.
+
+**라이브 스모크(터널 경유, 전부 통과)**: 세션(geo=KR)·config·daily(no=1)·lb·멀티(방 생성→WS `welcome`).

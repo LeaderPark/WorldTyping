@@ -11,6 +11,9 @@ node_modules
 
 .git
 
+# Claude Code 워크스페이스(worktree·태스크 산출물) — 이미지에 포함 금지
+.claude
+
 e2e/artifacts
 
 tooling/selfhost/.env

@@ -176,6 +176,8 @@
   "race.reveal.countries": "{count}-country race",
   "race.finish.waiting": "Finished! Waiting for results...",
 
+  "lobby.hero.subtitle": "Real-time races — overtake with your fingers",
+
   "bot.offer.title": "No opponents found",
   "bot.offer.body": "Start with a ghost bot instead?",
   "bot.offer.accept": "Start with bot",

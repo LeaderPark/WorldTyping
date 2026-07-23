@@ -1335,8 +1335,11 @@
   font-size: 0.9rem;
 }
 
-/* ── S9/S10/S11 멀티(WT-M4-04) ──────────────────────────────────────────
-   spec: docs/01 §10.2(S9/S10/S11 와이어프레임), docs/03 §6.5(OpponentTracks)·§6.3(ack 고스트). */
+/* ── S9/S10/S11 멀티(WT-M4-04, 라이트 정비 WT-UI-08) ─────────────────────
+   spec: docs/01 §8.2·§10.2(S9/S10/S11 와이어프레임), docs/03 §6.3(ack 고스트)·§6.5(OpponentTracks
+   rAF 계약). WT-UI-08은 WT-UI-01의 전역 컴포넌트 클래스(.wt-card/.wt-pill/.wt-icon-tile/.wt-kicker,
+   아래쪽 "전역 컴포넌트 클래스" 절 참조)를 로비/대기실/레이스에 처음 실제로 배선한다 — 판정/
+   프로토콜/엔진 코드는 무관, 여기는 시각 계층만 다룬다. */
 .wt-lobby,
 .wt-room {
   display: flex;
@@ -1354,15 +1357,73 @@
   justify-content: space-between;
   gap: 1rem;
 }
+.wt-lobby__back {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-decoration: none;
+}
+.wt-lobby__back:hover,
+.wt-lobby__back:focus-visible {
+  color: var(--text);
+}
+
+/* 히어로(①) — 홈 로고 카드와 같은 어휘: 아이콘 타일 + 제목 + 카피. */
+.wt-lobby__hero {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.25rem 0.25rem 0.5rem;
+}
+.wt-lobby__hero-icon {
+  font-size: 1.375rem;
+}
+.wt-lobby__hero-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.wt-lobby__hero-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.wt-lobby__hero-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* 섹션 카드: 예전엔 얇은 보더 박스였다 — .wt-card와 동일한 표면/그림자/반경으로 승격(구현 세부
+   지시 3의 "--surface 계열" 방침 계승, 신규 토큰 없음). */
 .wt-lobby__section {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  padding: 1rem;
-  border-radius: 0.75rem;
-  border: 1px solid var(--map-border);
-  /* WT-UI-01: --surface 계열로 치환(구현 세부 지시 3) — 회귀 사유는 .wt-mobile-skip 주석 참조. */
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  padding: 1.25rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.wt-lobby__section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.wt-lobby__section--quickmatch {
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+}
+.wt-lobby__quickmatch-cta {
+  width: 100%;
+  max-width: 22rem;
+  font-size: 1rem;
+}
+.wt-lobby__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 .wt-lobby__row {
   display: flex;
@@ -1370,53 +1431,215 @@
   align-items: center;
   gap: 0.6rem;
 }
+.wt-lobby__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.wt-lobby__field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
 .wt-lobby__error {
   color: var(--wt-prompt-error, #ef4444);
+  font-size: 0.9rem;
+}
+/* 방 코드 입력: .wt-rank-page__mode-select와 동일한 46px 필 규격(§2.3 필 반경). */
+.wt-lobby__code-input {
+  height: 46px;
+  padding: 0 1.25rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  min-width: 9rem;
+}
+.wt-lobby__code-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.wt-lobby__empty-hint {
+  margin: 0;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 .wt-lobby__public-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
   list-style: none;
   padding: 0;
+  margin: 0;
 }
+/* 공개 방 목록 카드화(①) — .wt-card(TSX가 부여) 위에 내부 레이아웃만 이 selector가 잡는다. */
 .wt-lobby__public-entry {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--map-border);
+  padding: 0.75rem 1rem;
+}
+.wt-lobby__public-entry-info {
+  font-variant-numeric: tabular-nums;
+}
+/* 목록 행의 참가 필은 .wt-track-item__cta(WT-UI-05)와 동일한 압축 기법 — 46px 기본 높이를
+   목록 행 밀도에 맞게 줄인다. */
+.wt-pill.wt-lobby__public-entry-cta {
+  height: 2.25rem;
+  padding: 0 0.9rem;
+  font-size: 0.85rem;
 }
 
-/* 대기실 슬롯(§10.2 S10). */
+/* 대기실(§10.2 S10). */
+.wt-room__code-chip {
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+}
+.wt-room__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.wt-room__settings {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+/* 연결 상태 배너(재연결 중 등) — 눈에 띄되 경고색까지는 아닌 중립 톤. */
+.wt-room__banner {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-card);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+/* 접속 실패/딥링크 참가 중 등 단독 상태 화면(RoomPage) — 중앙 정렬 카드. */
+.wt-room__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+}
+/* 레이스 로딩/리빌/개인 결승 대기(RaceView) — 기존 클래스에 처음 스타일을 준다(이전엔 무장식
+   텍스트였다). */
+.wt-room__loading,
+.wt-room__reveal {
+  padding: 2rem 1.5rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--text-muted);
+  text-align: center;
+}
+.wt-room__finish-wait {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1.5rem;
+}
+/* 재접속 관전 모드(§7.2-4) — grace 만료 후 입력 없이 트랙만 보는 화면임을 뱃지로 명시. */
+.wt-room__spectator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1rem;
+}
+.wt-room__spectator-badge {
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
 .wt-waiting-room__slots {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: 0.75rem;
 }
+/* 슬롯 카드(②) — .wt-card(TSX가 부여)가 표면/그림자/반경을 담당, 여기는 내부 레이아웃 + 상태
+   수정자만. */
 .wt-waiting-slot {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--map-border);
+  gap: 0.35rem;
+  padding: 0.85rem 1rem;
 }
-.wt-waiting-slot--empty {
-  opacity: 0.5;
+/* 복합 셀렉터(.wt-waiting-slot.wt-waiting-slot--empty, 명시도 0,2,0) — TSX가 이 요소에
+   .wt-card(0,1,0)도 함께 부여하는데(카드 표면 규격 상속), 그 규칙이 스타일시트 물리적으로 더
+   뒤(§2.3 전역 컴포넌트 블록)에 있어 단일 클래스 명시도로는 여기 background/box-shadow 리셋이
+   소스 순서 때문에 도로 덮인다 — 복합 셀렉터로 명시도를 올려 순서 무관하게 이 규칙이 이기게 한다. */
+.wt-waiting-slot.wt-waiting-slot--empty {
   align-items: center;
   justify-content: center;
+  box-shadow: none;
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  color: var(--text-muted);
 }
+/* 나 강조: 배지가 아니라 accent 보더(카드 자체 그림자는 유지) — 여러 슬롯 중 한눈에 띄어야 한다. */
 .wt-waiting-slot--me {
-  border-color: var(--grade-b);
+  border: 1.5px solid var(--accent);
+}
+.wt-waiting-slot__name {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt-waiting-slot__bot-badge {
+  flex: none;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.35rem;
 }
 .wt-waiting-slot__ready {
   font-size: 0.8rem;
-  opacity: 0.85;
+  color: var(--text-muted);
 }
+.wt-waiting-slot__ready--on {
+  color: var(--grade-c);
+  font-weight: 700;
+}
+.wt-waiting-room__autostart {
+  margin: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.wt-waiting-room__waiting-host {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* 채팅 라이트(②) — 로그는 sunken 패널, 입력은 로비 코드 입력과 동일한 필 규격(압축 버전). */
 .wt-waiting-room__chat {
   display: flex;
   flex-direction: column;
@@ -1425,55 +1648,91 @@
 .wt-waiting-room__chat-log {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.3rem;
   max-height: 8rem;
   overflow-y: auto;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-card);
+  background: var(--surface-sunken);
   font-size: 0.85rem;
+}
+.wt-waiting-room__chat-line {
+  margin: 0;
 }
 .wt-waiting-room__chat-form {
   display: flex;
   gap: 0.5rem;
 }
-.wt-waiting-room__chat-form input {
+.wt-waiting-room__chat-input {
   flex: 1 1 auto;
+  height: 2.5rem;
+  padding: 0 1rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+.wt-waiting-room__chat-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-/* 상대 진행 트랙(OpponentTracks, §6.5). transform/width만 rAF가 직접 갱신(§4.5와 동일 취지). */
+/* 레이스 오버레이(상대 진행 트랙, ③) — HUD 위에 뜨는 반투명 패널(앱바와 같은 표면 어휘). */
 .wt-race-overlay {
   width: 100%;
   max-width: 40rem;
+  margin: 0 auto 0.5rem;
 }
 .wt-opponent-tracks {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.45rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow-card);
 }
 .wt-opponent-track {
   display: grid;
   grid-template-columns: 8rem 1fr auto;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   font-size: 0.85rem;
 }
 .wt-opponent-track__name {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .wt-opponent-track__crown {
   flex: none;
+  color: var(--grade-s);
 }
 .wt-opponent-track__bot-badge {
+  flex: none;
   font-size: 0.65rem;
-  opacity: 0.7;
-  border: 1px solid var(--map-border);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0 0.3rem;
 }
+/* 트랙 래퍼(WT-UI-08 신설) — 바(overflow:hidden) + 이동체 노브(절대배치, .bar 밖)를 함께 담는
+   position:relative 컨테이너. 그리드 2번째 칸(1fr)을 이 래퍼가 받는다(전엔 .bar가 직접 받았다 —
+   시각 델타는 없다, .bar가 폭 100%로 그대로 채운다). */
+.wt-opponent-track__track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 .wt-opponent-track__bar {
+  width: 100%;
   height: 0.4rem;
   border-radius: 999px;
   background: var(--map-idle);
@@ -1484,6 +1743,25 @@
   width: 0%;
   background: var(--grade-b);
   transition: none; /* rAF가 매 프레임 직접 갱신 — 이중 애니메이션 방지(wt-gauge__fill과 동일 취지). */
+}
+/* 이동체 노브(③, §6.5 계약 확장) — fill과 같은 rAF 틱에서 OpponentTracks.tsx가 transform만 직접
+   쓴다(레이아웃 프로퍼티 미사용). .bar가 overflow:hidden이라 그 안에 두면 도착 지점 근처에서
+   절반이 잘리므로 형제(.track 안, .bar 밖)로 절대배치해 겹친다. left:0 + margin-left(음수, 노브
+   폭 절반 근사)는 정적 CSS일 뿐 — 프레임마다 바뀌는 값은 transform 하나뿐이다. */
+.wt-opponent-track__knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  margin-left: -0.5em;
+  transform: translate(0, -50%);
+  font-size: 0.8rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.3));
+  pointer-events: none;
+  will-change: transform;
+}
+.wt-opponent-track__knob--leader {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--grade-s) 70%, transparent));
 }
 .wt-opponent-track__meta {
   display: flex;
@@ -1520,11 +1798,22 @@
   animation: none;
 }
 
-/* 하드캡 카운트다운(§10.2 S11 "하드캡 ⏱ 1:12 남음"). */
+/* 하드캡 카운트다운(§10.2 S11 "하드캡 ⏱ 1:12 남음") — DashboardCard.tsx(WT-UI-03)는 아이콘 없이
+   숫자만 넘긴다, ::before로 시각만 보강(TSX 무수정). */
 .wt-race-hardcap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
   font-size: 0.85rem;
-  opacity: 0.85;
   font-variant-numeric: tabular-nums;
+}
+.wt-race-hardcap::before {
+  content: '⏱';
 }
 
 /* 진행바 서버 ack 고스트(§6.3 — 반투명 링, 정상 상태에선 현재 점과 겹쳐 보인다). */
@@ -1539,26 +1828,72 @@
   outline-offset: 2px;
 }
 
-/* 레이스 결과(§10.2 S11 결과, 순위표는 서버 값만 — §6.6). */
+/* 레이스 결과(⑤ — §10.2 S11 결과, 순위표는 서버 값만 — §6.6). 부유 카드(§7 wt-result-card와
+   같은 어휘 — 결과 화면은 항상 "떠 있는" 카드). */
 .wt-race-result {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
-  padding: 1.5rem;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
 }
+/* 표제(h2 그대로, 클래스 없이 요소 셀렉터로 — TSX 추가 변경 없이 §7 결과 카드와 같은 위계). */
+.wt-race-result > h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+/* .wt-rank-table__row--me(§8, WT-UI-07)와 같은 tint 기법 — 클래스명 자체는 e2e(e6-race.spec.ts)가
+   `.wt-race-result__row--me td`로 고정 참조하므로 변경 불가(§11 계약), 값만 맞춘다. */
 .wt-race-result__row--me {
   font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.wt-race-result__rematch {
+  justify-content: center;
+}
+.wt-race-result__rematch-countdown {
+  margin: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wt-race-result__rematch-waiting {
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }
 .wt-race-result__latency {
   font-size: 0.8rem;
+  font-weight: 600;
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  border: 1px solid var(--map-border);
+  border: 1px solid var(--border);
 }
-.wt-race-result__latency--good { color: var(--grade-s); }
-.wt-race-result__latency--ok { color: var(--grade-b); }
-.wt-race-result__latency--bad { color: var(--grade-d, #ef4444); }
+.wt-race-result__latency--good {
+  color: var(--grade-c);
+  border-color: color-mix(in srgb, var(--grade-c) 45%, transparent);
+  background: color-mix(in srgb, var(--grade-c) 12%, transparent);
+}
+.wt-race-result__latency--ok {
+  color: var(--grade-b);
+  border-color: color-mix(in srgb, var(--grade-b) 45%, transparent);
+  background: color-mix(in srgb, var(--grade-b) 12%, transparent);
+}
+/* [정비] 원래 var(--grade-d, #ef4444) 폴백은 --grade-d가 항상 정의돼 있어(토큰 회색) 죽은 코드였다
+   — 원색 리터럴을 제거하고 토큰만 남긴다(시각 델타 없음, "색은 tokens CSS변수만" 원칙 정합). */
+.wt-race-result__latency--bad {
+  color: var(--grade-d);
+  border-color: color-mix(in srgb, var(--grade-d) 45%, transparent);
+  background: color-mix(in srgb, var(--grade-d) 12%, transparent);
+}
+
+/* 대기실 내 채팅/리매치 등에서 재사용하는 필 활성 배선 — 기저 .wt-pill--active(§8, WT-UI-07)를
+   그대로 쓰므로 여기 별도 규칙은 불필요(레디 토글·리매치 투표·게임 시작 버튼이 전부
+   .wt-pill/.wt-pill--active로 배선됨, WT-UI-08). */
 
 /* 봇 제안 모달(§8.2 "GHOST 라벨"). */
 .wt-bot-offer {
@@ -1577,10 +1912,26 @@
   gap: 0.5rem;
   min-width: 18rem;
   padding: 1.5rem;
-  border-radius: 0.75rem;
+  border-radius: var(--radius-card);
   /* WT-UI-01: 진짜 모달 박스(뒤 스크림 있음) — 불투명 --surface(구현 세부 지시 3). */
   background: var(--surface);
   text-align: center;
+}
+.wt-bot-offer__title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.wt-bot-offer__body {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.wt-bot-offer__countdown {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 .wt-bot-offer__badge {
   align-self: flex-start;

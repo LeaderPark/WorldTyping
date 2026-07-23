@@ -176,6 +176,8 @@
   "race.reveal.countries": "{count}개국 레이스",
   "race.finish.waiting": "완주! 결과를 기다리는 중...",
 
+  "lobby.hero.subtitle": "실시간 레이스, 손끝으로 추월하기",
+
   "bot.offer.title": "상대를 찾지 못했어요",
   "bot.offer.body": "고스트 봇과 시작할까요?",
   "bot.offer.accept": "봇과 시작",

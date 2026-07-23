@@ -68,48 +68,58 @@ export function WaitingRoom({ room, myPlayerId, mp, onLeave }: WaitingRoomProps)
   return (
     <div className="wt-room" data-testid="waiting-room">
       <div className="wt-room__header">
-        <span data-testid="room-code">{t('room.code', { code: room.code })}</span>
-        <button type="button" className="wt-btn" data-testid="room-copy-code" onClick={copyInvite}>
-          {copied ? t('room.copied') : t('room.copy')}
-        </button>
-        <button type="button" className="wt-btn" data-testid="room-share-link" onClick={copyInvite}>
-          {t('room.shareLink')}
-        </button>
-        <span>{t('room.settings', { lang: room.lang, count: RACE_SET_SIZE, maxPlayers })}</span>
+        <span className="wt-room__code-chip" data-testid="room-code">{t('room.code', { code: room.code })}</span>
+        <div className="wt-room__header-actions">
+          <button type="button" className="wt-btn" data-testid="room-copy-code" onClick={copyInvite}>
+            {copied ? t('room.copied') : t('room.copy')}
+          </button>
+          <button type="button" className="wt-btn" data-testid="room-share-link" onClick={copyInvite}>
+            {t('room.shareLink')}
+          </button>
+        </div>
+        <span className="wt-room__settings">{t('room.settings', { lang: room.lang, count: RACE_SET_SIZE, maxPlayers })}</span>
       </div>
 
       <div className="wt-waiting-room__slots" data-testid="waiting-room-slots">
         {room.players.map((p) => (
           <div
             key={p.playerId}
-            className={`wt-waiting-slot${p.playerId === myPlayerId ? ' wt-waiting-slot--me' : ''}`}
+            className={`wt-card wt-waiting-slot${p.playerId === myPlayerId ? ' wt-waiting-slot--me' : ''}`}
             data-testid={`waiting-slot-${p.playerId}`}
           >
-            <span>
+            <span className="wt-waiting-slot__name">
               {p.playerId === myPlayerId ? t('room.hostMe') : p.isHost ? `${p.nickname} · ${t('room.player.host')}` : p.nickname}
-              {p.isBot && ` · ${t('room.player.bot')}`}
+              {p.isBot && <span className="wt-waiting-slot__bot-badge">{t('room.player.bot')}</span>}
             </span>
-            <span className="wt-waiting-slot__ready">
+            <span className={`wt-waiting-slot__ready${p.ready ? ' wt-waiting-slot__ready--on' : ''}`}>
               {p.connState === 'grace' ? t('room.spectator') : p.ready ? `✅ ${t('room.player.ready')}` : '⬜'}
             </span>
           </div>
         ))}
         {Array.from({ length: emptySlots }, (_, i) => (
-          <div key={`empty-${i}`} className="wt-waiting-slot wt-waiting-slot--empty" data-testid={`waiting-slot-empty-${i}`}>
+          <div
+            key={`empty-${i}`}
+            className="wt-card wt-waiting-slot wt-waiting-slot--empty"
+            data-testid={`waiting-slot-empty-${i}`}
+          >
             {t('room.slot.empty')}
           </div>
         ))}
       </div>
 
-      {autoStartLeft !== null && <p data-testid="waiting-autostart">{t('multi.countdown', { n: autoStartLeft })}</p>}
+      {autoStartLeft !== null && (
+        <p className="wt-waiting-room__autostart" data-testid="waiting-autostart">
+          {t('multi.countdown', { n: autoStartLeft })}
+        </p>
+      )}
 
       <div className="wt-waiting-room__chat">
-        <p>{t('room.chat.label')}</p>
+        <p className="wt-lobby__section-title">{t('room.chat.label')}</p>
         <div className="wt-waiting-room__chat-log" data-testid="waiting-chat-log">
           {chatLog.map((c, i) => {
             const from = room.players.find((p) => p.playerId === c.playerId);
             return (
-              <p key={i}>
+              <p key={i} className="wt-waiting-room__chat-line">
                 <strong>{from?.nickname ?? c.playerId}</strong>: {c.text}
               </p>
             );
@@ -121,6 +131,7 @@ export function WaitingRoom({ room, myPlayerId, mp, onLeave }: WaitingRoomProps)
             value={chatText}
             maxLength={120}
             placeholder={t('room.chat.placeholder')}
+            className="wt-waiting-room__chat-input"
             data-testid="waiting-chat-input"
             onChange={(e) => setChatText(e.target.value)}
           />
@@ -133,18 +144,18 @@ export function WaitingRoom({ room, myPlayerId, mp, onLeave }: WaitingRoomProps)
       <div className="wt-lobby__row">
         <button
           type="button"
-          className={`wt-btn${me?.ready ? ' wt-btn--active' : ''}`}
+          className={`wt-pill${me?.ready ? ' wt-pill--active' : ''}`}
           data-testid="waiting-ready-toggle"
           onClick={() => mp.ready(!me?.ready)}
         >
           {t('room.readyBtn')}
         </button>
         {isHost && (
-          <button type="button" className="wt-btn wt-btn--primary" data-testid="waiting-start-btn" onClick={mp.startRace}>
+          <button type="button" className="wt-pill wt-pill--active" data-testid="waiting-start-btn" onClick={mp.startRace}>
             {t('room.startBtn')}
           </button>
         )}
-        {!isHost && <span>{t('room.waitingHost')}</span>}
+        {!isHost && <span className="wt-waiting-room__waiting-host">{t('room.waitingHost')}</span>}
         <button type="button" className="wt-btn" data-testid="waiting-leave-btn" onClick={onLeave}>
           {t('room.leave')}
         </button>

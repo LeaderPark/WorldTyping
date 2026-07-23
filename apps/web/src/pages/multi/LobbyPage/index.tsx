@@ -127,29 +127,39 @@ export function LobbyPage() {
   return (
     <main className="wt-lobby" data-testid="lobby-page">
       <header className="wt-lobby__header">
-        <Link to="/" data-testid="lobby-back-home">{t('nav.back.home')}</Link>
-        <h1 tabIndex={-1}>{t('menu.multi')}</h1>
+        <Link to="/" data-testid="lobby-back-home" className="wt-lobby__back">
+          {t('nav.back.home')}
+        </Link>
       </header>
+
+      {/* 히어로(WT-UI-08 ①) — 홈의 로고 카드와 같은 어휘(아이콘 타일+제목+카피)를 멀티 진입점에도 씀. */}
+      <section className="wt-lobby__hero">
+        <span className="wt-icon-tile wt-lobby__hero-icon" aria-hidden="true">⚔</span>
+        <div className="wt-lobby__hero-body">
+          <h1 className="wt-lobby__hero-title" tabIndex={-1}>{t('menu.multi')}</h1>
+          <p className="wt-lobby__hero-subtitle">{t('lobby.hero.subtitle')}</p>
+        </div>
+      </section>
 
       {error && <p className="wt-lobby__error" data-testid="lobby-error">{error}</p>}
 
-      <section className="wt-lobby__section">
+      <section className="wt-lobby__section wt-lobby__section--quickmatch">
         <button
           type="button"
-          className="wt-btn wt-btn--primary"
+          className="wt-pill wt-pill--active wt-lobby__quickmatch-cta"
           data-testid="lobby-quickmatch"
           disabled={busy}
           onClick={() => void onQuickMatch()}
         >
           {t('multi.quickmatch.start')}
         </button>
-        <p>{t('multi.quickmatch.hint')}</p>
+        <p className="wt-lobby__hint">{t('multi.quickmatch.hint')}</p>
       </section>
 
       <section className="wt-lobby__section">
-        <h2>{t('multi.room.create')}</h2>
+        <h2 className="wt-lobby__section-title">{t('multi.room.create')}</h2>
         <form className="wt-lobby__row" onSubmit={(e) => void onCreateRoom(e)}>
-          <label>
+          <label className="wt-lobby__field">
             {t('multi.create.maxPlayers', { count: maxPlayers })}
             <input
               type="range"
@@ -160,7 +170,7 @@ export function LobbyPage() {
               onChange={(e) => setMaxPlayers(Number(e.target.value))}
             />
           </label>
-          <label>
+          <label className="wt-lobby__field wt-lobby__field--inline">
             <input
               type="checkbox"
               checked={isPublic}
@@ -169,36 +179,44 @@ export function LobbyPage() {
             />
             {t('multi.create.public')}
           </label>
-          <button type="submit" className="wt-btn" data-testid="lobby-create-submit" disabled={busy}>
+          <button type="submit" className="wt-btn wt-btn--primary" data-testid="lobby-create-submit" disabled={busy}>
             {t('multi.room.create')}
           </button>
         </form>
       </section>
 
       <section className="wt-lobby__section">
-        <h2>{t('multi.room.join')}</h2>
+        <h2 className="wt-lobby__section-title">{t('multi.room.join')}</h2>
         <form className="wt-lobby__row" onSubmit={onJoinSubmit}>
           <input
             type="text"
             value={codeInput}
             placeholder={t('multi.room.codeInput')}
+            className="wt-lobby__code-input"
             data-testid="lobby-join-code"
             onChange={(e) => setCodeInput(formatCodeInput(e.target.value))}
           />
-          <button type="submit" className="wt-btn" data-testid="lobby-join-submit" disabled={busy}>
+          <button type="submit" className="wt-btn wt-btn--primary" data-testid="lobby-join-submit" disabled={busy}>
             {t('multi.room.joinBtn')}
           </button>
         </form>
       </section>
 
       <section className="wt-lobby__section">
-        <h2>{t('multi.publicRooms.title')}</h2>
-        {publicRooms.length === 0 && <p>{t('multi.publicRooms.empty')}</p>}
+        <h2 className="wt-lobby__section-title">{t('multi.publicRooms.title')}</h2>
+        {publicRooms.length === 0 && <p className="wt-lobby__empty-hint">{t('multi.publicRooms.empty')}</p>}
         <ul className="wt-lobby__public-list" data-testid="lobby-public-rooms">
           {publicRooms.map((r) => (
-            <li key={r.code} className="wt-lobby__public-entry" data-testid={`lobby-public-room-${r.code}`}>
-              <span>{t('multi.publicRooms.entry', { code: r.code, current: r.players, max: r.maxPlayers, lang: r.lang })}</span>
-              <button type="button" className="wt-btn" disabled={busy} onClick={() => void joinByCode(r.code)}>
+            <li key={r.code} className="wt-card wt-lobby__public-entry" data-testid={`lobby-public-room-${r.code}`}>
+              <span className="wt-lobby__public-entry-info">
+                {t('multi.publicRooms.entry', { code: r.code, current: r.players, max: r.maxPlayers, lang: r.lang })}
+              </span>
+              <button
+                type="button"
+                className="wt-pill wt-lobby__public-entry-cta"
+                disabled={busy}
+                onClick={() => void joinByCode(r.code)}
+              >
                 {t('multi.room.joinBtn')}
               </button>
             </li>

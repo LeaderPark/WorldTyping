@@ -87,11 +87,11 @@ export function RaceResult({ raceResult, rematchState, myPlayerId, latencyMs, mp
         </tbody>
       </table>
 
-      <div className="wt-lobby__row" data-testid="race-result-rematch">
-        <p>{t('race.rematch.countdown', { seconds: secondsLeft })}</p>
+      <div className="wt-lobby__row wt-race-result__rematch" data-testid="race-result-rematch">
+        <p className="wt-race-result__rematch-countdown">{t('race.rematch.countdown', { seconds: secondsLeft })}</p>
         <button
           type="button"
-          className={`wt-btn${myVote === true ? ' wt-btn--active' : ''}`}
+          className={`wt-pill${myVote === true ? ' wt-pill--active' : ''}`}
           data-testid="race-result-vote-yes"
           onClick={() => mp.rematch(true)}
         >
@@ -99,14 +99,14 @@ export function RaceResult({ raceResult, rematchState, myPlayerId, latencyMs, mp
         </button>
         <button
           type="button"
-          className={`wt-btn${myVote === false ? ' wt-btn--active' : ''}`}
+          className={`wt-pill${myVote === false ? ' wt-pill--active' : ''}`}
           data-testid="race-result-vote-no"
           onClick={() => mp.rematch(false)}
         >
           {t('race.rematch.voteNo')}
         </button>
         <span data-testid="race-result-vote-count">{yesCount}</span>
-        {myVote !== null && <span>{t('race.rematch.waiting')}</span>}
+        {myVote !== null && <span className="wt-race-result__rematch-waiting">{t('race.rematch.waiting')}</span>}
       </div>
 
       <button type="button" className="wt-btn" data-testid="race-result-leave" onClick={onLeave}>

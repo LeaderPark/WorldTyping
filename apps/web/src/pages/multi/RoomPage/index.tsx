@@ -95,10 +95,12 @@ export function RoomPage() {
   if (connection === 'failed') {
     return (
       <main className="wt-room" data-testid="room-page">
-        <p>{t('multi.connection.failed')}</p>
-        <button type="button" className="wt-btn" data-testid="room-retry" onClick={() => window.location.reload()}>
-          {t('multi.connection.retry')}
-        </button>
+        <div className="wt-card wt-room__state">
+          <p>{t('multi.connection.failed')}</p>
+          <button type="button" className="wt-btn wt-btn--primary" data-testid="room-retry" onClick={() => window.location.reload()}>
+            {t('multi.connection.retry')}
+          </button>
+        </div>
       </main>
     );
   }
@@ -106,7 +108,9 @@ export function RoomPage() {
   if (!room) {
     return (
       <main className="wt-room" data-testid="room-page">
-        <p>{t('multi.deeplink.joining')}</p>
+        <div className="wt-card wt-room__state">
+          <p>{t('multi.deeplink.joining')}</p>
+        </div>
       </main>
     );
   }
@@ -118,7 +122,11 @@ export function RoomPage() {
           {t(multiErrorKey(lastError.code))}
         </p>
       )}
-      {connection === 'reconnecting' && <p data-testid="room-reconnecting">{t('multi.connection.reconnecting')}</p>}
+      {connection === 'reconnecting' && (
+        <p className="wt-room__banner" data-testid="room-reconnecting">
+          {t('multi.connection.reconnecting')}
+        </p>
+      )}
 
       {room.phase === 'waiting' && (
         <WaitingRoom room={room} myPlayerId={myPlayerId} mp={mp} onLeave={handleLeave} />
@@ -135,7 +143,7 @@ export function RoomPage() {
             spectating={spectating}
           />
         ) : (
-          <p data-testid="room-race-loading">{t('boarding.connecting')}</p>
+          <p className="wt-room__loading" data-testid="room-race-loading">{t('boarding.connecting')}</p>
         ))}
 
       {room.phase === 'result' && raceResult && (

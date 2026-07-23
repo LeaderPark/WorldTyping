@@ -188,6 +188,29 @@ describe("GET /r/:shareId (OG 메타 셸)", () => {
     const res = await SELF.fetch(`http://local/r/bad`);
     expect(res.status).toBe(404);
   });
+
+  // WT-UI-09 후속 정합: /r/ 랜딩·404 셸은 이전까지 og/layout.ts가 라이트로 전환된 뒤에도 다크
+  // 리터럴(#0b1220 배경/#f8fafc 텍스트/#38bdf8 액센트)로 남아 OG 카드와 톤이 어긋나 있었다. 이
+  // 테스트는 셸 인라인 스타일이 OG_COLORS(og/layout.ts)의 라이트 팔레트를 쓰고, 구 다크 리터럴로
+  // 되돌아가는 회귀를 잡는 가드다.
+  it("유효 shareId 랜딩 셸이 OG_COLORS 라이트 팔레트를 쓰고 구 다크 리터럴이 없다", async () => {
+    const shareId = await validShareId();
+    const html = await (await SELF.fetch(`http://local/r/${shareId}`)).text();
+    expect(html).toContain(`background:${OG_COLORS.bg0}`);
+    expect(html).toContain(`color:${OG_COLORS.text}`);
+    expect(html).not.toContain("#0b1220");
+    expect(html).not.toContain("#f8fafc");
+    expect(html).not.toContain("#38bdf8");
+  });
+
+  it("404 셸이 OG_COLORS 라이트 팔레트를 쓰고 구 다크 리터럴이 없다", async () => {
+    const html = await (await SELF.fetch(`http://local/r/zzzzzzzz`)).text();
+    expect(html).toContain(`background:${OG_COLORS.bg0}`);
+    expect(html).toContain(`color:${OG_COLORS.text}`);
+    expect(html).not.toContain("#0b1220");
+    expect(html).not.toContain("#f8fafc");
+    expect(html).not.toContain("#38bdf8");
+  });
 });
 
 describe("frame-ancestors (§9.4)", () => {

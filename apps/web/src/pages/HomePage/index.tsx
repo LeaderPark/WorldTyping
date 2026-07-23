@@ -32,9 +32,17 @@ import { useMetaStore } from '../../stores/meta';
 import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { RouteMotifBackdrop } from '../../components/RouteMotifBackdrop';
+import { Mascot } from '../../components/Mascot';
 import { HeroMapPlaceholder } from './HeroMapPlaceholder';
 
 const HeroMap = lazy(() => import('./HeroMap'));
+
+/** [WT-DC-02] 스토어에 별도 'muted' 필드를 새로 두지 않고 기존 volume.master(설정 스토어 기존
+ *  필드, sound-manager.ts의 play()가 이미 master*sfx로 게인을 계산한다)를 0으로 두는 것을
+ *  "음소거"로 취급한다 — sound-manager API(setVolume) 안에서 해결 가능해 스토어 확장이 필요
+ *  없었다(태스크 에스컬레이션 조건 불충족). 세션 중 마지막 비0 볼륨을 기억해 해제 시 복원하고,
+ *  기억한 값이 없으면(예: 이미 음소거된 채로 새로고침) 스토어 최초 기본값(0.8)으로 복원한다. */
+const DEFAULT_MASTER_VOLUME = 0.8;
 
 /** useCountries.ts의 데일리 세트 키 계산과 동일 규약(UTC 자정 기준 ISO 날짜) — 이 페이지는
  *  링크만 구성하므로 국가 데이터셋 없이도 같은 키를 재현할 수 있어야 한다(중복 최소화를 위해
@@ -58,6 +66,19 @@ export function HomePage() {
   const guestId = useSettingsStore((s) => s.guestId);
   const bestPI = useMetaStore((s) => s.bestPI);
   const hasAnyStamp = useMetaStore((s) => Object.keys(s.stamps).length > 0);
+
+  // [WT-DC-02] 사운드 토글(②) — 저빈도 사용자 설정 변경이라 §4.5 핫패스 규약(고빈도 값 금지)과
+  // 무관하다. 클릭 자체가 pointerdown이라 sound-manager의 첫 제스처 unlock()도 함께 트리거된다.
+  const masterVolume = useSettingsStore((s) => s.volume.master);
+  const setVolume = useSettingsStore((s) => s.setVolume);
+  const isSoundMuted = masterVolume <= 0;
+  const lastMasterRef = useRef(masterVolume > 0 ? masterVolume : DEFAULT_MASTER_VOLUME);
+  useEffect(() => {
+    if (masterVolume > 0) lastMasterRef.current = masterVolume;
+  }, [masterVolume]);
+  const toggleSound = () => {
+    setVolume({ master: isSoundMuted ? lastMasterRef.current || DEFAULT_MASTER_VOLUME : 0 });
+  };
 
   // 데일리 뱃지 실데이터(alreadyPlayed·dailyNo)와 티커(전체 1위) — 조회 실패는 조용히 무시하고
   // placeholder/미표시로 남는다(파일 상단 주석 — 첫 화면 렌더를 네트워크로 막지 않는다).
@@ -129,16 +150,25 @@ export function HomePage() {
             <button
               type="button"
               data-testid="home-lang-toggle"
-              className="wt-pill"
+              className="wt-pill wt-pill--compact"
               onClick={() => setLang(lang === 'ko' ? 'en' : 'ko')}
             >
               {lang === 'ko' ? t('settings.inputLang.ko') : t('settings.inputLang.en')}
+            </button>
+            <button
+              type="button"
+              data-testid="home-sound-toggle"
+              aria-pressed={!isSoundMuted}
+              className="wt-pill wt-pill--compact wt-home__sound-toggle"
+              onClick={toggleSound}
+            >
+              {isSoundMuted ? t('home.soundToggle.off') : t('home.soundToggle.on')}
             </button>
             <Link
               to="/?modal=settings"
               data-testid="home-nav-settings"
               aria-label={t('menu.settings')}
-              className="wt-icon-tile"
+              className="wt-icon-tile wt-home__settings-btn"
             >
               ⚙
             </Link>
@@ -151,7 +181,8 @@ export function HomePage() {
             <HeroMap />
           </Suspense>
           <div className="wt-card wt-home__logo-card">
-            <h1 className="wt-home__title" tabIndex={-1}>{t('app.title')}</h1>
+            <Mascot width={56} tail="var(--continent-asia)" blush bob />
+            <h1 className="wt-home__title wt-home__title--brand" tabIndex={-1}>{t('app.title')}</h1>
             <p className="wt-home__tagline">{t(`app.tagline.${lang}`)}</p>
           </div>
         </section>

@@ -2,7 +2,7 @@
 //       docs/00 §11-D13(mulberry32 공유)·§11-D21(서버 salt 전용), docs/07 WT-M3-05 [구현 세부
 //       지시 1·2·4]·[완료 조건] — 시드 결정성, 티어 분포 3/3/2/1/1, 멱등 cron, /daily/today·/me.
 import { SELF, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { COUNTRIES } from "@wt/data";
 import type { CountryId, DifficultyTier } from "@wt/shared";
 import { ensureDailySeed } from "../src/cron/daily-seed";
@@ -70,6 +70,18 @@ describe("ensureDailySeed (docs/06 §2.1)", () => {
     const b = await ensureDailySeed(env, Date.parse("2026-08-05T00:00:00Z"));
     expect(a.seed).not.toBe(b.seed);
     expect(a.countryIds).not.toEqual(b.countryIds);
+  });
+
+  it("[WT-OPT-01] existing-row 재호출은 KV put을 재실행하지 않는다(§11-D60)", async () => {
+    const now = Date.parse("2026-08-07T00:00:00Z");
+    const first = await ensureDailySeed(env, now);
+    expect(first.created).toBe(true);
+
+    const putSpy = vi.spyOn(env.KV, "put");
+    const second = await ensureDailySeed(env, now + 60_000); // 같은 KST 날짜 — existing 분기
+    expect(second.created).toBe(false);
+    expect(putSpy).not.toHaveBeenCalled();
+    putSpy.mockRestore();
   });
 
   it("writes a KV cache readable by set-builder.ts's loadDailySet shape ({seed, countryIds})", async () => {

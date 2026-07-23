@@ -2,8 +2,21 @@
 //       (config:client edge cache 60s / data:countries:override 핫스왑) + WT-M3-02
 //       [구현 세부 지시] #4 — "config 폴백"을 커버한다.
 import { SELF, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { KV_KEYS } from "../src/lib/kv-keys";
+import { __resetConfigSnapshotMemoForTests } from "../src/routes/config";
+
+// [WT-OPT-01] GET /config는 KV 3종(config:client/config:banner/data:countries:override) +
+// manifest fetch를 모듈 스코프 TTL 30초로 메모한다(routes/config.ts). vitest-pool-workers는
+// singleWorker로 전체 실행 동안 모듈 상태를 공유하므로(스토리지만 테스트 단위 격리), 이 파일의
+// 각 케이스가 방금 put/delete한 KV 값을 "TTL이 지난 것"처럼 즉시 재조회하려면 매 테스트 전후로
+// 리셋해야 한다 — 그렇지 않으면 이전 케이스가 채운 캐시가 새 KV 값을 가려 아래 단언들이 깨진다.
+beforeEach(() => {
+  __resetConfigSnapshotMemoForTests();
+});
+afterEach(() => {
+  __resetConfigSnapshotMemoForTests();
+});
 
 const BASE = "http://local/api/v1";
 

@@ -33,6 +33,32 @@ export type RateLimitScope = keyof typeof LIMITS;
 // v1 초반은 아래 KV 고정윈도만으로 충분 — 트래픽이 임계에 닿으면 여기서 `c.env.RL?.limit(...)`를
 // 먼저 호출해 KV 쓰기 자체를 줄이는 형태로 확장한다(env.ts의 RL 바인딩은 이미 자리만 존재).
 
+// [WT-OPT-01, §11-D60] config:loadtest는 요청마다(모든 스코프에서) 매번 KV get을 도는데, 부하
+// 테스트 시간·환경에 한정된 완화 플래그라 평시에는 사실상 항상 부재값을 반복 조회하는 낭비다.
+// 모듈 스코프로 TTL 5초만 메모한다 — 우회 플래그를 켜고 끄는 시점에 최대 5초의 반영 지연이
+// 생기지만, 이 플래그 자체가 "부하 테스트 동안만 수동 세팅"하는 운영 절차 전용이라 5초 지연은
+// 무해하다(요청 자체가 초당 수십~수백 건인 부하 테스트 상황을 가정).
+const LOADTEST_MEMO_TTL_MS = 5000;
+let loadtestMemo: { value: boolean; expiresAt: number } | null = null;
+
+async function isLoadtestActive(kv: KVNamespace): Promise<boolean> {
+  const now = Date.now();
+  if (loadtestMemo && loadtestMemo.expiresAt > now) return loadtestMemo.value;
+  const value = (await kv.get(KV_KEYS.configLoadtest)) !== null;
+  loadtestMemo = { value, expiresAt: now + LOADTEST_MEMO_TTL_MS };
+  return value;
+}
+
+/**
+ * 테스트 전용: config:loadtest 모듈 메모를 초기화해 다음 호출이 KV를 강제로 재조회하게 한다.
+ * 프로덕션 코드 경로에서는 절대 호출되지 않는다 — vitest-pool-workers가 singleWorker로
+ * 전체 실행 동안 모듈 상태를 공유하기 때문에(스토리지만 테스트 단위로 격리), 테스트가 KV의
+ * config:loadtest를 직접 put/delete한 직후 "TTL이 지난 것"을 시뮬레이션하려면 이 리셋이 필요하다.
+ */
+export function __resetLoadtestMemoForTests(): void {
+  loadtestMemo = null;
+}
+
 /**
  * scope에 해당하는 KV 고정윈도 미들웨어. per:'pid'는 requireAuth 이후에 붙여야
  * `c.get('pid')`가 채워져 있다 — 아직 pid가 없으면(비인증 라우트에 pid 스코프를 잘못 붙인 경우)
@@ -58,7 +84,7 @@ export function rateLimit(
       return;
     }
 
-    if ((await kv.get(KV_KEYS.configLoadtest)) !== null) {
+    if (await isLoadtestActive(kv)) {
       await next();
       return;
     }

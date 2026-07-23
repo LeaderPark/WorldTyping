@@ -197,6 +197,48 @@ describe("텔레메트리 배선 — 서버 트리거 이벤트(§5.2 표)", () 
     expect(res.status).toBe(400);
   });
 
+  it("[WT-OPT-01] POST /api/v1/t: client_error가 여러 건이어도 pid→해시 파생(sha256)은 요청당 1회만 계산된다", async () => {
+    const session = await SELF.fetch(`${BASE}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId: crypto.randomUUID() }),
+    });
+    const { token, playerId } = (await session.json()) as { token: string; playerId: string };
+    // 세션 부트스트랩 자체가 waitUntil로 예약한 visit 텔레메트리(내부에서 sha256Hex16(pid)를
+    // 한 번 더 호출)가 아직 처리 중일 수 있다 — 이 digest 스파이가 그 지연된 호출까지 집계하지
+    // 않도록 먼저 정착시킨다(위 "POST /session..." 테스트와 동일한 매크로태스크 양보 패턴).
+    await new Promise((r) => setTimeout(r, 10));
+
+    const digestSpy = vi.spyOn(crypto.subtle, "digest");
+    const res = await SELF.fetch(`${BASE}/t`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        events: [
+          { type: "client_error", ts: Date.now(), message: "boom1" },
+          { type: "client_error", ts: Date.now(), message: "boom2" },
+          { type: "client_error", ts: Date.now(), message: "boom3" },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { received: number };
+    expect(body.received).toBe(3);
+
+    // 이 요청 안에서 SHA-256(playerId)를 입력으로 한 digest 호출만 골라낸다 — rateLimit("t")의
+    // hashIp(IP 문자열)처럼 pid와 무관한 다른 digest 호출(§11-D60 범위 밖)이 같은 요청에 섞여도
+    // 오탐하지 않기 위함이다. sha256Hex16(pid)는 이벤트 3건 각각이 아니라 routes/t.ts가 요청당
+    // 1회 선계산해 재사용해야 하므로, pid를 해싱한 digest 호출은 정확히 1회여야 한다.
+    const decoder = new TextDecoder();
+    const pidDigestCalls = digestSpy.mock.calls.filter((args) => {
+      const data = args[1] as BufferSource;
+      const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array((data as ArrayBufferView).buffer);
+      return decoder.decode(bytes) === playerId;
+    });
+    expect(pidDigestCalls).toHaveLength(1);
+    digestSpy.mockRestore();
+  });
+
   it("POST /api/v1/t: share_click 이벤트도 처리된다", async () => {
     const spy = vi.spyOn(env.AE, "writeDataPoint");
     const res = await SELF.fetch(`${BASE}/t`, {

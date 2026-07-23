@@ -30,7 +30,6 @@ import { loadAnticheatConfig } from "../lib/anticheat-config";
 import { buildSetForStart, rebuildSet, computeSetHash, type SingleMode } from "../lib/set-builder";
 import { verifyRun, type ServerValues } from "../lib/run-verify";
 import {
-  activeSeasonPeriod,
   allBoardKey,
   boardKeysForRun,
   inlineRankForRun,
@@ -315,7 +314,11 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   const doBoard = finalVerdict === "valid" && !shadowban;
   let boardKeys: string[] = [];
   if (doBoard) {
-    const seasonPeriod = await activeSeasonPeriod(db, now); // v1은 항상 null(§11-D15)
+    // v1 스코프는 seasons 테이블에 행이 없어 activeSeasonPeriod(db, now)를 호출해도 항상 null만
+    // 반환한다(§11-D15). 매 valid 제출마다 도는 이 SELECT 자체가 낭비이므로 상수 null로 고정한다
+    // (§11-D60·WT-OPT-01) — lib/lb.ts의 activeSeasonPeriod 함수 본체는 시즌 기능 부활 시 재사용
+    // 하도록 그대로 남겨둔다.
+    const seasonPeriod: string | null = null;
     boardKeys = boardKeysForRun({
       modeKey: token.modeKey,
       lang: token.lang,
@@ -342,10 +345,15 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
 
   let inline: InlineRank | undefined;
   if (doBoard) {
-    // dirty 마킹(§1.5): cron(*/1)이 이 보드들만 top-100 재조회한다.
+    // dirty 마킹(§1.5): cron(*/1)이 이 보드들만 top-100 재조회한다. sentinel(§11-D60·WT-OPT-01)을
+    // 같은 batch에 함께 put해 cron이 매분 dirty:* 전체를 list하기 전에 sentinel 1개 get만으로
+    // "이번 분에 처리할 게 있는지"를 판별할 수 있게 한다(kv-keys.ts dirtySentinel 주석 참조).
     if (c.env.KV) {
       const kv = c.env.KV;
-      await Promise.all(boardKeys.map((bk) => kv.put(KV_KEYS.dirty(bk), "1", { expirationTtl: DIRTY_TTL_SEC })));
+      await Promise.all([
+        ...boardKeys.map((bk) => kv.put(KV_KEYS.dirty(bk), "1", { expirationTtl: DIRTY_TTL_SEC })),
+        kv.put(KV_KEYS.dirtySentinel, "1", { expirationTtl: DIRTY_TTL_SEC }),
+      ]);
     }
     // rank/total/isPersonalBest 인라인(§1.4-③) — all 보드 기준, 추가 왕복 없음.
     inline = await inlineRankForRun(db, allBoardKey(token.modeKey, token.lang, token.platform), pid, token.rid);

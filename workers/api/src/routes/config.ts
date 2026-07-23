@@ -98,51 +98,90 @@ const ConfigResSchema = z.object({
 export const config = new Hono<{ Bindings: Env }>();
 
 config.get("/config", async (c) => {
-  const kv = c.env.KV;
-  const dataUrl = await resolveDataUrl(c.env);
+  const snap = await loadConfigSnapshot(c.env);
+  const dataUrl = resolveDataUrlFromSnapshot(snap);
   let cfg = defaultConfig(dataUrl);
 
-  if (kv) {
-    const raw = await kv.get(KV_KEYS.configClient);
-    if (raw) {
-      try {
-        const parsed = ConfigResSchema.safeParse(JSON.parse(raw));
-        if (parsed.success) {
-          // dataUrl은 override 여부에 따라 항상 이 라우트가 결정. banner는 ConfigResSchema(config:client
-          // 전용) 밖의 별도 KV 키가 원천이라 여기서는 일단 null로 채우고, 아래 banner 병합 블록이
-          // 필요하면 덮어쓴다.
-          cfg = { ...parsed.data, dataUrl, banner: null };
-        } else {
-          // 운영자가 핫스왑한 값이 스키마를 깼다는 신호.
-          logError("config_client_schema_invalid", { message: parsed.error.message });
-        }
-      } catch (err) {
-        logError("config_client_json_invalid", { message: err instanceof Error ? err.message : String(err) });
+  if (snap.clientRaw) {
+    try {
+      const parsed = ConfigResSchema.safeParse(JSON.parse(snap.clientRaw));
+      if (parsed.success) {
+        // dataUrl은 override 여부에 따라 항상 이 라우트가 결정. banner는 ConfigResSchema(config:client
+        // 전용) 밖의 별도 KV 키가 원천이라 여기서는 일단 null로 채우고, 아래 banner 병합 블록이
+        // 필요하면 덮어쓴다.
+        cfg = { ...parsed.data, dataUrl, banner: null };
+      } else {
+        // 운영자가 핫스왑한 값이 스키마를 깼다는 신호.
+        logError("config_client_schema_invalid", { message: parsed.error.message });
       }
+    } catch (err) {
+      logError("config_client_json_invalid", { message: err instanceof Error ? err.message : String(err) });
     }
   }
 
   // WT-M6-06: config:banner 병합(장애 공지 배너, docs/06 §10-4) — config:client 검증 결과와
   // 무관하게 항상 시도한다(둘은 독립 KV 키).
-  if (kv) {
-    const bannerRaw = await kv.get(KV_KEYS.configBanner);
-    if (bannerRaw) {
-      try {
-        const parsedBanner = BannerConfigSchema.safeParse(JSON.parse(bannerRaw));
-        if (parsedBanner.success) {
-          cfg.banner = parsedBanner.data;
-        } else {
-          logError("config_banner_schema_invalid", { message: parsedBanner.error.message });
-        }
-      } catch (err) {
-        logError("config_banner_json_invalid", { message: err instanceof Error ? err.message : String(err) });
+  if (snap.bannerRaw) {
+    try {
+      const parsedBanner = BannerConfigSchema.safeParse(JSON.parse(snap.bannerRaw));
+      if (parsedBanner.success) {
+        cfg.banner = parsedBanner.data;
+      } else {
+        logError("config_banner_schema_invalid", { message: parsedBanner.error.message });
       }
+    } catch (err) {
+      logError("config_banner_json_invalid", { message: err instanceof Error ? err.message : String(err) });
     }
   }
 
   c.header("Cache-Control", "public, max-age=60");
   return c.json(cfg);
 });
+
+interface ConfigKvSnapshot {
+  /** KV `data:countries:override` 원문(존재 여부만 씀). */
+  overrideRaw: string | null;
+  /** KV `config:client` 원문. */
+  clientRaw: string | null;
+  /** KV `config:banner` 원문. */
+  bannerRaw: string | null;
+  /** `manifest.json`의 countries sha256(없으면 undefined). */
+  manifestHash: string | undefined;
+}
+
+// [WT-OPT-01, §11-D60] 이 라우트는 GET /config 요청마다 KV 3종(override·client·banner) +
+// ASSETS.fetch(manifest) 총 4회 왕복을 도는데, 셋 다 핫스왑 채널이라 즉시 반영이 필수가
+// 아니다(각각 기존에도 "핫스왑, 배포 없이 반영"이 목적이지 "요청마다 최신"이 계약은 아니었다).
+// 모듈 스코프로 TTL 30초 묶어서 캐싱한다 — 반영 지연은 최대 30초, 이 라우트의 기존 HTTP
+// Cache-Control(max-age=60)보다 짧아 클라이언트 쪽 캐시 계약을 초과하지 않는다.
+const CONFIG_SNAPSHOT_TTL_MS = 30_000;
+let configSnapshotMemo: { snapshot: ConfigKvSnapshot; expiresAt: number } | null = null;
+
+async function loadConfigSnapshot(env: Env): Promise<ConfigKvSnapshot> {
+  const now = Date.now();
+  if (configSnapshotMemo && configSnapshotMemo.expiresAt > now) return configSnapshotMemo.snapshot;
+
+  const kv = env.KV;
+  const [overrideRaw, clientRaw, bannerRaw, manifestHash] = await Promise.all([
+    kv ? kv.get(KV_KEYS.dataCountriesOverride) : Promise.resolve(null),
+    kv ? kv.get(KV_KEYS.configClient) : Promise.resolve(null),
+    kv ? kv.get(KV_KEYS.configBanner) : Promise.resolve(null),
+    readManifestCountriesHash(env.ASSETS),
+  ]);
+  const snapshot: ConfigKvSnapshot = { overrideRaw, clientRaw, bannerRaw, manifestHash };
+  configSnapshotMemo = { snapshot, expiresAt: now + CONFIG_SNAPSHOT_TTL_MS };
+  return snapshot;
+}
+
+/**
+ * 테스트 전용: config 스냅샷 모듈 메모를 초기화한다. 프로덕션 코드 경로에서는 호출되지 않는다 —
+ * vitest-pool-workers가 singleWorker로 전체 실행 동안 모듈 상태를 공유하므로(스토리지만 테스트
+ * 단위 격리), 테스트가 config:client/config:banner/data:countries:override를 직접 put한 직후
+ * "TTL이 지난 것"을 시뮬레이션하려면 이 리셋이 필요하다.
+ */
+export function __resetConfigSnapshotMemoForTests(): void {
+  configSnapshotMemo = null;
+}
 
 /**
  * dataUrl 결정 순서:
@@ -157,14 +196,9 @@ config.get("/config", async (c) => {
  * 바꿔야 한다 — 이 태스크 범위 밖이라 캐시버스팅 의미(빌드가 바뀌면 URL이 바뀐다)만 보존하는
  * 최소 변경으로 대체했다. manifest를 못 읽으면(로컬 KV/ASSETS 미바인딩 등) 해시 없이 폴백한다.
  */
-async function resolveDataUrl(env: Env): Promise<string> {
-  if (env.KV) {
-    const override = await env.KV.get(KV_KEYS.dataCountriesOverride);
-    if (override) return "/api/v1/data/countries";
-  }
-
-  const hash = await readManifestCountriesHash(env.ASSETS);
-  return hash ? `${COUNTRIES_DATA_PATH}?v=${hash.slice(0, 8)}` : COUNTRIES_DATA_PATH;
+function resolveDataUrlFromSnapshot(snap: ConfigKvSnapshot): string {
+  if (snap.overrideRaw) return "/api/v1/data/countries";
+  return snap.manifestHash ? `${COUNTRIES_DATA_PATH}?v=${snap.manifestHash.slice(0, 8)}` : COUNTRIES_DATA_PATH;
 }
 
 async function readManifestCountriesHash(assets: Env["ASSETS"] | undefined): Promise<string | undefined> {

@@ -12,7 +12,7 @@ import type { Env } from "../env";
 import { ApiHttpError } from "../lib/api-error";
 import { optionalAuth, type AuthVariables } from "../mw/auth";
 import { rateLimit } from "../mw/ratelimit";
-import { trackClientError, trackShareClick } from "../lib/telemetry";
+import { sha256Hex16, trackClientError, trackShareClick } from "../lib/telemetry";
 
 const MAX_BATCH = 20; // 클라 배칭 주기(10개/5초)보다 여유 있게(재시도 합류 대비) — §5.2
 
@@ -62,10 +62,14 @@ t.post("/t", optionalAuth, rateLimit("t"), async (c) => {
     throw new ApiHttpError(400, "INVALID_BODY", "events 배열(1~20개)이 필요합니다.");
   }
   const pid = c.get("pid") ?? null;
+  // 배치 1건에 client_error가 여러 개일 수 있어(MAX_BATCH=20) pid→해시 파생을 요청당 1회만
+  // 계산해 재사용한다(§11-D60·WT-OPT-01) — sha256Hex16은 pid가 같으면 항상 같은 값이라 이벤트
+  // 수만큼 반복 계산하는 건 낭비다.
+  const userIdHash = pid ? await sha256Hex16(pid) : "";
 
   for (const ev of parsed.data.events) {
     if (ev.type === "client_error") {
-      await trackClientError(c.env, pid, { message: ev.message, top3Frames: top3Frames(ev.stack) });
+      await trackClientError(c.env, pid, { message: ev.message, top3Frames: top3Frames(ev.stack) }, userIdHash);
     } else if (ev.type === "share_click") {
       trackShareClick(c.env, { referrerHost: ev.referrerHost, utmSource: ev.utmSource });
     }

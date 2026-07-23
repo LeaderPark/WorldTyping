@@ -26,6 +26,15 @@ export const KV_KEYS = {
   lb: (boardKey: string): string => `lb:${boardKey}`,
   /** 리더보드 더티 마킹(TTL 180s). */
   dirty: (boardKey: string): string => `dirty:${boardKey}`,
+  /**
+   * 리더보드 더티 존재 여부 센티널(WT-OPT-01, §11-D60). 제출 핸들러가 개별 `dirty:{board}` 마킹과
+   * 같은 batch에서 이 키도 함께 put한다(TTL=DIRTY_TTL_SEC 동일). cron(lb-refresher)이 매분 이
+   * 키 하나만 get해 "이번 분에 처리할 dirty 보드가 있는지"를 판별한다 — 없고 콜드(10분) 분도
+   * 아니면 KV op 정확히 1회(get)로 즉시 반환한다. 값은 하이픈(`dirty-sentinel`)이라 콜론 프리픽스
+   * `dirty:`로 하는 `kv.list({prefix:"dirty:"})` 결과에 절대 섞이지 않는다(의도적 불충돌 — 이
+   * 파일 상단 규약 그대로).
+   */
+  dirtySentinel: "dirty-sentinel",
 
   /**
    * 레이트리밋 고정윈도 카운터. scope는 mw/ratelimit.ts의 LIMITS 키(또는 세션 신규 pid

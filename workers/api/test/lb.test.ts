@@ -4,7 +4,7 @@
 //     daily DO NOTHING, shadowban 미노출, KV 1페이지/D1 커서·지역, cron dirty/cold, 제출 인라인 순위.
 /* eslint-disable no-await-in-loop -- 순차 시드/전수 대조가 목적(각 반복이 독립 D1 write). */
 import { SELF, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   boardKeysForRun,
   coldAlltimeBoardKeys,
@@ -14,6 +14,7 @@ import {
   queryPage,
   rankOfUser,
   readBoardCache,
+  refreshBoardCache,
   upsertBestStmts,
   type RankTuple,
 } from "../src/lib/lb";
@@ -412,6 +413,9 @@ describe("cron/lb-refresher", () => {
     const id = await seedRow(board, "c1", { score: 300, elapsedMs: 1000, accMilli: 900, achievedAt: 100 });
     await env.KV.delete(KV_KEYS.lb(board));
     await env.KV.put(KV_KEYS.dirty(board), "1");
+    // sentinel(§11-D60·WT-OPT-01): 실제 제출 경로는 dirty 마킹과 항상 함께 남기므로, 여기서도
+    // 직접 재현해야 이번 분이 게이트를 통과한다(minute 3은 콜드가 아니라 sentinel 없인 즉시 반환).
+    await env.KV.put(KV_KEYS.dirtySentinel, "1");
 
     await runLbRefresher(env, Date.parse("2026-07-21T00:03:00Z")); // minute 3 → 콜드 아님
 
@@ -435,6 +439,105 @@ describe("cron/lb-refresher", () => {
     const cached = await readBoardCache(env.KV, board);
     expect(cached).not.toBeNull();
     expect(cached!.entries.map((e) => e.userId)).toContain(id);
+  });
+});
+
+// ───────── sentinel 게이트 · 콜드 프리필터(§11-D60·WT-OPT-01) ─────────
+
+describe("cron/lb-refresher — sentinel 게이트(§11-D60)", () => {
+  it("무-dirty·비-콜드 분: sentinel이 없으면 KV op가 정확히 1회(get)뿐이고 즉시 반환한다", async () => {
+    await env.KV.delete(KV_KEYS.dirtySentinel);
+    const getSpy = vi.spyOn(env.KV, "get");
+    const putSpy = vi.spyOn(env.KV, "put");
+    const deleteSpy = vi.spyOn(env.KV, "delete");
+    const listSpy = vi.spyOn(env.KV, "list");
+
+    await runLbRefresher(env, Date.parse("2026-07-21T00:03:00Z")); // minute 3 → 콜드 아님
+
+    expect(getSpy).toHaveBeenCalledTimes(1);
+    expect(getSpy).toHaveBeenCalledWith(KV_KEYS.dirtySentinel);
+    expect(putSpy).not.toHaveBeenCalled();
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(listSpy).not.toHaveBeenCalled();
+
+    getSpy.mockRestore();
+    putSpy.mockRestore();
+    deleteSpy.mockRestore();
+    listSpy.mockRestore();
+  });
+
+  it("sentinel이 있으면 dirty 목록을 list하기 전에 삭제하고, 그 보드를 정상 처리한다", async () => {
+    const board = "worldtour|en|desktop|d:2051-04-04";
+    const id = await seedRow(board, "s1", { score: 200, elapsedMs: 900, accMilli: 900, achievedAt: 5 });
+    await env.KV.delete(KV_KEYS.lb(board));
+    await env.KV.put(KV_KEYS.dirty(board), "1");
+    await env.KV.put(KV_KEYS.dirtySentinel, "1");
+
+    await runLbRefresher(env, Date.parse("2026-07-21T00:04:00Z")); // 콜드 아님, sentinel만으로 게이트 통과
+
+    expect(await env.KV.get(KV_KEYS.dirtySentinel)).toBeNull(); // 처리 중 삭제됨
+    const cached = await readBoardCache(env.KV, board);
+    expect(cached?.entries.map((e) => e.userId)).toContain(id);
+    expect(await env.KV.get(KV_KEYS.dirty(board))).toBeNull(); // dirty 키도 처리 후 삭제
+  });
+
+  it("콜드 분: lb_best에 행이 없는 alltime 보드는 프리필터로 제외돼 캐시가 생성되지 않는다", async () => {
+    const emptyBoard = coldAlltimeBoardKeys().find((bk) => bk.startsWith("tier:4|"))!;
+    await env.KV.delete(KV_KEYS.lb(emptyBoard));
+    await env.KV.delete(KV_KEYS.dirtySentinel);
+
+    await runLbRefresher(env, Date.parse("2026-07-21T00:20:00Z")); // minute 20 → 콜드, 행 없음
+
+    expect(await readBoardCache(env.KV, emptyBoard)).toBeNull();
+  });
+
+  it("콜드 분: 캐시는 있는데 현재 행이 0인 콜드 보드는 캐시가 삭제된다(전량 비활성화·닉변 아닌 완전 이탈 반영)", async () => {
+    const board = coldAlltimeBoardKeys().find((bk) => bk.startsWith("tier:5|"))!;
+    // D1에는 행이 없고 KV 캐시만 미리 심어(예전 활성 상태의 잔재) 있는 상태를 시뮬레이션.
+    await env.KV.put(KV_KEYS.lb(board), JSON.stringify({ entries: [], total: 3, builtAt: Date.now() }));
+    await env.KV.delete(KV_KEYS.dirtySentinel);
+
+    await runLbRefresher(env, Date.parse("2026-07-21T00:30:00Z")); // 콜드
+
+    expect(await env.KV.get(KV_KEYS.lb(board))).toBeNull();
+  });
+});
+
+// ───────── refreshBoardCache 빈 보드 delete 조건(§11-D60) ─────────
+
+describe("refreshBoardCache — 빈 보드 delete 조건(§11-D60·WT-OPT-01)", () => {
+  it("total=0이고 캐시가 애초에 없으면 kv.delete를 호출하지 않는다", async () => {
+    const board = unitBoard(); // lb_best에 행 없음 + KV 캐시 없음
+    await env.KV.delete(KV_KEYS.lb(board));
+    const deleteSpy = vi.spyOn(env.KV, "delete");
+
+    const total = await refreshBoardCache(env.DB, env.KV, board);
+
+    expect(total).toBe(0);
+    expect(deleteSpy).not.toHaveBeenCalled();
+    deleteSpy.mockRestore();
+  });
+
+  it("total=0이지만 캐시가 존재하면 그 캐시를 delete한다", async () => {
+    const board = unitBoard();
+    await env.KV.put(KV_KEYS.lb(board), JSON.stringify({ entries: [], total: 5, builtAt: Date.now() }));
+
+    const total = await refreshBoardCache(env.DB, env.KV, board);
+
+    expect(total).toBe(0);
+    expect(await env.KV.get(KV_KEYS.lb(board))).toBeNull();
+  });
+
+  it("total>0이면 정상적으로 top-N을 재조회해 캐시를 기록한다(회귀 방지)", async () => {
+    const board = unitBoard();
+    const id = await seedRow(board, "rbc1", { score: 700, elapsedMs: 500, accMilli: 900, achievedAt: 1 });
+    await env.KV.delete(KV_KEYS.lb(board));
+
+    const total = await refreshBoardCache(env.DB, env.KV, board);
+
+    expect(total).toBe(1);
+    const cached = await readBoardCache(env.KV, board);
+    expect(cached?.entries.map((e) => e.userId)).toContain(id);
   });
 });
 
@@ -526,8 +629,9 @@ describe("POST /runs/submit — 리더보드 인라인 반영(§1.3·§1.4-③)"
       .first<{ n: number }>();
     expect(cnt!.n).toBe(3);
 
-    // dirty 마킹(§1.5).
+    // dirty 마킹(§1.5) + sentinel(§11-D60·WT-OPT-01) — 둘 다 같은 batch에서 함께 기록된다.
     expect(await env.KV.get(KV_KEYS.dirty("worldtour|en|desktop|all"))).toBe("1");
+    expect(await env.KV.get(KV_KEYS.dirtySentinel)).toBe("1");
   });
 
   it("flagged 제출(점수 위조)은 보드 미등재 + rank/total/PB null", async () => {

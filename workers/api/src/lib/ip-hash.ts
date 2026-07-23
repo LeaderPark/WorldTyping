@@ -17,10 +17,16 @@ export async function hashIp(ip: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** cf.country(alpha-2). 'T1'(Tor exit) / 'XX'(알 수 없음)는 NULL 처리(docs/06 §1.3 주석). */
+/**
+ * 요청 국가(alpha-2). `CF-IPCountry` 헤더를 우선 신뢰하고, 없으면 `cf.country`로 폴백한다
+ * (§11-D61 — self-host/miniflare처럼 `cf` 객체가 비어 있는 환경에서도 리버스 프록시가 세팅한
+ * `CF-IPCountry` 헤더만으로 geo를 얻을 수 있게 한다). 'T1'(Tor exit) / 'XX'(알 수 없음)는 두
+ * 경로 동일하게 NULL 처리(docs/06 §1.3 주석).
+ */
 export function getGeoCountry(c: Context): string | null {
+  const headerCountry = c.req.header("CF-IPCountry");
   const cf = (c.req.raw as Request & { cf?: { country?: string } }).cf;
-  const country = cf?.country;
+  const country = headerCountry ?? cf?.country;
   if (!country || country === "T1" || country === "XX") return null;
   return country;
 }

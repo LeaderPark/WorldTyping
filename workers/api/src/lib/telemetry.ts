@@ -215,13 +215,20 @@ export function trackGameAbandon(env: Pick<Env, "AE">, opts: { dateKst: string; 
   writeTelemetryEvent(env, "game_abandon", { userIdHash: "" }, undefined, `date:${opts.dateKst},count:${opts.count}`);
 }
 
-/** client_error — POST /api/v1/t 배치(routes/t.ts). 스택 상위 3프레임만 blobs[10]에 싣는다. */
+/**
+ * client_error — POST /api/v1/t 배치(routes/t.ts). 스택 상위 3프레임만 blobs[10]에 싣는다.
+ *
+ * `precomputedUserIdHash`(WT-OPT-01, §11-D60): 배치 1건에 client_error가 여러 개 실려도 pid는
+ * 요청 전체에서 동일하므로, 호출부(routes/t.ts)가 sha256Hex16(pid)를 요청당 1회만 계산해 넘기면
+ * 이 함수는 그 값을 재사용한다 — 생략 시(기존 호출부 하위 호환) 이 함수가 직접 계산한다.
+ */
 export async function trackClientError(
   env: Pick<Env, "AE">,
   pid: string | null,
   opts: { message: string; top3Frames: string },
+  precomputedUserIdHash?: string,
 ): Promise<void> {
-  const userIdHash = pid ? await sha256Hex16(pid) : "";
+  const userIdHash = precomputedUserIdHash ?? (pid ? await sha256Hex16(pid) : "");
   writeTelemetryEvent(
     env,
     "client_error",

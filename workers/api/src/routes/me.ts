@@ -238,6 +238,11 @@ me.delete("/users/me", requireAuth, async (c) => {
     await Promise.all([
       kv.delete(KV_KEYS.passport(pid)),
       ...boardKeys.map((bk) => kv.put(KV_KEYS.dirty(bk), "1", { expirationTtl: DIRTY_TTL_SEC })),
+      // sentinel(§11-D60·WT-OPT-01): lb-refresher가 매분 이 키 하나만으로 "처리할 dirty 보드가
+      // 있는지"를 게이트한다 — 이 경로도 routes/runs.ts와 동일하게 dirty 마킹과 항상 함께 남겨야
+      // cron이 계정 삭제로 새로 생긴 dirty 보드를 다음 분에 놓치지 않는다. 보드가 하나도 없었으면
+      // (원래 리더보드에 등재된 적 없는 계정) sentinel도 남기지 않는다.
+      ...(boardKeys.length > 0 ? [kv.put(KV_KEYS.dirtySentinel, "1", { expirationTtl: DIRTY_TTL_SEC })] : []),
     ]);
   }
 

@@ -5,8 +5,9 @@
 // `config:loadtest` 플래그가 존재하는 동안은 스코프 무관 전체 우회(부하 테스트 전용 완화,
 // staging에서 signSessionToken 직접 서명이 불가능해 이 경로가 유일한 완화 수단이다).
 import { SELF, env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KV_KEYS } from "../src/lib/kv-keys";
+import { __resetLoadtestMemoForTests } from "../src/mw/ratelimit";
 
 const BASE = "http://local/api/v1";
 
@@ -22,6 +23,16 @@ describe("mw/ratelimit — config:loadtest 우회", () => {
   beforeEach(async () => {
     // 각 케이스가 이전 케이스의 rl:session 윈도 카운터에 영향받지 않도록 정리.
     await env.KV.delete(KV_KEYS.configLoadtest);
+    // [WT-OPT-01] config:loadtest 조회는 모듈 스코프 TTL 5초 메모다(mw/ratelimit.ts) — vitest는
+    // singleWorker로 전체 실행 동안 모듈 상태를 공유하므로(스토리지만 테스트 단위 격리), KV를
+    // 정리한 직후 이 리셋도 함께 호출해 "5초가 지난 것"과 동일한 상태에서 각 케이스를 시작한다.
+    __resetLoadtestMemoForTests();
+  });
+
+  afterEach(() => {
+    // 이 스위트가 config:loadtest=true로 남긴 메모가 다음 테스트 파일(예: session.test.ts의
+    // 레이트리밋 429 단언)로 새어나가 레이트리밋이 계속 우회되는 사고를 막는다.
+    __resetLoadtestMemoForTests();
   });
 
   it("평시: session 스코프는 10회/60s를 넘으면 429(RATE_LIMITED)", async () => {
@@ -59,6 +70,11 @@ describe("mw/ratelimit — config:loadtest 우회", () => {
       expect(res.status).toBe(200);
     }
     await env.KV.delete(KV_KEYS.configLoadtest);
+    // 모듈 메모는 KV delete와 무관하게 최대 5초간 이전 값(true)을 캐시할 수 있다(mw/ratelimit.ts
+    // TTL 메모, §11-D60 — 반영 지연은 프로덕션에서 무해하다고 명시). 이 테스트는 "원복 직후 즉시
+    // 정상 레이트리밋이 걸린다"를 검증하려는 것이므로, 실제 배포에서 몇 초 후 벌어질 캐시 만료를
+    // 여기서 명시적으로 시뮬레이션한다.
+    __resetLoadtestMemoForTests();
 
     // 우회 동안은 config:loadtest 분기가 rl:session 카운터 자체를 건드리지 않고 조기 반환하므로,
     // 원복 직후 제너릭 세션 한도(10/60s)는 0부터 다시 시작한다 — 10회는 통과, 11번째가 429.
@@ -68,6 +84,21 @@ describe("mw/ratelimit — config:loadtest 우회", () => {
     }
     const eleventh = await bootstrap();
     expect(eleventh.status).toBe(429);
+  });
+
+  it("[WT-OPT-01] TTL 메모 동안은 config:loadtest KV get이 반복 호출되지 않는다", async () => {
+    const getSpy = vi.spyOn(env.KV, "get");
+    // 서로 다른 3개 스코프(session·leaderboard)를 연달아 호출해도 config:loadtest용 get은
+    // 최초 1회만 나가야 한다(메모가 5초 TTL 동안 재사용됨 — mw/ratelimit.ts isLoadtestActive).
+    await bootstrap();
+    await bootstrap();
+    await SELF.fetch(`${BASE}/lb?board=${encodeURIComponent("tier:1|en|desktop|all")}`);
+
+    const loadtestGetCalls = getSpy.mock.calls.filter(
+      (args) => typeof args[0] === "string" && args[0] === KV_KEYS.configLoadtest,
+    );
+    expect(loadtestGetCalls).toHaveLength(1);
+    getSpy.mockRestore();
   });
 });
 
@@ -95,6 +126,11 @@ describe("mw/ratelimit — leaderboard 스코프 배선(GET /lb, GET /lb/me) —
 
   beforeEach(async () => {
     await env.KV.delete(KV_KEYS.configLoadtest);
+    __resetLoadtestMemoForTests();
+  });
+
+  afterEach(() => {
+    __resetLoadtestMemoForTests();
   });
 
   it("평시: leaderboard 스코프는 60회/60s를 넘으면 61번째 요청이 429(RATE_LIMITED)", async () => {

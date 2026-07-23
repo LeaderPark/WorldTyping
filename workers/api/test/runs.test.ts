@@ -2,7 +2,7 @@
 //       §3.5(섀도우밴), docs/00 §11-D5·D16·D21·D38 + WT-M3-03 [완료 조건]
 //       — /runs/start→submit 왕복, 정상=valid+runs 기록, 리플레이(KV), 데일리 규칙, rejected=200, 섀도우밴.
 import { SELF, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { computeScore, requiredKeystrokes, type CountryId, type ScoreCountry } from "@wt/shared";
 import { COUNTRIES } from "@wt/data";
 import { kstDate } from "../src/lib/kst";
@@ -184,6 +184,28 @@ describe("POST /runs/submit — 정상 경로", () => {
     expect(row!.verdict).toBe("flagged");
     expect(row!.verdict_reason).toContain("score_mismatch");
     expect(row!.score).toBe(built.clientScore);
+  });
+});
+
+describe("POST /runs/submit — 시즌 쿼리 제거(§11-D15·D60)", () => {
+  it("valid 제출 경로에서 seasons 테이블을 조회하지 않는다(activeSeasonPeriod 호출을 상수 null로 고정)", async () => {
+    const { token } = await bootstrap();
+    const started = (await (await startRun(token, { mode: "worldtour", lang: "en", platform: "desktop" })).json()) as StartRes;
+    const built = buildSubmit(started.countryIds, 2, 80);
+
+    const prepareSpy = vi.spyOn(env.DB, "prepare");
+    const res = await submitRun(token, {
+      runToken: started.runToken,
+      result: built.result,
+      clientScore: built.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as SubmitRes).verdict).toBe("valid");
+
+    const sqlCalls = prepareSpy.mock.calls.map((args) => String(args[0]));
+    expect(sqlCalls.some((sql) => /\bseasons\b/i.test(sql))).toBe(false);
+    prepareSpy.mockRestore();
   });
 });
 

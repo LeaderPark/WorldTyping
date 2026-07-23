@@ -92,8 +92,12 @@ export async function ensureDailySeed(env: Env, nowMs: number = Date.now()): Pro
 
   const existing = await readExistingRow(db, dateKst);
   if (existing) {
+    // KV 캐시는 "신규 생성" 분기에서만 기록한다(§11-D60·WT-OPT-01) — 이 분기는 이미 발행된
+    // 날짜를 그대로 읽는 순수 조회 경로다(routes/runs.ts의 daily 제출마다 호출되는 경로 포함).
+    // cron/즉석발행이 최초 생성 시 이미 KV를 채워 뒀으므로 여기서 매번 재기록하는 건 낭비다
+    // (routes/daily.ts의 GET /daily/today는 이 함수 호출 전에 자체 KV 히트를 먼저 확인하므로
+    // 이 분기가 KV를 쓰지 않아도 그 라우트의 캐시 계약은 그대로 유지된다).
     const countryIds = JSON.parse(existing.country_ids) as CountryId[];
-    await writeKvCache(env, dateKst, existing.daily_no, existing.seed, countryIds);
     return { dateKst, dailyNo: existing.daily_no, seed: existing.seed, countryIds, created: false };
   }
 
@@ -125,6 +129,10 @@ export async function ensureDailySeed(env: Env, nowMs: number = Date.now()): Pro
   const row = await readExistingRow(db, dateKst);
   if (!row) throw new Error(`ensureDailySeed: insert-then-read failed for ${dateKst}`);
   const finalIds = JSON.parse(row.country_ids) as CountryId[];
-  await writeKvCache(env, dateKst, row.daily_no, row.seed, finalIds);
+  // KV 캐시는 이 호출이 실제로 새 행을 만들었을 때만 기록한다(§11-D60) — INSERT가 ON CONFLICT
+  // DO NOTHING으로 흡수된 레이스 패자는 승자가 이미 캐시를 기록했다고 보고 재기록을 생략한다.
+  if (created) {
+    await writeKvCache(env, dateKst, row.daily_no, row.seed, finalIds);
+  }
   return { dateKst, dailyNo: row.daily_no, seed: row.seed, countryIds: finalIds, created };
 }

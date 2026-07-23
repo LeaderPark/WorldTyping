@@ -413,12 +413,18 @@ export async function readBoardCache(kv: KVNamespace, boardKey: string): Promise
 
 /**
  * 보드 top-100을 D1에서 재조회해 KV `lb:{board}`에 기록(§1.5). 활성 유저 0명이면 KV 키를
- * 삭제(비활성 유저의 stale 노출 방지). 반환값은 total(콜드/더티 판정 로깅용).
+ * 삭제(비활성 유저의 stale 노출 방지) — 단, 캐시가 실제로 존재할 때만 지운다(§11-D60·WT-OPT-01).
+ * 대다수 호출(늘 비어있는 보드의 cron 콜드 리프레시·GET /lb 미스 직후 백필)은 애초에 캐시가
+ * 없는 상태라 무조건 delete를 날리면 크론 매분 + 미스 요청마다 의미 없는 KV 쓰기가 쌓인다.
+ * 반환값은 total(콜드/더티 판정 로깅용).
  */
 export async function refreshBoardCache(db: D1Database, kv: KVNamespace, boardKey: string): Promise<number> {
   const total = await boardTotal(db, boardKey);
   if (total === 0) {
-    await kv.delete(KV_KEYS.lb(boardKey));
+    const cached = await kv.get(KV_KEYS.lb(boardKey));
+    if (cached !== null) {
+      await kv.delete(KV_KEYS.lb(boardKey));
+    }
     return 0;
   }
   // ranking key: docs/06 §1.2

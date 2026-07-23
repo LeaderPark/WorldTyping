@@ -1230,7 +1230,7 @@
   border: 1px solid var(--map-border);
   background: var(--surface);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 13.5px; /* [WT-DC-02] 디자인 정본 L119 리터럴 — 종전 0.85rem(13.6px)에서 정합 */
   text-decoration: none;
 }
 
@@ -1245,6 +1245,7 @@
   border-radius: var(--radius-card);
   overflow: hidden;
   background: var(--map-idle);
+  box-shadow: var(--shadow-card); /* [WT-DC-02] 디자인 정본 L59 */
 }
 .wt-home-hero__map {
   position: absolute;
@@ -1272,10 +1273,17 @@
 :root[data-reduced] .wt-map__country--hero-lit {
   transition: none;
 }
+/* [WT-DC-02] Mascot(마스코트)를 얹기 위해 flex column + gap으로 개정(디자인 정본 L61) —
+   기존 h1/p 두 자녀만 있을 땐 text-align:center 단독으로 충분했지만, 마스코트가 첫 자녀로
+   들어오며 세 요소 간 균일한 2px 간격을 gap이 전담한다(자녀 개별 margin은 아래에서 제거). */
 .wt-home__logo-card {
   position: relative;
   z-index: 1;
-  padding: 1rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 28px 16px;
   text-align: center;
 }
 .wt-home__title {
@@ -1283,8 +1291,14 @@
   font-size: 1.5rem;
   font-weight: 700;
 }
+/* [WT-DC-02] 수정자 — 디자인 정본 L73 리터럴(800/-0.01em). 결합 셀렉터로 기본 규칙 위치와
+   무관하게 항상 이기게 한다(파일 내 기존 관례 — 예: .wt-pill.wt-track-item__cta). */
+.wt-home__title.wt-home__title--brand {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
 .wt-home__tagline {
-  margin: 0.25rem 0 0;
+  margin: 0; /* [WT-DC-02] 부모 gap(2px)이 간격을 전담 — 개별 margin과 이중 적용 방지 */
   font-size: 0.9rem;
   color: var(--text-muted);
 }
@@ -1330,6 +1344,28 @@
   font-size: 0.85rem;
   opacity: 0.75;
   text-align: center;
+}
+
+/* ── WT-DC-02: 헤더 3버튼 규격(디자인 정본 L52~56) ──────────────────────────
+   .wt-pill/.wt-icon-tile 전역 정의(§2.3, L2237~/L2301~)는 그대로 두고, 결합 셀렉터로
+   S1 헤더 전용 축소 규격만 덮어쓴다(소스 순서 무관 — 파일 기존 관례와 동일 기법). */
+/* 언어 pill + 사운드 토글 pill 공용 컴팩트 변형: 34px 높이, 13px 글자. */
+.wt-pill.wt-pill--compact {
+  height: 34px;
+  font-size: 0.8125rem; /* 13px */
+}
+/* 사운드 토글은 언어 pill과 달리 "선택된 값"이 아니라 on/off 스위치라 accent 보더 대신
+   중립 보더(디자인 정본 L55 — 언어 pill만 accent #0a84ff, 사운드는 #e3e6db)를 쓴다. */
+.wt-pill.wt-pill--compact.wt-home__sound-toggle {
+  border-color: var(--border);
+}
+/* 설정 버튼: 44px 전역 아이콘 타일을 34px/radius 10으로 축소(디자인 정본 L56). 배경은
+   전역 값(var(--surface-sunken))과 동일해 재선언하지 않는다. */
+.wt-icon-tile.wt-home__settings-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 1rem; /* 16px — 축소된 타일에 맞춘 톱니 아이콘 크기 */
 }
 
 /* [공유 — 변경 금지] .wt-mode-card 계열은 홈이 WT-UI-04에서 행(.wt-home__menu-row) 방식으로

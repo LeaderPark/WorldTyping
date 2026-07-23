@@ -55,6 +55,11 @@ describe('HomePage (S1)', () => {
     expect(screen.getByTestId('hero-map-loading')).toBeInTheDocument();
   });
 
+  it('RouteMotifBackdrop이 배경으로 부착된다(WT-UI-04 ⑤)', () => {
+    renderHome();
+    expect(screen.getByTestId('route-motif-backdrop')).toBeInTheDocument();
+  });
+
   it('싱글/멀티/데일리 3개 카드와 랭킹/여권/설정 내비를 렌더한다', () => {
     renderHome();
     expect(screen.getByTestId('home-card-single')).toHaveAttribute('href', '/play');
@@ -65,15 +70,15 @@ describe('HomePage (S1)', () => {
     expect(screen.getByTestId('home-daily-badge').getAttribute('href')).toMatch(/^\/play\/daily\//);
   });
 
-  it('완주 기록이 하나도 없으면 싱글플레이 카드가 펄스된다(§11.1 1단계)', () => {
+  it('완주 기록이 하나도 없으면 싱글플레이 행이 펄스된다(§11.1 1단계)', () => {
     renderHome();
-    expect(screen.getByTestId('home-card-single').className).toContain('wt-mode-card--pulse');
+    expect(screen.getByTestId('home-card-single').className).toContain('wt-home__menu-row--pulse');
   });
 
   it('완주 기록이 있으면 펄스가 사라진다', () => {
     useMetaStore.getState().addStamp('continent:asia');
     renderHome();
-    expect(screen.getByTestId('home-card-single').className).not.toContain('wt-mode-card--pulse');
+    expect(screen.getByTestId('home-card-single').className).not.toContain('wt-home__menu-row--pulse');
   });
 
   it('언어 토글 버튼이 lang을 뒤집는다', () => {

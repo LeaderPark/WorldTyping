@@ -1,9 +1,13 @@
 // spec: docs/01 §10.1(S1 홈/S2 언어 게이트)·§10.2(S1 와이어프레임 전문)·§11.1(온보딩 1단계
 //       "싱글플레이 카드 펄스 하이라이트"), docs/03 §4.2(HomePage 트리)·§8.1(lang 동기화),
-//       WT-M2-05(언어 게이트 골격), WT-M2-07(히어로 지도/모드 카드/데일리 뱃지/티커 채움)
+//       docs/00 §11-D45(HeroMap lazy 경계)·D50(브랜드 색은 장식·지도 fill 전용), WT-M2-05(언어
+//       게이트 골격), WT-M2-07(히어로 지도/모드 카드/데일리 뱃지/티커 채움), WT-UI-04(홈 리뉴얼
+//       — 로고 카드+컬러 메뉴 행 5+RouteMotifBackdrop+데일리 뱃지+언어 게이트 라이트)
 //
 // 랜딩 → 첫 타이핑 3클릭·15초 여정의 1번째 클릭 지점(§11.1 목표). 언어 게이트(S2)는 WT-M2-05가
-// 이미 완성한 그대로 유지한다.
+// 이미 완성한 골격(role/aria-label/testid/localStorage 시맨틱)을 그대로 유지하고, WT-UI-04는
+// 다이얼로그 표면만 .wt-card로 라이트 재도장한다 — 문구는 손대지 않았다(index.html의 정적
+// 크리티컬 셸이 이 문구를 그대로 복제하고 있어, 카피를 바꾸면 그 파일도 동기해야 한다).
 //
 // [WT-M3-06] 데일리 뱃지 실데이터(alreadyPlayed·dailyNo)와 티커(전체 1위)를 서버에서 채운다.
 // 조회 실패(오프라인 등)는 화면을 깨뜨리지 않고 조용히 placeholder/미표시로 폴백한다 — 이
@@ -15,6 +19,11 @@
 // 초과한다(§11-D45 실측 2.64s). Suspense fallback은 HeroMapPlaceholder — HeroMap 내부의
 // "위상 데이터 fetch 중" placeholder와 동일 마크업이라 청크 도착 시점 스왑에 레이아웃
 // 시프트가 없다. 게임 라우트(GamePage)의 WorldMap 로딩 경로는 이 변경과 무관(불변).
+//
+// [WT-UI-04] HeroMap을 "축소·배경화"한다 — HeroMap.tsx/HeroMapPlaceholder.tsx 자체는 무수정
+// (같은 testid/className을 그대로 렌더하므로 위 무시프트 계약이 그대로 유지된다), 이 파일과
+// globals.css의 .wt-home__hero/.wt-home-hero__map만 크기·레이어링을 바꿔 로고 카드 뒤에 깔리는
+// 작은 배경 배너로 재배치한다.
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +31,7 @@ import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
 import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
 import { useModalA11y } from '../../lib/useModalA11y';
+import { RouteMotifBackdrop } from '../../components/RouteMotifBackdrop';
 import { HeroMapPlaceholder } from './HeroMapPlaceholder';
 
 const HeroMap = lazy(() => import('./HeroMap'));
@@ -102,9 +112,11 @@ export function HomePage() {
 
   return (
     <main className="wt-home" data-testid="home-page">
-      <header className="wt-home__header">
-        <h1 className="wt-home__title" tabIndex={-1}>{t('app.title')}</h1>
-        <nav className="wt-home__nav">
+      {/* [WT-UI-04] 대륙 6색 저채도 아크+도트 — 순수 장식(부착만, 컴포넌트 자체는 무수정). */}
+      <RouteMotifBackdrop className="wt-home__backdrop" />
+
+      <div className="wt-home__content">
+        <header className="wt-home__header">
           <Link
             to={`/play/daily/${todayDailyKey()}`}
             data-testid="home-daily-badge"
@@ -113,57 +125,113 @@ export function HomePage() {
           >
             {t('home.daily.badge', { n: dailyNo ?? placeholderDailyNumber() })}
           </Link>
-          <Link to="/rank" data-testid="home-nav-rank">{t('menu.ranking')}</Link>
-          <Link to="/passport" data-testid="home-nav-passport">{t('menu.passport')}</Link>
-          <button
-            type="button"
-            data-testid="home-lang-toggle"
-            onClick={() => setLang(lang === 'ko' ? 'en' : 'ko')}
+          <div className="wt-home__header-actions">
+            <button
+              type="button"
+              data-testid="home-lang-toggle"
+              className="wt-pill"
+              onClick={() => setLang(lang === 'ko' ? 'en' : 'ko')}
+            >
+              {lang === 'ko' ? t('settings.inputLang.ko') : t('settings.inputLang.en')}
+            </button>
+            <Link
+              to="/?modal=settings"
+              data-testid="home-nav-settings"
+              aria-label={t('menu.settings')}
+              className="wt-icon-tile"
+            >
+              ⚙
+            </Link>
+          </div>
+        </header>
+
+        {/* 로고 카드(①) — HeroMap(⑥, 축소·배경화)이 그 뒤로 깔린다. */}
+        <section className="wt-home__hero">
+          <Suspense fallback={<HeroMapPlaceholder />}>
+            <HeroMap />
+          </Suspense>
+          <div className="wt-card wt-home__logo-card">
+            <h1 className="wt-home__title" tabIndex={-1}>{t('app.title')}</h1>
+            <p className="wt-home__tagline">{t(`app.tagline.${lang}`)}</p>
+          </div>
+        </section>
+
+        {/* 메뉴 행 5(②): 싱글/멀티/데일리/랭킹/여권 — .wt-menu-row(WT-UI-01)를 그대로 쓰고
+            행마다 대륙색 좌측 바 + 아이콘 타일 + 킥커 + 제목 + 위트 카피 + 셰브런을 채운다. */}
+        <nav className="wt-home__menu" aria-label={t('home.menu.navLabel')}>
+          <Link
+            to="/play"
+            data-testid="home-card-single"
+            className={`wt-menu-row wt-home__menu-row--single${!hasAnyStamp ? ' wt-home__menu-row--pulse' : ''}`}
           >
-            {lang === 'ko' ? t('settings.inputLang.ko') : t('settings.inputLang.en')}
-          </button>
-          <Link to="/?modal=settings" data-testid="home-nav-settings" aria-label={t('menu.settings')}>
-            ⚙
+            <span className="wt-icon-tile" aria-hidden="true">▶</span>
+            <span className="wt-menu-row__body">
+              <span className="wt-kicker wt-kicker--asia">{t('home.menu.singleKicker')}</span>
+              <span className="wt-menu-row__title">{t('menu.single')}</span>
+              <span className="wt-menu-row__copy">{t('home.menu.singleCopy')}</span>
+            </span>
+            <span className="wt-menu-row__chevron" aria-hidden="true">›</span>
+          </Link>
+
+          {/* 멀티는 M4 소관 — 스텁 페이지로 링크만 연결(작업 특이 조정 "멀티/랭킹 카드 링크는
+              스텁 페이지로"). */}
+          <Link to="/multi" data-testid="home-card-multi" className="wt-menu-row wt-home__menu-row--multi">
+            <span className="wt-icon-tile" aria-hidden="true">⚔</span>
+            <span className="wt-menu-row__body">
+              <span className="wt-kicker wt-kicker--europe">{t('home.menu.multiKicker')}</span>
+              <span className="wt-menu-row__title">{t('menu.multi')}</span>
+              <span className="wt-menu-row__copy">{t('home.menu.multiCopy')}</span>
+            </span>
+            <span className="wt-menu-row__chevron" aria-hidden="true">›</span>
+          </Link>
+
+          <Link
+            to={`/play/daily/${todayDailyKey()}`}
+            data-testid="home-card-daily"
+            className="wt-menu-row wt-home__menu-row--daily"
+          >
+            <span className="wt-icon-tile" aria-hidden="true">📅</span>
+            <span className="wt-menu-row__body">
+              <span className="wt-kicker wt-kicker--south-america">{t('home.menu.dailyKicker')}</span>
+              <span className="wt-menu-row__title">{t('home.daily.title')}</span>
+              <span className="wt-menu-row__copy">{t('home.menu.dailyCopy', { count: 20 })}</span>
+            </span>
+            <span className="wt-menu-row__chevron" aria-hidden="true">›</span>
+          </Link>
+
+          <Link to="/rank" data-testid="home-nav-rank" className="wt-menu-row wt-home__menu-row--ranking">
+            <span className="wt-icon-tile" aria-hidden="true">🏆</span>
+            <span className="wt-menu-row__body">
+              <span className="wt-kicker wt-kicker--africa">{t('home.menu.rankingKicker')}</span>
+              <span className="wt-menu-row__title">{t('menu.ranking')}</span>
+              <span className="wt-menu-row__copy">{t('home.menu.rankingCopy')}</span>
+            </span>
+            <span className="wt-menu-row__chevron" aria-hidden="true">›</span>
+          </Link>
+
+          <Link to="/passport" data-testid="home-nav-passport" className="wt-menu-row wt-home__menu-row--passport">
+            <span className="wt-icon-tile" aria-hidden="true">🛂</span>
+            <span className="wt-menu-row__body">
+              <span className="wt-kicker wt-kicker--oceania">{t('home.menu.passportKicker')}</span>
+              <span className="wt-menu-row__title">{t('menu.passport')}</span>
+              <span className="wt-menu-row__copy">{t('home.menu.passportCopy')}</span>
+            </span>
+            <span className="wt-menu-row__chevron" aria-hidden="true">›</span>
           </Link>
         </nav>
-      </header>
 
-      <Suspense fallback={<HeroMapPlaceholder />}>
-        <HeroMap />
-      </Suspense>
-
-      <div className="wt-home__cards">
-        <Link
-          to="/play"
-          data-testid="home-card-single"
-          className={`wt-mode-card${!hasAnyStamp ? ' wt-mode-card--pulse' : ''}`}
-        >
-          <p className="wt-mode-card__title">{t('menu.single')}</p>
-          <p className="wt-mode-card__desc">{t('home.single.desc')}</p>
-        </Link>
-        {/* 멀티는 M4 소관 — 스텁 페이지로 링크만 연결(작업 특이 조정 "멀티/랭킹 카드 링크는
-            스텁 페이지로"). */}
-        <Link to="/multi" data-testid="home-card-multi" className="wt-mode-card">
-          <p className="wt-mode-card__title">{t('menu.multi')}</p>
-          <p className="wt-mode-card__desc">{t('home.multi.desc')}</p>
-        </Link>
-        <Link to={`/play/daily/${todayDailyKey()}`} data-testid="home-card-daily" className="wt-mode-card">
-          <p className="wt-mode-card__title">{t('home.daily.title')}</p>
-          <p className="wt-mode-card__desc">{t('home.daily.desc', { count: 20 })}</p>
-        </Link>
+        {bestPI !== null && (
+          <p className="wt-home__ticker" data-testid="home-ticker">
+            {t('home.ticker.myBest', { pi: bestPI })}
+          </p>
+        )}
+        {/* 서버 리더보드 전체 1위(WT-M3-06) — 조회 실패/빈 보드는 조용히 미표시. */}
+        {top1 && (
+          <p className="wt-home__ticker" data-testid="home-ticker-top1">
+            {t('home.ticker.top1', { nickname: top1.nickname, score: top1.score })}
+          </p>
+        )}
       </div>
-
-      {bestPI !== null && (
-        <p className="wt-home__ticker" data-testid="home-ticker">
-          {t('home.ticker.myBest', { pi: bestPI })}
-        </p>
-      )}
-      {/* 서버 리더보드 전체 1위(WT-M3-06) — 조회 실패/빈 보드는 조용히 미표시. */}
-      {top1 && (
-        <p className="wt-home__ticker" data-testid="home-ticker-top1">
-          {t('home.ticker.top1', { nickname: top1.nickname, score: top1.score })}
-        </p>
-      )}
 
       <LanguageGateOverlay />
     </main>
@@ -196,14 +264,15 @@ function LanguageGateOverlay() {
       data-testid="language-gate"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
     >
-      <div className="rounded-lg bg-white p-6 text-center dark:bg-slate-800">
+      {/* [WT-UI-04] .wt-card 라이트 다이얼로그 — 문구·testid·localStorage 시맨틱은 무변경. */}
+      <div className="wt-card mx-4 max-w-sm p-6 text-center">
         <p>{t('lang.selectPrompt.ko')}</p>
         <p>{t('lang.selectPrompt.en')}</p>
-        <div className="mt-4 flex gap-3">
-          <button type="button" data-testid="lang-ko" className="rounded border px-3 py-1" onClick={() => choose('ko')}>
+        <div className="mt-4 flex justify-center gap-3">
+          <button type="button" data-testid="lang-ko" className="wt-pill" onClick={() => choose('ko')}>
             {t('lang.selectOption.ko')}
           </button>
-          <button type="button" data-testid="lang-en" className="rounded border px-3 py-1" onClick={() => choose('en')}>
+          <button type="button" data-testid="lang-en" className="wt-pill" onClick={() => choose('en')}>
             {t('lang.selectOption.en')}
           </button>
         </div>

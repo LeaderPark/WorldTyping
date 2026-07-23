@@ -565,13 +565,34 @@
   }
 }
 
-/* ── S1 홈(WT-M2-07) ──────────────────────────────────────────────────
-   spec: docs/01 §10.2(S1 와이어프레임), §11.1(1단계 — 싱글플레이 카드 펄스). */
+/* ── S1 홈(WT-M2-07, WT-UI-04 리뉴얼) ────────────────────────────────────
+   spec: docs/01 §10.2(S1 와이어프레임 — METRO TYPING 계승 리뉴얼: 로고 카드+컬러 메뉴 행 5+
+   백드롭+데일리 뱃지), §11.1(1단계 — 싱글플레이 행 펄스), docs/00 §11-D45(HeroMap lazy 경계는
+   HeroMap.tsx/HeroMapPlaceholder.tsx 무수정으로 유지 — 아래는 두 컴포넌트가 공유하는 기존
+   클래스의 크기·레이어링만 조정), D50(브랜드 색은 장식·지도 fill 전용 — 메뉴 행 좌측 색 바는
+   장식이라 원색 그대로, 텍스트인 킥커는 *-text 파생 토큰만 사용). */
 .wt-home {
+  position: relative;
+  min-height: 100%;
+  overflow: hidden; /* RouteMotifBackdrop 배경을 컨테이너 안에 가둔다 */
+}
+/* [WT-UI-04] RouteMotifBackdrop(aria-hidden·pointer-events:none 자체 내장) 부착 — 콘텐츠 뒤. */
+.wt-home__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+.wt-home__content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: 1.25rem;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2.5rem;
 }
 .wt-home__header {
   display: flex;
@@ -580,25 +601,40 @@
   justify-content: space-between;
   gap: 1rem;
 }
-.wt-home__nav {
+.wt-home__header-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 .wt-home__daily-badge {
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
   border: 1px solid var(--map-border);
+  background: var(--surface);
+  color: var(--text);
   font-size: 0.85rem;
+  text-decoration: none;
+}
+
+/* [WT-UI-04] 히어로: HeroMap을 축소·배경화(D45) — 로고 카드(.wt-card)가 그 위에 뜬다. */
+.wt-home__hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 960 / 420;
+  max-height: 13rem;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  background: var(--map-idle);
 }
 .wt-home-hero__map {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  aspect-ratio: 960 / 500;
-  max-height: 28rem;
-  overflow: hidden;
-  border-radius: 0.75rem;
+  height: 100%;
+  opacity: 0.6;
 }
 .wt-home-hero__map-svg {
   width: 100%;
@@ -619,12 +655,70 @@
 :root[data-reduced] .wt-map__country--hero-lit {
   transition: none;
 }
-
-.wt-home__cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 1rem;
+.wt-home__logo-card {
+  position: relative;
+  z-index: 1;
+  padding: 1rem 1.75rem;
+  text-align: center;
 }
+.wt-home__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.wt-home__tagline {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* [WT-UI-04] 메뉴 행 5(싱글/멀티/데일리/랭킹/여권) — .wt-menu-row/.wt-icon-tile/.wt-kicker는
+   WT-UI-01 §2.3 전역 클래스를 그대로 쓴다(재정의 없음). 행마다 좌측 4px 색 바만 대륙색으로
+   구분한다(순수 장식 — D50, 원색 직접 사용 허용. 킥커 텍스트는 아래 JSX에서 대응하는
+   .wt-kicker--* 수정자로 *-text 파생 토큰을 쓴다). */
+.wt-home__menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.wt-home__menu-row--single {
+  --wt-menu-row-accent: var(--continent-asia);
+}
+.wt-home__menu-row--multi {
+  --wt-menu-row-accent: var(--continent-europe);
+}
+.wt-home__menu-row--daily {
+  --wt-menu-row-accent: var(--continent-south-america);
+}
+.wt-home__menu-row--ranking {
+  --wt-menu-row-accent: var(--continent-africa);
+}
+.wt-home__menu-row--passport {
+  --wt-menu-row-accent: var(--continent-oceania);
+}
+/* §11.1 1단계: 완주 기록이 하나도 없으면 "싱글플레이" 행이 펄스(온보딩 유도). 구 카드 펄스
+   (wt-mode-card--pulse)를 행 방식으로 대체 — 시각 효과(box-shadow 링)는 동일하게 유지. */
+.wt-home__menu-row--pulse {
+  animation: wt-home-menu-row-pulse 1.6s ease-in-out infinite;
+}
+@keyframes wt-home-menu-row-pulse {
+  0%, 100% { box-shadow: var(--shadow-card), 0 0 0 0 color-mix(in srgb, var(--grade-s) 55%, transparent); }
+  50% { box-shadow: var(--shadow-card), 0 0 0 8px color-mix(in srgb, var(--grade-s) 0%, transparent); }
+}
+:root[data-reduced] .wt-home__menu-row--pulse {
+  animation: none;
+}
+
+.wt-home__ticker {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  text-align: center;
+}
+
+/* [공유 — 변경 금지] .wt-mode-card 계열은 홈이 WT-UI-04에서 행(.wt-home__menu-row) 방식으로
+   갈아탄 뒤에도 S3 ModeSelectPage(apps/web/src/pages/ModeSelectPage/index.tsx, 이 태스크 범위
+   밖)가 __title/__meta/__progress를 그대로 참조 중이라 이름·구조를 유지한다. __desc(홈 전용,
+   ModeSelectPage 미사용)와 구 카드 그리드(wt-home__cards)·펄스(wt-mode-card--pulse)만 정리했다. */
 .wt-mode-card {
   display: flex;
   flex-direction: column;
@@ -641,30 +735,13 @@
   font-weight: 700;
   font-size: 1.05rem;
 }
-.wt-mode-card__meta,
-.wt-mode-card__desc {
+.wt-mode-card__meta {
   opacity: 0.8;
   font-size: 0.9rem;
 }
 .wt-mode-card__progress {
   font-size: 0.8rem;
   opacity: 0.7;
-}
-/* §11.1 1단계: 완주 기록이 하나도 없으면 "싱글플레이" 카드가 펄스(온보딩 유도). */
-.wt-mode-card--pulse {
-  animation: wt-mode-card-pulse 1.6s ease-in-out infinite;
-}
-@keyframes wt-mode-card-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--grade-s) 55%, transparent); }
-  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--grade-s) 0%, transparent); }
-}
-:root[data-reduced] .wt-mode-card--pulse {
-  animation: none;
-}
-.wt-home__ticker {
-  font-size: 0.85rem;
-  opacity: 0.75;
-  text-align: center;
 }
 
 /* ── S3/S4 모드·노선 선택(WT-M2-07) ── */

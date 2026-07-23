@@ -28,6 +28,17 @@
   --text-muted: #5e645e;
   --border: #e3e6db;
   --accent: #0a84ff;
+  /* ── WT-DC-01: 화면 내 accent 텍스트 / 링크 색(디자인 정본 L18·19·54) ──
+     [--accent-text] 브랜드 원색 --accent(#0a84ff)는 흰 --surface 위에서 실측 3.65:1로 본문 텍스트
+     AA(4.5:1)에 못 미친다(§2.3 .wt-pill 주석 참조) — 화면 내 accent 텍스트 전용 파생값을 둔다.
+     디자인 L54(홈 언어 필 텍스트) 리터럴 #0868ca를 그대로 채택(흰 배경 실측 ≈5.8:1, AA 통과).
+     다크 테마는 아래 :root[data-theme='dark']에서 기존 .wt-pill 인라인 mix 값을 그대로 유지한다
+     (시각 델타 0 — WT-DC-01 이전 다크 렌더 보존).
+     [--link/--link-hover] 디자인 L18(a) / L19(a:hover) 리터럴. 전역 anchor 규칙은 걸지 않는다 —
+     화면 내 앵커는 각 화면의 개별 스타일이 이긴다(후속 태스크가 화면별로 소비). */
+  --accent-text: #0868ca;
+  --link: #075ec2;
+  --link-hover: #0a84ff;
   --shadow-card: 0 1px 2px rgb(23 27 25 / 0.05), 0 8px 24px rgb(23 27 25 / 0.08);
   --shadow-float: 0 2px 4px rgb(23 27 25 / 0.08), 0 12px 32px rgb(23 27 25 / 0.14);
   --radius-card: 16px;
@@ -91,6 +102,10 @@
   --text-muted: #94a3b8;
   --border: #334155; /* 구 dark:border-slate-700과 동일 */
   --accent: #0a84ff; /* 라이트와 동일값 — Apple 다크 시스템 블루가 두 테마 모두 통용 */
+  /* WT-DC-01: 다크는 기존 .wt-pill 인라인 mix 값(color-mix accent 80% black) 그대로 유지 —
+     라이트에서만 디자인 리터럴 #0868ca로 바뀌고 다크 렌더는 델타 0. --link/--link-hover는 전역
+     anchor 규칙이 없어(화면별 개별 스타일 소비) 다크 오버라이드 없이 라이트 값만 정의한다. */
+  --accent-text: color-mix(in srgb, var(--accent) 80%, black);
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 8px 24px rgb(0 0 0 / 0.5);
   --shadow-float: 0 2px 4px rgb(0 0 0 / 0.45), 0 12px 32px rgb(0 0 0 / 0.6);
 

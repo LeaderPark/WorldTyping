@@ -43,6 +43,16 @@
   font-style: normal;
   font-display: optional;
 }
+/* WT-DC-01: JetBrains Mono 700(Bold) 보강 — CPM 다이얼·타이머 숫자를 mono 700으로 렌더한다
+   (.wt-dial__value·.wt-dashboard__timer-value). copy-fonts.mjs가 JetBrainsMono-Bold.woff2를
+   public/fonts/에 채운다(부재 시 폴백 스택으로 자연히 넘어감 — font-display:optional). */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: optional;
+}
 
 /* ── 접근성/모바일 일괄(WT-M5-02) ──────────────────────────────────────────
    spec: docs/03 §7(브레이크포인트·모바일 입력·접근성 표), docs/01 §11.2·§11.3. */
@@ -357,10 +367,13 @@
 .wt-dashboard__divider { width: 1px; align-self: stretch; background: var(--map-border); }
 .wt-dashboard__timer { display: flex; flex-direction: column; align-items: center; }
 .wt-dashboard__timer-label { font-size: 0.62rem; color: var(--text-muted); letter-spacing: 0.04em; }
-.wt-dashboard__timer-value { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+/* WT-DC-01: 타이머 숫자 mono 700(디자인 정본 — CPM·타이머는 JetBrains Mono 700). */
+.wt-dashboard__timer-value { font-size: 1.05rem; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; }
 .wt-dial { display: flex; flex-direction: column; align-items: center; }
 .wt-dial__gauge { width: 3.4rem; height: auto; overflow: visible; }
-.wt-dial__track { fill: none; stroke: var(--map-idle); stroke-width: 8; stroke-linecap: round; }
+/* WT-DC-01: 다이얼 트랙은 흰 대시보드 카드 위에 놓인다 — --map-idle(라이트=흰색)이면 비가시라
+   --surface-sunken(크림 그레이)으로 교체해 트랙이 또렷이 보이게 한다. */
+.wt-dial__track { fill: none; stroke: var(--surface-sunken); stroke-width: 8; stroke-linecap: round; }
 .wt-dial__tick { stroke: var(--text-muted); stroke-width: 2; opacity: 0.5; }
 .wt-dial__needle {
   transform-box: fill-box;
@@ -371,7 +384,8 @@
 .wt-dial__needle polygon { fill: var(--text); }
 .wt-dial__hub { fill: var(--text); }
 .wt-dial__readout { display: flex; align-items: baseline; gap: 0.2rem; margin-top: -0.35rem; }
-.wt-dial__value { font-size: 1rem; font-weight: 700; color: var(--text); }
+/* WT-DC-01: CPM 숫자 mono 700(디자인 정본 — CPM·타이머는 JetBrains Mono 700). */
+.wt-dial__value { font-size: 1rem; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; }
 .wt-dial__unit { font-size: 0.6rem; color: var(--text-muted); }
 :root[data-reduced] .wt-dial__needle { transition: none; }
 
@@ -565,7 +579,9 @@
 .wt-gauge {
   width: 12rem;
   height: 0.3rem;
-  background: var(--map-idle);
+  /* WT-DC-01: 레일은 흰 카드 위에 놓인다 — --map-idle(라이트=흰색) 대신 --surface-sunken으로
+     교체해 미채움 구간이 보이게 한다(채움은 .wt-gauge__fill --grade-b). */
+  background: var(--surface-sunken);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -594,7 +610,9 @@
   min-width: 3rem;
   height: 0.55rem;
   border-radius: 999px;
-  background: var(--map-idle);
+  /* WT-DC-01: 미채움 레일을 --surface-sunken으로(라이트 흰 앱바 위 비가시 방지 — 채움은
+     --rail-fill 대륙색). */
+  background: var(--surface-sunken);
 }
 .wt-progress-line__rail-fill {
   position: absolute;
@@ -710,7 +728,9 @@
 .wt-boarding__card--worldtour { --wt-boarding-accent: var(--grade-s); }
 .wt-boarding__card--daily { --wt-boarding-accent: var(--grade-a); }
 .wt-boarding__card--punch {
-  animation: wt-boarding-punch 200ms ease-in;
+  /* WT-DC-01: forwards 추가 — 개찰(punch) 종료 프레임(scale 0.9/opacity 0)을 유지해 카드가
+     사라진 채로 남게 한다(디자인 ttPunch 연출). fill 없이는 애니 종료 즉시 원상 복귀해 깜빡인다. */
+  animation: wt-boarding-punch 200ms ease-in forwards;
 }
 @keyframes wt-boarding-punch {
   0% { transform: scale(1); opacity: 1; }
@@ -1918,7 +1938,9 @@
   width: 100%;
   height: 0.4rem;
   border-radius: 999px;
-  background: var(--map-idle);
+  /* WT-DC-01: 상대 트랙 미채움 레일을 --surface-sunken으로(흰 카드 위 비가시 방지 — 채움은
+     .wt-opponent-track__fill --grade-b). */
+  background: var(--surface-sunken);
   overflow: hidden;
 }
 .wt-opponent-track__fill {
@@ -2207,9 +2229,11 @@
 
 /* 필: accent 텍스트/보더 + 흰 pill, 높이 46px(§2.1 --radius-pill 참조 반경).
    [대비 메모] --accent(#0a84ff) 원색은 --surface(#fff) 위에서 실측 3.65:1로 WCAG AA 본문
-   텍스트(4.5:1)에 못 미친다(large text 3:1은 통과). WT-M5-02(.wt-btn--primary)와 동일한
-   기법으로 텍스트만 color-mix(accent 80%, black)로 살짝 어둡게 보정(실측 5.32:1) — 보더는
-   텍스트가 아니므로(WCAG 1.4.11 비텍스트 3:1) 원색 그대로 둔다. */
+   텍스트(4.5:1)에 못 미친다(large text 3:1은 통과). 보더는 텍스트가 아니므로(WCAG 1.4.11
+   비텍스트 3:1) 원색 그대로 둔다.
+   [WT-DC-01] 텍스트색을 시맨틱 토큰 --accent-text로 이설한다 — 라이트=디자인 리터럴 #0868ca
+   (흰 배경 실측 ≈5.8:1, 종전 mix 5.32:1보다 소폭 개선), 다크=종전 mix(accent 80% black) 그대로
+   유지(tokens.css 참조 — 다크 시각 델타 0). */
 .wt-pill {
   display: inline-flex;
   align-items: center;
@@ -2219,7 +2243,7 @@
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--accent);
   background: var(--surface);
-  color: color-mix(in srgb, var(--accent) 80%, black);
+  color: var(--accent-text);
   font-weight: 700;
   font-size: 0.9375rem; /* 15px */
   white-space: nowrap;
@@ -2686,4 +2710,64 @@
 .wt-nav-back:hover,
 .wt-nav-back:focus-visible {
   color: var(--text);
+}
+
+/* ── WT-DC-01: 디자인 정본 키프레임 4종 + 소비 클래스 ──────────────────────────────────
+   spec: 디자인 정본 L27~30(ttBob/ttChip/ttConfetti/ttToast)의 정확값 이식. 전부 transform/opacity
+   만 애니메이션(§4.5 핫패스 규약 — 레이아웃 프로퍼티 불변). 마스코트 bob 외 3종(chip/confetti/
+   toast)의 실제 화면 배선은 후속 태스크가 소비한다 — 여기서는 키프레임·소비 클래스·reduced-motion
+   정지 규칙만 선반영한다. 모든 연속/입장 애니는 :root[data-reduced] + @media(prefers-reduced-motion)
+   양쪽에서 정지(§7.3). */
+@keyframes wt-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes wt-chip {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes wt-confetti {
+  0% { transform: translate(0, -10vh) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx, 0px), 105vh) rotate(var(--rot, 360deg)); opacity: 0.9; }
+}
+@keyframes wt-toast {
+  0% { opacity: 0; transform: translate(-50%, 10px); }
+  10%, 88% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+
+/* 마스코트 상하 부유(components/Mascot.tsx bob prop). 지속시간은 --wt-bob-dur로 오버라이드
+   가능 — 홈 2.6s(기본) / 매칭 1.4s(디자인 정본 L62·L402). */
+.wt-mascot--bob {
+  animation: wt-bob var(--wt-bob-dur, 2.6s) ease-in-out infinite;
+}
+/* 환승 칩 / 경유지 배너 입장(디자인 ttChip 240·300ms). 소비 요소는 left:50%로 중앙 배치되어야
+   한다(키프레임이 translate(-50%,…)로 수평 중앙을 유지). */
+.wt-chip-in {
+  animation: wt-chip 240ms ease-out;
+}
+/* 축포 파티클(디자인 ttConfetti) — 후속 배선은 파티클별로 --dx/--rot 및 duration/delay를 인라인
+   지정(디자인 L1515 방식)하고 reduced-motion에서는 파티클 생성 자체를 건너뛴다. 여기 기본값은
+   폴백일 뿐이다. */
+.wt-confetti {
+  animation: wt-confetti 1.8s ease-in forwards;
+}
+/* 토스트(디자인 ttToast) — 입장→유지→퇴장 3단(both fill). 소비 요소는 left:50%로 중앙 배치. */
+.wt-toast {
+  animation: wt-toast 2400ms ease-out both;
+}
+
+:root[data-reduced] .wt-mascot--bob,
+:root[data-reduced] .wt-chip-in,
+:root[data-reduced] .wt-confetti,
+:root[data-reduced] .wt-toast {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-mascot--bob,
+  .wt-chip-in,
+  .wt-confetti,
+  .wt-toast {
+    animation: none;
+  }
 }

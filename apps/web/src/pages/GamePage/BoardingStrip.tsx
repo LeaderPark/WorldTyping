@@ -11,7 +11,7 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, TypingInputController } from '@wt/engine';
-import type { Country } from '@wt/shared';
+import type { Country, GameMode } from '@wt/shared';
 import { PromptArea } from '../../features/typing/PromptArea';
 import { TimeLimitGauge } from '../../features/hud/TimeLimitGauge';
 import { ComboBadge } from '../../features/hud/ComboBadge';
@@ -19,6 +19,8 @@ import { FlagIcon } from '../../components/FlagIcon';
 
 /** juice #2 스탬프 팝 지속(ms) — GameView가 쓰던 값과 동일(§13.3-2). */
 const STAMP_MS = 480;
+/** WT-DC-04(③): 환승 칩 유지(ms, 디자인 showCountry transferTimer 2000ms). */
+const TRANSFER_CHIP_MS = 2000;
 
 export interface BoardingStripProps {
   engine: GameSessionEngine;
@@ -27,6 +29,8 @@ export interface BoardingStripProps {
   countries: readonly Country[];
   currentIndex: number;
   lang: 'ko' | 'en';
+  /** WT-DC-04(③): 환승 칩은 세계일주에서만(대륙 변경 감지). 나머지 모드는 칩 없음. */
+  mode: GameMode;
   /** 국가당 제한시간 게이지 표시 여부(GameView의 showGauge 조건 그대로 위임). */
   showGauge: boolean;
   bindGaugeEl: (el: HTMLElement | null) => void;
@@ -40,6 +44,7 @@ export function BoardingStrip({
   countries,
   currentIndex,
   lang,
+  mode,
   showGauge,
   bindGaugeEl,
   juice = true,
@@ -47,6 +52,8 @@ export function BoardingStrip({
   const { t } = useTranslation();
   const stampRef = useRef<HTMLDivElement | null>(null);
   const stampTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transferRef = useRef<HTMLSpanElement | null>(null);
+  const transferTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // juice #2: 국가 확정(스킵 제외) 시 캡슐 위에 스탬프가 15° 기울어져 찍힌다(§13.3-2). 스트립이
   // 국가 전환마다 리렌더돼도 이 구독은 [engine, juice] 안정 deps라 재구독하지 않는다.
@@ -70,6 +77,34 @@ export function BoardingStrip({
       if (stampTimer.current) clearTimeout(stampTimer.current);
     };
   }, [engine, juice]);
+
+  // WT-DC-04(③): 세계일주 대륙 변경(환승) 시 캡슐 위에 다크 콘솔 칩을 240ms 입장 + 2000ms 유지 후
+  // 감춘다(디자인 showCountry transferTimer). {line}은 새 대륙명(continent.<slug> — 별도 "선" 키가
+  // 없어 현지화 대륙명을 그대로 넣는다). 순수 표시 — 판정/입력 무관, engine 구독은 [engine,mode] 안정.
+  useEffect(() => {
+    if (mode !== 'worldtour') return undefined;
+    const unsub = engine.subscribe((e) => {
+      if (e.type !== 'countryShown' || e.index <= 0) return;
+      const prev = countries[e.index - 1];
+      const cur = countries[e.index];
+      if (!prev || !cur || prev.continent === cur.continent) return;
+      const el = transferRef.current;
+      if (!el) return;
+      el.textContent = t('game.transfer.chip', { line: t(`continent.${cur.continent}`) });
+      el.classList.remove('wt-strip__transfer--show');
+      void el.offsetWidth; // 애니메이션 재시작(읽기 1회 — 레이아웃 write 아님)
+      el.classList.add('wt-strip__transfer--show');
+      if (transferTimer.current) clearTimeout(transferTimer.current);
+      transferTimer.current = setTimeout(() => {
+        el.classList.remove('wt-strip__transfer--show');
+        transferTimer.current = null;
+      }, TRANSFER_CHIP_MS);
+    });
+    return () => {
+      unsub();
+      if (transferTimer.current) clearTimeout(transferTimer.current);
+    };
+  }, [engine, mode, countries, t]);
 
   const current = countries[currentIndex];
   if (!current) return null;
@@ -109,6 +144,10 @@ export function BoardingStrip({
           )}
           <ComboBadge engine={engine} juice={juice} />
           <div ref={stampRef} className="wt-stamp" aria-hidden="true" />
+          {/* WT-DC-04(③): 환승 칩 — 세계일주 대륙 변경 시에만 위 effect가 --show 토글로 노출. */}
+          {mode === 'worldtour' && (
+            <span ref={transferRef} className="wt-strip__transfer" data-testid="transfer-chip" aria-hidden="true" />
+          )}
         </div>
 
         <NeighborSlot country={next} position={currentIndex + 2} side="next" lang={lang} label={t('strip.next')} />

@@ -48,17 +48,38 @@ export function ModeSelectPage() {
         <h1 className="wt-mode-select__title" tabIndex={-1}>{t('mode.select.title')}</h1>
       </div>
 
+      {/* 위트 헤드라인 히어로(WT-UI-05) — 순수 장식용 카피, 판정/점수/진행도 로직과 무관. h1은
+          위 헤더의 것 하나만 유지한다(useRouteFocus가 문서의 첫 h1을 찾는다, docs/03 §7.3). */}
+      <div className="wt-mode-select__hero">
+        <span className="wt-kicker">{t('mode.hero.kicker')}</span>
+        <p className="wt-mode-select__headline">{t('mode.hero.headline')}</p>
+        <p className="wt-mode-select__subhead">{t('mode.hero.subhead')}</p>
+        <Link to="/rank" data-testid="mode-select-rank-cta" className="wt-pill wt-mode-select__hero-cta">
+          {t('mode.hero.rankCta')}
+        </Link>
+      </div>
+
       <div className="wt-mode-select__cards">
-        <Link to="/play/continent" data-testid="mode-card-continent" className="wt-mode-card">
-          <p className="wt-mode-card__title">{t('mode.continent.title')}</p>
+        <Link
+          to="/play/continent"
+          data-testid="mode-card-continent"
+          className="wt-mode-card wt-mode-select__card"
+        >
+          <p className="wt-mode-card__title">
+            <span aria-hidden="true">🗺 </span>
+            {t('mode.continent.title')}
+          </p>
           <p className="wt-mode-card__meta">{t('mode.continent.count', { count: CONTINENT_IDS.length })}</p>
           <p className="wt-mode-card__progress" data-testid="mode-card-continent-progress">
             {t('mode.continent.progress', { done: continentDone, total: CONTINENT_IDS.length })}
           </p>
         </Link>
 
-        <Link to="/play/tier" data-testid="mode-card-tier" className="wt-mode-card">
-          <p className="wt-mode-card__title">{t('mode.tier.title')}</p>
+        <Link to="/play/tier" data-testid="mode-card-tier" className="wt-mode-card wt-mode-select__card">
+          <p className="wt-mode-card__title">
+            <span aria-hidden="true">🛂 </span>
+            {t('mode.tier.title')}
+          </p>
           <p className="wt-mode-card__meta">{t('mode.tier.subtitle')}</p>
           {currentTier !== null && (
             <p className="wt-mode-card__progress" data-testid="mode-card-tier-progress">
@@ -67,8 +88,15 @@ export function ModeSelectPage() {
           )}
         </Link>
 
-        <Link to="/play/worldtour" data-testid="mode-card-worldtour" className="wt-mode-card">
-          <p className="wt-mode-card__title">{t('mode.worldtour.title')}</p>
+        <Link
+          to="/play/worldtour"
+          data-testid="mode-card-worldtour"
+          className="wt-mode-card wt-mode-select__card"
+        >
+          <p className="wt-mode-card__title">
+            <span aria-hidden="true">✈ </span>
+            {t('mode.worldtour.title')}
+          </p>
           <p className="wt-mode-card__meta">{t('mode.worldtour.desc')}</p>
           {worldtourLocation && (
             <p className="wt-mode-card__progress" data-testid="mode-card-worldtour-progress">

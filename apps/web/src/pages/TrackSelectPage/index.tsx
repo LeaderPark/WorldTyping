@@ -24,6 +24,15 @@ function bestStatusLabel(best: TrackBest | undefined, t: TFn): string {
   return t('route.best', { grade: best.grade, time: formatMMSS(best.timeMs) });
 }
 
+/** 콘솔 헤더 우측 뱃지(모드명) — mode.* 키를 그대로 재사용해 새 키를 늘리지 않는다. 인자 타입은
+ *  일부러 string이다(useParams<{mode:string}>()의 mode는 !==로 걸러도 리터럴 유니언으로
+ *  좁혀지지 않는다 — string에는 부정 리터럴 타입이 없다). */
+function modeBadgeLabel(mode: string, t: TFn): string {
+  if (mode === 'continent') return t('mode.continent.title');
+  if (mode === 'tier') return t('mode.tier.title');
+  return t('mode.worldtour.title');
+}
+
 export function TrackSelectPage() {
   const { t } = useTranslation();
   const { mode } = useParams<{ mode: string }>();
@@ -43,54 +52,83 @@ export function TrackSelectPage() {
         <h1 className="wt-track-select__title" tabIndex={-1}>{t('route.select.title')}</h1>
       </div>
 
-      <ul className="wt-track-select__list">
-        {mode === 'continent' &&
-          CONTINENT_ORDER.map((continent) => {
-            const count = CONTINENT_ROUTES[continent].length;
-            const best = trackBests[`continent:${continent}`];
-            return (
-              <li key={continent}>
-                <Link
-                  to={`/play/continent/${continent}`}
-                  data-testid={`track-item-continent-${continent}`}
-                  className="wt-track-item"
-                >
-                  <span className="wt-track-item__name">
-                    {t('route.list.name', { continent: t(`continent.${continent}`), count })}
-                  </span>
-                  <span className="wt-track-item__best">{bestStatusLabel(best, t)}</span>
-                  <span className="wt-track-item__cta">{t('route.start')}</span>
-                </Link>
-              </li>
-            );
-          })}
+      {/* 다크 콘솔 카드("여행 설정", WT-UI-05) — .wt-console/.wt-token은 WT-UI-01 전역 정의를
+          재사용한다. 토큰 그리드 내부 로직(진행도/기록 판정)은 기존 trackBests/bestStatusLabel
+          그대로이고, 여기서는 배선(마크업)만 리스트→토큰 그리드로 바꾼다. */}
+      <section className="wt-console wt-track-select__console">
+        <div className="wt-track-select__console-head">
+          <span className="wt-track-select__console-dot" aria-hidden="true" />
+          <p className="wt-track-select__console-title">{t('route.console.title')}</p>
+          <span className="wt-kicker wt-track-select__console-badge">{modeBadgeLabel(mode, t)}</span>
+        </div>
 
-        {mode === 'tier' &&
-          TIER_IDS.map((tier) => {
-            const best = trackBests[`tier:${tier}`];
-            return (
-              <li key={tier}>
-                <Link to={`/play/tier/${tier}`} data-testid={`track-item-tier-${tier}`} className="wt-track-item">
-                  <span className="wt-track-item__name">{t('mode.tier.desc', { tier })}</span>
-                  <span className="wt-track-item__best">{bestStatusLabel(best, t)}</span>
-                  <span className="wt-track-item__cta">{t('route.start')}</span>
-                </Link>
-              </li>
-            );
-          })}
+        <ul className="wt-track-select__list">
+          {mode === 'continent' &&
+            CONTINENT_ORDER.map((continent) => {
+              const count = CONTINENT_ROUTES[continent].length;
+              const best = trackBests[`continent:${continent}`];
+              return (
+                <li key={continent}>
+                  <Link
+                    to={`/play/continent/${continent}`}
+                    data-testid={`track-item-continent-${continent}`}
+                    className={`wt-track-item wt-token${!best ? ' wt-token--locked' : ''}`}
+                  >
+                    <span
+                      className={`wt-token__circle wt-token__circle--${continent}`}
+                      aria-hidden="true"
+                    />
+                    <span className="wt-token__label">
+                      {t('route.list.name', { continent: t(`continent.${continent}`), count })}
+                    </span>
+                    <span className="wt-track-item__best">{bestStatusLabel(best, t)}</span>
+                    <span className="wt-pill wt-track-item__cta">{t('route.start')}</span>
+                  </Link>
+                </li>
+              );
+            })}
 
-        {mode === 'worldtour' && (
-          <li>
-            <Link to="/play/worldtour/main" data-testid="track-item-worldtour" className="wt-track-item">
-              <span className="wt-track-item__name">
-                {t('route.list.name', { continent: t('mode.worldtour.title'), count: ROUTE_WORLD_TOUR.length })}
-              </span>
-              <span className="wt-track-item__best">{bestStatusLabel(trackBests['worldtour:main'], t)}</span>
-              <span className="wt-track-item__cta">{t('route.start')}</span>
-            </Link>
-          </li>
-        )}
-      </ul>
+          {mode === 'tier' &&
+            TIER_IDS.map((tier) => {
+              const best = trackBests[`tier:${tier}`];
+              return (
+                <li key={tier}>
+                  <Link
+                    to={`/play/tier/${tier}`}
+                    data-testid={`track-item-tier-${tier}`}
+                    className={`wt-track-item wt-token${!best ? ' wt-token--locked' : ''}`}
+                  >
+                    <span className="wt-token__circle wt-token__circle--neutral" aria-hidden="true">
+                      {`T${tier}`}
+                    </span>
+                    <span className="wt-token__label">{t('mode.tier.desc', { tier })}</span>
+                    <span className="wt-track-item__best">{bestStatusLabel(best, t)}</span>
+                    <span className="wt-pill wt-track-item__cta">{t('route.start')}</span>
+                  </Link>
+                </li>
+              );
+            })}
+
+          {mode === 'worldtour' && (
+            <li>
+              <Link
+                to="/play/worldtour/main"
+                data-testid="track-item-worldtour"
+                className={`wt-track-item wt-token${!trackBests['worldtour:main'] ? ' wt-token--locked' : ''}`}
+              >
+                <span className="wt-token__circle wt-token__circle--neutral" aria-hidden="true">
+                  ✈
+                </span>
+                <span className="wt-token__label">
+                  {t('route.list.name', { continent: t('mode.worldtour.title'), count: ROUTE_WORLD_TOUR.length })}
+                </span>
+                <span className="wt-track-item__best">{bestStatusLabel(trackBests['worldtour:main'], t)}</span>
+                <span className="wt-pill wt-track-item__cta">{t('route.start')}</span>
+              </Link>
+            </li>
+          )}
+        </ul>
+      </section>
     </main>
   );
 }

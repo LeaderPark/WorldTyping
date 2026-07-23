@@ -372,25 +372,73 @@
   transform: scale(1.6);
 }
 
-/* 보딩패스(S5, §10.2 전문 — "개찰기 통과 애니메이션(200ms)"). */
+/* ── 보딩패스(S5, §10.2 전문 — "개찰기 통과 애니메이션(200ms)") ──
+   [WT-UI-05] 실물 티켓 룩으로 개정 — 절취선(점선 경계 + 카드 좌우 외곽 노치)·바코드 장식·
+   본문/스텁 2단 배치. BoardingPassProps·PUNCH_MS(200ms 그대로 유지)·§7.2 동기 focus 계약·
+   장시간 경고·고스트 토글 로직은 무수정(BoardingPass.tsx 참조) — 여기는 시각만 바꾼다. */
 .wt-boarding {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
 }
 .wt-boarding__card {
+  --wt-boarding-accent: var(--accent);
+  position: relative;
+  isolation: isolate;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  min-width: 20rem;
-  padding: 1.5rem 2rem;
+  align-items: stretch;
+  width: 100%;
+  max-width: 26rem;
   border-radius: 0.75rem;
   border: 1px solid var(--map-border);
   /* WT-UI-01: --surface 계열로 치환(구현 세부 지시 3) — 회귀 사유는 .wt-mobile-skip 주석 참조. */
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(4px);
+  overflow: visible;
   transition: transform 200ms ease-out, opacity 200ms ease-out;
 }
+/* 카드 좌우 외곽의 "펀칭 노치" — 실물 티켓의 절취 흔적. 배경은 카드 뒤 페이지 배경(--bg)과
+   맞추고 얇은 테두리로 "구멍" 윤곽을 또렷하게 한다(완벽한 픽셀 매치가 아니어도 테두리 링이
+   있어 의도된 장식으로 읽힌다). */
+.wt-boarding__card::before,
+.wt-boarding__card::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--map-border);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.wt-boarding__card::before {
+  left: -0.5rem;
+}
+.wt-boarding__card::after {
+  right: -0.5rem;
+}
+/* 상단 억센트 바 — trackId별 노선색(대륙) 또는 등급색(티어/일주/데일리), BoardingPass.tsx의
+   ticketAccentClass가 --wt-boarding-accent를 설정하는 수식자 클래스를 고른다. 순수 장식. */
+.wt-boarding__accent {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  border-radius: 0.75rem 0.75rem 0 0;
+  background: var(--wt-boarding-accent);
+}
+.wt-boarding__card--asia { --wt-boarding-accent: var(--continent-asia); }
+.wt-boarding__card--europe { --wt-boarding-accent: var(--continent-europe); }
+.wt-boarding__card--africa { --wt-boarding-accent: var(--continent-africa); }
+.wt-boarding__card--north-america { --wt-boarding-accent: var(--continent-north-america); }
+.wt-boarding__card--south-america { --wt-boarding-accent: var(--continent-south-america); }
+.wt-boarding__card--oceania { --wt-boarding-accent: var(--continent-oceania); }
+.wt-boarding__card--tier { --wt-boarding-accent: var(--grade-b); }
+.wt-boarding__card--worldtour { --wt-boarding-accent: var(--grade-s); }
+.wt-boarding__card--daily { --wt-boarding-accent: var(--grade-a); }
 .wt-boarding__card--punch {
   animation: wt-boarding-punch 200ms ease-in;
 }
@@ -399,15 +447,76 @@
   60% { transform: scale(0.94) rotate(-1deg); opacity: 0.7; }
   100% { transform: scale(0.9); opacity: 0; }
 }
+.wt-boarding__card--locked {
+  cursor: progress;
+  opacity: 0.75;
+}
+/* 오프라인 차단 안내(BoardingBlocked)는 티켓 축제 장식(노치/억센트)을 숨긴다 — "출국 불가"
+   상태라는 톤에 맞춘다. */
+.wt-boarding__card--blocked::before,
+.wt-boarding__card--blocked::after {
+  display: none;
+}
+.wt-boarding__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.5rem 1.5rem 1.25rem 1.75rem;
+}
 .wt-boarding__label {
   font-size: 0.75rem;
   letter-spacing: 0.2em;
   opacity: 0.7;
 }
+.wt-boarding__route {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
 .wt-boarding__cta {
   margin-top: 0.5rem;
   font-weight: 700;
   text-align: center;
+}
+/* 절취선 너머 티켓 스텁 — 점선 경계 + 세로 반복 라벨 + 매수 + 바코드. */
+.wt-boarding__stub {
+  flex: 0 0 5.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 1.5rem 0.5rem 1.25rem;
+  border-left: 2px dashed var(--map-border);
+}
+.wt-boarding__stub-text {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+.wt-boarding__stub-count {
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--wt-boarding-accent);
+}
+.wt-boarding__barcode {
+  width: 100%;
+  height: 1.75rem;
+  background-image: repeating-linear-gradient(
+    90deg,
+    currentColor 0, currentColor 2px,
+    transparent 2px, transparent 4px,
+    currentColor 4px, currentColor 5px,
+    transparent 5px, transparent 8px,
+    currentColor 8px, currentColor 11px,
+    transparent 11px, transparent 13px
+  );
+  opacity: 0.5;
 }
 .wt-boarding__ghost-toggle {
   display: flex;
@@ -417,6 +526,41 @@
   font-size: 0.85rem;
   opacity: 0.85;
   cursor: pointer;
+}
+/* 좁은 화면: 스텁을 카드 아래로(§7 모바일 원칙) — 절취선이 세로→가로 점선으로, 노치는
+   좌우→상하로 이동한다. */
+@media (max-width: 420px) {
+  .wt-boarding__card {
+    flex-direction: column;
+  }
+  .wt-boarding__stub {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: space-between;
+    border-left: none;
+    border-top: 2px dashed var(--map-border);
+    padding: 0.75rem 1.5rem;
+  }
+  .wt-boarding__stub-text {
+    writing-mode: horizontal-tb;
+    transform: none;
+  }
+  .wt-boarding__barcode {
+    width: 4rem;
+    height: 1.5rem;
+  }
+  .wt-boarding__card::before,
+  .wt-boarding__card::after {
+    top: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .wt-boarding__card::before {
+    top: -0.5rem;
+  }
+  .wt-boarding__card::after {
+    bottom: -0.5rem;
+  }
 }
 
 /* 결과(S7). 카드 슬라이드 인(§13.3-6 "결과 카드 슬라이드 인"). */
@@ -686,30 +830,139 @@
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
   gap: 1rem;
 }
+/* [WT-UI-05] 토큰 그리드로 개정 — 과거엔 세로 리스트였다. .wt-token(전역, L1000~)이 원형+레이블
+   내부 배치를 맡고, 여기서는 그리드 배치만 담당한다. */
 .wt-track-select__list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 1.25rem 0.75rem;
   list-style: none;
   padding: 0;
+  margin: 0;
 }
+/* [WT-UI-05] 행(row) → 토큰 링크 칩으로 개정. 레이아웃(display:flex 등)은 .wt-token이 맡고
+   여기는 링크 크롬(밑줄 제거·패딩·호버)만 — 두 클래스는 항상 같은 요소에 함께 붙는다
+   (TrackSelectPage/index.tsx). */
 .wt-track-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid var(--map-border);
   text-decoration: none;
   color: inherit;
+  padding: 0.5rem 0.25rem;
+  border-radius: var(--radius-tile);
+  transition: background-color 150ms ease-out;
+}
+.wt-track-item:hover,
+.wt-track-item:focus-visible {
+  background: color-mix(in srgb, #f8fafc 10%, transparent);
 }
 .wt-track-item__best {
   opacity: 0.75;
   font-size: 0.9rem;
 }
-.wt-track-item__cta {
+/* [WT-UI-05] .wt-pill과 함께 쓴다(TrackSelectPage) — 그리드 칩 안에 들어가므로 전역 .wt-pill의
+   46px 고정 높이를 축소한다. 결합 셀렉터(.wt-pill.wt-track-item__cta)로 명시도를 올려 파일
+   뒤쪽(L1000~)에 정의된 .wt-pill보다 항상 이 규칙이 이기게 한다(소스 순서에 의존하지 않음). */
+.wt-pill.wt-track-item__cta {
+  height: 1.5rem;
+  padding: 0 0.6rem;
+  font-size: 0.7rem;
+  margin-top: 0.4rem;
+  white-space: nowrap;
+}
+
+/* ── [WT-UI-05] S3 위트 헤드라인 히어로 ──
+   spec: 이 태스크 지시문(WT-UI-05), docs/01 §10.2(S3 와이어프레임). 순수 장식 카피 — 진행도
+   표시(.wt-mode-card__progress)는 무수정. */
+.wt-mode-select__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+  padding: 0.5rem 1rem 0;
+}
+.wt-mode-select__headline {
+  margin: 0;
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--text);
+}
+.wt-mode-select__subhead {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+.wt-mode-select__hero-cta {
+  margin-top: 0.25rem;
+}
+/* 카드 폴리시 — .wt-mode-card는 S1 홈(L628~)과 공유하므로 그 규칙 자체는 건드리지 않고, 이 화면
+   전용 클래스를 겹쳐(className="wt-mode-card wt-mode-select__card") WT-UI-01 카드 톤(surface +
+   shadow-card + radius-card)으로 승격한다. 이 규칙은 파일에서 .wt-mode-card(S1 섹션)보다 뒤에
+   있어 겹치는 속성(padding/background 등)에서 항상 이긴다. */
+.wt-mode-select__card {
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 1.5rem 1.5rem 1.25rem;
+}
+
+/* ── [WT-UI-05] S4 "여행 설정" 콘솔 + 토큰 그리드 ──
+   spec: 이 태스크 지시문(WT-UI-05), docs/01 §10.2(S4 와이어프레임).
+   .wt-console/.wt-token/.wt-kicker/.wt-pill은 WT-UI-01이 전역 정의(L1000~)했다 — 그 정의는
+   "보통 라이트 페이지 위" 사용을 가정해 --text-muted(테마 반전) 등을 쓴다. .wt-console은
+   테마 불변 "항상 다크" 카드라 그 안에서 --text-muted를 그대로 쓰면 라이트 테마일 때 저대비가
+   된다(.wt-console 자신이 이미 그래서 #f8fafc를 직접 지정 — 그 전례를 그대로 따른다). 아래
+   스코프 규칙은 전부 결합 셀렉터라 소스 순서와 무관하게 이긴다. */
+.wt-track-select__console {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.wt-track-select__console-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.wt-track-select__console-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--grade-c);
+  flex: none;
+}
+.wt-track-select__console-title {
+  margin: 0;
+  flex: 1 1 auto;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.wt-track-select__console-badge {
+  flex: none;
+}
+.wt-console .wt-kicker {
+  color: inherit;
+  opacity: 0.75;
+}
+.wt-console .wt-token__label {
+  color: inherit;
+  opacity: 0.85;
+}
+/* 원형 토큰 — 대륙 6색은 순색 원(글자 없음, 장식 전용 — WCAG 1.4.11 비텍스트 3:1은 진한 대륙색
+   대 콘솔 배경(#14201a)에서 항상 여유롭게 통과). 티어/세계일주는 글자(T1~T5, ✈)가 들어가므로
+   --text-muted 대신 .wt-console과 동일한 고정 밝은 텍스트(#f8fafc)를 쓰는 중립 칩으로 — 실측
+   대비 ~10:1(계산 근거는 최종 보고 참조). */
+.wt-token__circle.wt-token__circle--asia { background: var(--continent-asia); border-color: transparent; }
+.wt-token__circle.wt-token__circle--europe { background: var(--continent-europe); border-color: transparent; }
+.wt-token__circle.wt-token__circle--africa { background: var(--continent-africa); border-color: transparent; }
+.wt-token__circle.wt-token__circle--north-america { background: var(--continent-north-america); border-color: transparent; }
+.wt-token__circle.wt-token__circle--south-america { background: var(--continent-south-america); border-color: transparent; }
+.wt-token__circle.wt-token__circle--oceania { background: var(--continent-oceania); border-color: transparent; }
+.wt-token__circle.wt-token__circle--neutral {
+  background: color-mix(in srgb, #f8fafc 14%, transparent);
+  border-color: color-mix(in srgb, #f8fafc 30%, transparent);
+  color: #f8fafc;
+  font-size: 1.05rem;
   font-weight: 700;
 }
 

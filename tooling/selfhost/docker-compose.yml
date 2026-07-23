@@ -28,7 +28,10 @@ services:
     volumes:
       - wt-data:/data
     ports:
-      - "127.0.0.1:8787:8787"
+      # [리드 승인 2026-07-23] e2e 게이트가 호스트 8787에 밀폐 wrangler dev를 띄우므로 라이브 앱은
+      # 호스트 8790으로 이전한다. 컨테이너 내부 리슨 포트는 8787 유지 — cloudflared 터널은 compose
+      # 내부망(app:8787)으로 닿아 이 호스트 매핑과 독립적이라 사이트 무영향. 호스트 8787은 e2e 전용.
+      - "127.0.0.1:8790:8787"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8787/api/v1/health"]
       interval: 30s

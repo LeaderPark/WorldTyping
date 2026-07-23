@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent }
 import { useTranslation } from 'react-i18next';
 import { requiredKeystrokes, type Country, type GameMode } from '@wt/shared';
 import { formatMMSS } from '../../lib/format';
+import { useMetaStore, type TrackBest } from '../../stores/meta';
 import { describeRouteLabel, ruleTypeKey } from './route-label';
 
 export interface BoardingPassProps {
@@ -63,6 +64,8 @@ export function BoardingPass({
   const { t } = useTranslation();
   const [punching, setPunching] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // WT-DC-04(⑤): 카드 아래 "내 최고" 라인(디자인 L210~212). 원천은 meta trackBests(`mode:trackId`).
+  const trackBests = useMetaStore((s) => s.trackBests);
   // 세계일주(10분+) 모바일 "장시간 모드" 경고 1회(§7.3) — 보딩패스 화면 1회 노출로 충분(닫으면
   // 이 마운트 동안은 재노출하지 않는다. 판마다 새로 마운트되므로 다음 판엔 다시 뜬다 — 매번
   // 배터리/시간을 상기시키는 편이 안전하다는 판단, 영구 억제는 하지 않는다).
@@ -105,6 +108,17 @@ export function BoardingPass({
   const routeLabel = describeRouteLabel(mode, trackId, countries.length, t);
   const ruleType = t(ruleTypeKey(mode));
   const displayName = nickname || `GUEST_${guestId.slice(0, 4).toUpperCase()}`;
+
+  // WT-DC-04(⑤): 내 최고 라인(디자인 L210~212). boarding.myBest 키는 {grade}·{time}·{accuracy}%
+  // 3항을 요구하나, 현 meta TrackBest는 정확도를 저장하지 않는다(grade/timeMs/score/completed만).
+  // 정확도가 실제로 존재할 때만 렌더한다 — 스토어가 acc를 싣기 시작하면 자동 노출된다(전방 호환).
+  // [에스컬레이션] TrackBest에 acc 필드 추가(store 소유 태스크) 또는 boarding.myBest를 grade+time
+  // 로 축소(WT-DC-01) 중 하나가 필요하다 — 임의로 store/i18n을 고치지 않고 보고한다.
+  const best = trackBests[`${mode}:${trackId}`] as (TrackBest & { acc?: number }) | undefined;
+  const myBestLine =
+    best && typeof best.acc === 'number'
+      ? t('boarding.myBest', { grade: best.grade, time: formatMMSS(best.timeMs), accuracy: best.acc })
+      : null;
 
   // 기존 testid/속성/핸들러(§7.2 동기 focus 계약 포함)는 전부 그대로 — 클래스 조합만 티켓
   // 억센트(trackId별 노선색)를 더한다.
@@ -149,7 +163,9 @@ export function BoardingPass({
           <p className="wt-boarding__rules">
             {t('boarding.rules', { ruleType, parTime: formatMMSS(parMs) })}
           </p>
-          <p className="wt-boarding__cta">{locked ? t('boarding.connecting') : t('boarding.cta')}</p>
+          <p className="wt-boarding__cta">
+            {punching ? t('boarding.punching') : locked ? t('boarding.connecting') : t('boarding.cta')}
+          </p>
         </div>
 
         {/* 절취선 너머 티켓 스텁 — 실물 보딩패스의 계승(§10.2 "여권을 탭해서 출국하기"의 시각적
@@ -160,6 +176,13 @@ export function BoardingPass({
           <span className="wt-boarding__barcode" />
         </div>
       </div>
+
+      {/* WT-DC-04(⑤): 내 최고 라인(디자인 L210~212) — 카드 아래 muted 텍스트. 데이터가 있을 때만. */}
+      {myBestLine && (
+        <p className="wt-boarding__mybest" data-testid="boarding-mybest">
+          {myBestLine}
+        </p>
+      )}
 
       {/* 카드 클릭(depart) 영역 밖에 둔다 — 토글 클릭이 출국 탭으로 오인되지 않게(§9.3). */}
       {ghostUnlocked && onToggleGhost && (

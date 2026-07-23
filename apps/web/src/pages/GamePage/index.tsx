@@ -35,6 +35,7 @@ import { useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
 import { SERVER_SET_MODES } from '../../net/run-session';
 import { useModalA11y } from '../../lib/useModalA11y';
+import { Mascot } from '../../components/Mascot';
 import { BoardingBlocked, BoardingPass } from './BoardingPass';
 import { GameView } from './GameView';
 import { ResultView } from './ResultView';
@@ -44,6 +45,26 @@ const VALID_MODES: readonly GameMode[] = ['continent', 'tier', 'worldtour', 'dai
 function isValidMode(m: string | undefined): m is GameMode {
   return VALID_MODES.includes(m as GameMode);
 }
+
+/** WT-DC-04(①): 카운트다운 숫자·마스코트 꼬리의 모드 억센트 색(tokens var). 대륙=노선색(현
+ *  출제국 대륙), 티어=--grade-b, 세계일주=--grade-s, 데일리=--grade-a(디자인 정본). */
+function countdownAccentVar(mode: GameMode, countries: readonly Country[]): string {
+  switch (mode) {
+    case 'continent':
+      return `var(--continent-${countries[0]?.continent ?? 'europe'})`;
+    case 'worldtour':
+      return 'var(--grade-s)';
+    case 'daily':
+      return 'var(--grade-a)';
+    default:
+      return 'var(--grade-b)'; // tier(+ race 안전 폴백)
+  }
+}
+
+/** 초기 카운트다운(3000ms)=3·2·1, 리트라이(1500ms)=2·1의 폴백(countdownEndsAt 부재/이상 시). */
+const COUNTDOWN_FALLBACK_MS = 3000;
+/** sound-manager 비프 케이던스와 동일한 절대 시각(ms). 표시 숫자는 이 시점에 재생되는 비프에 동기. */
+const COUNTDOWN_BEEP_TIMES = [0, 1000, 2000] as const;
 
 export function GamePage() {
   const { t } = useTranslation();
@@ -86,6 +107,10 @@ export function GamePage() {
   const onMapReady = useCallback((h: WorldMapHandle) => {
     mapHandleRef.current = h;
   }, []);
+
+  // WT-DC-04(①): 카운트다운 숫자 노드(intro가 countdown phase에만 마운트). 값 갱신은 아래 전용
+  // 로컬 타이머가 textContent로 직접 쓴다(§4.5 — React state 미경유).
+  const countdownNumRef = useRef<HTMLSpanElement | null>(null);
 
   // 웨이포인트 라벨명(§11-D63)은 현지화된 국가명(countries.json nameKo|nameEn)이다. lang을 ref로
   // 잡아 지도 배선 effect의 구독을 재생성하지 않고(재구독은 reset을 유발) 최신 lang을 읽는다.
@@ -188,6 +213,12 @@ export function GamePage() {
                 mapHandleRef.current?.drawRouteSegment(prev.id, c.id);
                 mapHandleRef.current?.moveVehicle(prev.id, c.id);
               }
+              // WT-DC-04(③): 세계일주 경유지 도착(10/20/30/40번째, 종착 제외) 시 지도에 앰버 링 펄스.
+              // 배너/칩(GameView·BoardingStrip)과 별개 구독 — 여기는 지도 핸들을 소유한 GamePage 몫.
+              const reached = e.index + 1;
+              if (mode === 'worldtour' && reached % 10 === 0 && reached < countryIds.length) {
+                mapHandleRef.current?.pulseCheckpointRing(c.id);
+              }
             }
           }
           break;
@@ -256,6 +287,46 @@ export function GamePage() {
     mapHandleRef.current?.setJuiceLevel(reducedActive ? 1 : 0);
   }, [reducedActive, geoIndex]);
 
+  // WT-DC-04(①): 카운트다운 숫자 로컬 타이머. sound-manager 비프 케이던스(0/1000/2000ms)에 동기해
+  // 재생되는 비프 개수만큼 숫자를 센다 — 풀(3000ms)=3·2·1, 리트라이(1500ms)=2·1. 길이는 엔진
+  // countdownEndsAt에서 도출한다(엔진 시간 무수정). tick 애니는 juice일 때만 WAAPI scale(1.6)→1 +
+  // fade 300ms(reduced-motion=숫자 tick만 정지, 값 갱신은 유지). phase가 countdown일 때만 활성.
+  const accentVar = countdownAccentVar(mode, countries);
+  useEffect(() => {
+    if (phase !== 'countdown') return undefined;
+    const el = countdownNumRef.current;
+    if (!el) return undefined;
+    const nowMs =
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const endsAt = engine.getSnapshot().countdownEndsAt;
+    let duration = endsAt != null ? endsAt - nowMs : COUNTDOWN_FALLBACK_MS;
+    if (!Number.isFinite(duration) || duration <= 0) duration = COUNTDOWN_FALLBACK_MS;
+    const beepTimes = COUNTDOWN_BEEP_TIMES.filter((t) => t < duration);
+    const startNum = beepTimes.length;
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    const showAt = (i: number): void => {
+      el.textContent = String(startNum - i);
+      if (juice && typeof el.animate === 'function') {
+        el.animate(
+          [
+            { transform: 'scale(1.6)', opacity: 0 },
+            { transform: 'scale(1)', opacity: 1 },
+          ],
+          { duration: 300, easing: 'ease-out' },
+        );
+      }
+    };
+    beepTimes.forEach((t, i) => {
+      if (t === 0) showAt(0);
+      else timers.push(setTimeout(() => showAt(i), t));
+    });
+    return () => {
+      for (const id of timers) clearTimeout(id);
+    };
+  }, [phase, engine, juice]);
+
   return (
     <div className="wt-game-page" data-testid="game-page">
       {geoIndex && (
@@ -301,14 +372,29 @@ export function GamePage() {
             ghostIndex={ghostIndex}
           />
         )}
+        {/* WT-DC-04(①): 카운트다운 딤 스크림 — 게임 화면 전체(지도·HUD·스트립)를 덮되(content가
+            지도 위 z1이라 map까지 시각적으로 딤) 숫자(intro z5) 아래(z4)에 둔다. phase가 playing으로
+            바뀌는 즉시 이 조건이 거짓이 되어 제거된다(플레이 시야 가림 없음). */}
+        {phase === 'countdown' && (
+          <div className="wt-countdown-scrim" data-testid="countdown-scrim" aria-hidden="true" />
+        )}
         {/* 카운트다운 인트로 카피(WT-UI-03, 원작 "운행을 시작합니다"에 대응) — 엔진 카운트다운
-            메커니즘은 그대로 두고, 출발 직전 잠깐 지도 무대 위에 안내를 얹는다. */}
+            메커니즘은 그대로 두고, 출발 직전 잠깐 지도 무대 위에 안내를 얹는다. WT-DC-04(①): 마스코트
+            (모드 억센트 꼬리) + 92px 카운트다운 숫자(로컬 타이머가 textContent 직접 갱신). */}
         {phase === 'countdown' && (
           <div className="wt-game-intro" data-testid="game-intro" role="status" aria-live="polite">
             <div className="wt-game-intro__box">
+              <Mascot width={46} tail={accentVar} />
               <p className="wt-game-intro__title">{t('game.intro.title')}</p>
               <p className="wt-game-intro__hint">{t('game.intro.hint')}</p>
             </div>
+            <span
+              ref={countdownNumRef}
+              className="wt-game-intro__count"
+              data-testid="countdown-number"
+              style={{ color: accentVar }}
+              aria-hidden="true"
+            />
           </div>
         )}
         {phase === 'finished' && result && (

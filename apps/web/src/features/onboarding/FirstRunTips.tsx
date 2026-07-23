@@ -15,7 +15,9 @@ import { useMetaStore } from '../../stores/meta';
 const AUTO_ADVANCE_SEEN_KEY = 'wt:onboarding:autoAdvanceSeen';
 /** 첫 3개 국가(0-based index 0~2)에서만 "따라 치면 돼요" 툴팁을 보여준다(§11.1). */
 const TOOLTIP_MAX_INDEX = 2;
-const TOAST_AUTO_HIDE_MS = 4000;
+// WT-DC-04(⑦): 디자인 정본 toast2는 ttToast 2400ms(both) 후 2500ms에 제거(입장→유지→퇴장 3단이
+// 애니 안에서 끝나고 잔여 100ms는 opacity 0 hold). 기존 4000ms 단순 페이드에서 교체.
+const TOAST_AUTO_HIDE_MS = 2500;
 
 function hasSeenAutoAdvanceToast(): boolean {
   try {
@@ -75,7 +77,7 @@ export function FirstRunTips({ controller, currentIndex }: FirstRunTipsProps) {
         </div>
       )}
       {toastVisible && (
-        <div className="wt-onboarding-toast" data-testid="onboarding-toast" role="status" aria-live="polite">
+        <div className="wt-onboarding-toast wt-toast" data-testid="onboarding-toast" role="status" aria-live="polite">
           {t('onboarding.autoAdvance')}
         </div>
       )}

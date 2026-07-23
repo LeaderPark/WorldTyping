@@ -9,7 +9,7 @@
 // 구독 → DOM 직접 갱신(§4.5)이고, 여기 React state로 올리는 값은 §4.5가 명시 허용하는 국가 전환
 // 단위 빈도의 것(콤보 ×5 글로우 on/off)뿐이다. 스탬프(juice #2)는 BoardingStrip이, 국가 채색은
 // prompt-renderer가 각각 DOM을 직접 다룬다.
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, TypingInputController } from '@wt/engine';
@@ -25,6 +25,21 @@ import { describeRouteLabel } from './route-label';
 /** GDD §13.3-3 콤보 글로우 배수. */
 const GLOW_STEP = 5;
 const GLOW_MS = 500;
+
+/** WT-DC-04(②): 생명 손실 하트 바운스(디자인 loseLife 450ms) / 비네트 플래시(700ms) / 경유지 배너
+ *  유지(2200ms). */
+const HEART_HIT_MS = 450;
+const VIGNETTE_MS = 700;
+const CHECKPOINT_BANNER_MS = 2200;
+
+/** WT-DC-04(②): 하트 색 펄스 목표색(디자인 #e5484d). WAAPI 키프레임은 CSS var()를 못 풀므로
+ *  런타임에 토큰(--continent-asia = 디자인 #e5484d)을 해석해 쓰고, 해석 불가 시 리터럴로 폴백한다. */
+const DANGER_FALLBACK = '#e5484d';
+function resolveDangerColor(): string {
+  if (typeof getComputedStyle !== 'function' || typeof document === 'undefined') return DANGER_FALLBACK;
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--continent-asia').trim();
+  return v || DANGER_FALLBACK;
+}
 
 /** 멀티 레이스 오버레이(WT-M4-04) — 존재하면 GameView가 variant="race"로 동작한다(docs/03 §4.2).
  *  RaceView(pages/multi/RoomPage)가 조립해 넘긴다 — GameView 자체는 멀티플레이어 스토어/네트워크를
@@ -109,6 +124,83 @@ export function GameView({
   const [edgeGlow, setEdgeGlow] = useState(false);
   const glowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // WT-DC-04(②): 생명 손실 비네트 + 하트 바운스. 비네트는 자기 div, 하트는 GameAppBar가 ref로 넘긴
+  // 요소. lifeChanged는 playing 진입 시 초기 라이프로도 1회 emit되므로(engine beginPlaying) "감소"만
+  // 필터한다(prevLives 추적). 전부 WAAPI(비네트=opacity, 하트=transform+color) — 명령형·비블로킹.
+  const vignetteRef = useRef<HTMLDivElement | null>(null);
+  const livesElRef = useRef<HTMLElement | null>(null);
+  const bindLivesEl = useCallback((el: HTMLElement | null) => {
+    livesElRef.current = el;
+  }, []);
+  const prevLivesRef = useRef<number | null>(lives);
+  useEffect(() => {
+    const unsub = engine.subscribe((e) => {
+      if (e.type !== 'lifeChanged') return;
+      const prev = prevLivesRef.current;
+      prevLivesRef.current = e.lives;
+      // 초기 세팅/증가/동일은 손실 아님. 감소일 때만 연출.
+      if (prev == null || e.lives >= prev) return;
+      if (!juice) return;
+      const v = vignetteRef.current;
+      if (v && typeof v.animate === 'function') {
+        v.animate([{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }], {
+          duration: VIGNETTE_MS,
+          easing: 'ease-out',
+        });
+      }
+      const h = livesElRef.current;
+      if (h && typeof h.animate === 'function') {
+        const danger = resolveDangerColor();
+        h.animate(
+          [
+            { transform: 'scale(1)' },
+            { transform: 'scale(1.5) rotate(-8deg)', color: danger },
+            { transform: 'scale(1)' },
+          ],
+          { duration: HEART_HIT_MS, easing: 'ease-out' },
+        );
+      }
+    });
+    return unsub;
+  }, [engine, juice]);
+
+  // WT-DC-04(③): 세계일주 경유지 배너(디자인 L325~328). countryCommitted(비스킵)에서 10/20/30/40
+  // 번째 도착(종착 제외) 시 상단 배너를 명령형으로 띄우고 2200ms 후 감춘다(React state 미경유 —
+  // 국가 전환 단위 이하 빈도지만 리렌더 없이 처리). 지도 앰버 링은 GamePage가 별도 구독한다.
+  const cpBannerRef = useRef<HTMLDivElement | null>(null);
+  const cpBannerTextRef = useRef<HTMLSpanElement | null>(null);
+  const cpBannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (mode !== 'worldtour') return undefined;
+    const total = countryIds.length;
+    const unsub = engine.subscribe((e) => {
+      if (e.type !== 'countryCommitted' || e.skipped) return;
+      const reached = e.index + 1;
+      if (reached % 10 !== 0 || reached >= total) return;
+      const c = countries[e.index];
+      const banner = cpBannerRef.current;
+      const textEl = cpBannerTextRef.current;
+      if (!c || !banner || !textEl) return;
+      textEl.textContent = t('game.checkpoint.banner', {
+        country: lang === 'ko' ? c.nameKo : c.nameEn,
+        current: reached,
+        total,
+      });
+      banner.classList.remove('wt-cp-banner--show');
+      void banner.offsetWidth; // 애니메이션 재시작(읽기 1회 — 레이아웃 write 아님)
+      banner.classList.add('wt-cp-banner--show');
+      if (cpBannerTimer.current) clearTimeout(cpBannerTimer.current);
+      cpBannerTimer.current = setTimeout(() => {
+        banner.classList.remove('wt-cp-banner--show');
+        cpBannerTimer.current = null;
+      }, CHECKPOINT_BANNER_MS);
+    });
+    return () => {
+      unsub();
+      if (cpBannerTimer.current) clearTimeout(cpBannerTimer.current);
+    };
+  }, [engine, mode, countries, countryIds, lang, t]);
+
   // 스크린리더 국가 전환 낭독(§7.3 "국가 전환 시 '다음: 몽골, 12번째, 45개 중' 낭독 — 매
   // 키스트로크 낭독 금지"). textContent 직접 갱신(§4.5와 동일 취지 — 국가당 최대 1회뿐).
   useEffect(() => {
@@ -168,6 +260,7 @@ export function GameView({
         lives={lives}
         ackIndex={race?.ackIndex ?? null}
         ghostIndex={race ? null : ghostIndex}
+        bindLivesEl={bindLivesEl}
       />
 
       <div className="wt-game-view__stage">
@@ -183,10 +276,22 @@ export function GameView({
         countries={countries}
         currentIndex={currentIndex}
         lang={lang}
+        mode={mode}
         showGauge={showGauge}
         bindGaugeEl={bindGaugeEl}
         juice={juice}
       />
+
+      {/* WT-DC-04(②): 생명 손실 비네트(디자인 L324, z6). 평상시 opacity 0, lifeChanged 감소 시 WAAPI. */}
+      <div ref={vignetteRef} className="wt-life-vignette" data-testid="life-vignette" aria-hidden="true" />
+
+      {/* WT-DC-04(③): 세계일주 경유지 배너(디자인 L325~328, top 64px, z6). 기본 숨김 — 위 effect가
+          도착 시 --show 토글 + textContent 갱신. race variant엔 없음(싱글 전용 연출). */}
+      {!race && mode === 'worldtour' && (
+        <div ref={cpBannerRef} className="wt-cp-banner" data-testid="checkpoint-banner" role="status" aria-live="polite">
+          <span ref={cpBannerTextRef} className="wt-cp-banner__pill" />
+        </div>
+      )}
 
       {/* 스크린리더 전용 낭독 영역(§7.3) — 시각 표시가 아니라 위 useEffect가 국가 전환 단위로만 채운다. */}
       <div ref={announceRef} aria-live="polite" className="sr-only" data-testid="game-country-announce" />

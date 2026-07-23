@@ -347,7 +347,7 @@
 }
 .wt-appbar__lives { color: var(--grade-a); letter-spacing: 0.08em; flex: none; }
 .wt-appbar__acc { opacity: 0.7; flex: none; }
-.wt-appbar__acc-value { color: var(--text); font-weight: 700; flex: none; min-width: 2.5rem; }
+.wt-appbar__acc-value { color: var(--text); font-weight: 700; flex: none; min-width: 2.625rem; } /* WT-DC-04: 42px 정합(디자인 L244) */
 
 /* ── WT-UI-03: 부유 대시보드(features/hud/DashboardCard.tsx) + CPM 다이얼(CpmDial.tsx) ──
    지도 무대 위에 뜬 순수 표시 카드(pointer-events:none — 포커스 유지 계약 방해 없음). */
@@ -412,7 +412,7 @@
 .wt-strip__neighbor--empty { visibility: hidden; }
 .wt-strip__neighbor--prev { align-items: flex-start; }
 .wt-strip__neighbor--next { align-items: flex-end; }
-.wt-strip__neighbor-caption { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 0.05em; }
+.wt-strip__neighbor-caption { font-size: 0.625rem; color: var(--text-muted); letter-spacing: 0.05em; } /* WT-DC-04: 10px 정합(디자인 L285) */
 .wt-strip__neighbor-body { display: flex; align-items: center; gap: 0.35rem; min-width: 0; max-width: 100%; }
 .wt-strip__neighbor--next .wt-strip__neighbor-body { flex-direction: row-reverse; }
 .wt-strip__neighbor-num {
@@ -465,8 +465,11 @@
   inset: 0;
   z-index: 5;
   display: flex;
+  /* WT-DC-04: 인트로 박스 + 카운트다운 숫자를 세로로(디자인 L335 gap 14px). */
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.875rem;
   pointer-events: none;
   animation: wt-intro-fade 350ms ease-out;
 }
@@ -578,7 +581,7 @@
 /* 국가당 제한시간 게이지(티어/데일리 전용, §4.4 useGameClock.bindGaugeEl). */
 .wt-gauge {
   width: 12rem;
-  height: 0.3rem;
+  height: 0.3125rem; /* WT-DC-04: 192×5px 정합(디자인 L300) */
   /* WT-DC-01: 레일은 흰 카드 위에 놓인다 — --map-idle(라이트=흰색) 대신 --surface-sunken으로
      교체해 미채움 구간이 보이게 한다(채움은 .wt-gauge__fill --grade-b). */
   background: var(--surface-sunken);
@@ -589,6 +592,118 @@
   height: 100%;
   background: var(--grade-b);
   transition: none; /* rAF가 매 프레임 직접 갱신 — CSS 전이는 이중 애니메이션이라 끈다. */
+}
+
+/* ── WT-DC-04 ── S5~S7 싱글 게임 연출 정합(디자인 정본 L186~396) ────────────────────────
+   카운트다운 숫자+딤 스크림(①) / 생명 손실 비네트(②) / 환승 칩·경유지 배너(③) / 결과 타이틀
+   페이드(⑥). 고빈도값은 전부 엔진 이벤트 구독 → 명령형 DOM/WAAPI(§4.5)이고, 여기 CSS는 정적
+   스타일·입장 키프레임뿐이다. 색은 tokens 변수만 — 단 딤 스크림 rgba(리드 확정 기본값)와 콘솔
+   칩 텍스트 #f8fafc(테마 무관 콘솔 텍스트, .wt-console 전례 globals L2284)는 명시 예외(각 주석).
+   모든 입장/연속 애니는 :root[data-reduced] + @media(prefers-reduced-motion) 양쪽에서 정지(§7.3). */
+
+/* ① 카운트다운 숫자(디자인 L349, 92px/800). color는 인라인 style로 모드 억센트 토큰 var 주입. */
+.wt-game-intro__count {
+  font-size: 5.75rem; /* 92px */
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 2px 12px rgb(255 255 255 / 0.8);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ① 전체화면 딤 스크림(리드 지시 wt-dc-notes §WT-DC-04). z: map(0)/HUD/strip 위 · 숫자(z5) 아래.
+   배경 rgba(0,0,0,0.45)는 리드 확정 기본값(테마 무관 딤 — 토큰 예외). phase=playing 시 즉시 제거. */
+.wt-countdown-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: rgb(0 0 0 / 0.45);
+  pointer-events: none;
+  animation: wt-scrim-fade 300ms ease-out;
+}
+@keyframes wt-scrim-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ② 생명 손실 비네트(디자인 L324, loseLife). 평상시 opacity 0 — WAAPI가 opacity만 0→1→0 구동
+   (GameView, transform/opacity 핫패스 규약 준수). box-shadow 색은 토큰(--continent-asia =
+   디자인 #e5484d)에서 50% 혼합. */
+.wt-life-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: inset 0 0 120px 30px color-mix(in srgb, var(--continent-asia) 50%, transparent);
+}
+
+/* ③ 환승 칩(worldtour, BoardingStrip 캡슐, 디자인 L307~308, ttChip 240ms). */
+.wt-strip__transfer {
+  position: absolute;
+  top: -1rem;
+  left: 50%;
+  transform: translate(-50%, 0);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: var(--surface-console);
+  color: #f8fafc; /* 테마무관 콘솔 텍스트(.wt-console 전례) */
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: var(--shadow-float);
+  pointer-events: none;
+  display: none;
+}
+.wt-strip__transfer--show { display: block; animation: wt-chip 240ms ease-out; }
+
+/* ③ 경유지 체크포인트 배너(worldtour, GameView, 디자인 L325~328, top 64px, ttChip 300ms). */
+.wt-cp-banner {
+  position: absolute;
+  top: 4rem; /* 64px */
+  left: 50%;
+  transform: translate(-50%, 0);
+  z-index: 6;
+  pointer-events: none;
+  display: none;
+}
+.wt-cp-banner--show { display: block; animation: wt-chip 300ms ease-out; }
+.wt-cp-banner__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  border-radius: 999px;
+  background: var(--surface-console);
+  color: #f8fafc; /* 테마무관 콘솔 텍스트(.wt-console 전례) */
+  font-size: 0.875rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-float);
+}
+
+/* ⑤ 보딩패스 "내 최고" 라인(디자인 L211, muted). */
+.wt-boarding__mybest {
+  margin: 0;
+  font-size: 0.84rem; /* ~13.5px */
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ⑥ 결과 타이틀 입장 페이드(디자인 L356 ttFadeUp 350ms). */
+.wt-result-view__title { animation: wt-intro-fade 350ms ease-out; }
+
+/* reduced-motion(§7.3): 스크림은 페이드 없이 즉시 표시(딤 자체는 유지 — 위 background로 그대로
+   보인다), 나머지 입장 애니는 정지. 비네트/하트/카운트다운 tick은 WAAPI라 GameView/GamePage가
+   juice=false에서 호출을 건너뛴다(여기 CSS 대상 아님). */
+:root[data-reduced] .wt-countdown-scrim,
+:root[data-reduced] .wt-strip__transfer--show,
+:root[data-reduced] .wt-cp-banner--show,
+:root[data-reduced] .wt-result-view__title {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-countdown-scrim,
+  .wt-strip__transfer--show,
+  .wt-cp-banner--show,
+  .wt-result-view__title {
+    animation: none;
+  }
 }
 
 /* ── WT-UI-03: 진행바(§4.2 ProgressLine, 앱바 이설) ──
@@ -608,7 +723,7 @@
   position: relative;
   flex: 1 1 auto;
   min-width: 3rem;
-  height: 0.55rem;
+  height: 0.5625rem; /* WT-DC-04: 레일 9px 정합(디자인 L225) */
   border-radius: 999px;
   /* WT-DC-01: 미채움 레일을 --surface-sunken으로(라이트 흰 앱바 위 비가시 방지 — 채움은
      --rail-fill 대륙색). */
@@ -634,8 +749,8 @@
 }
 .wt-dot {
   flex: 0 0 auto;
-  width: 0.3rem;
-  height: 0.3rem;
+  width: 0.3125rem; /* WT-DC-04: 도트 5px 정합(디자인 L229) */
+  height: 0.3125rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text-muted) 45%, transparent);
 }
@@ -644,8 +759,8 @@
   background: color-mix(in srgb, var(--surface) 75%, transparent);
 }
 .wt-dot--current {
-  width: 0.55rem;
-  height: 0.55rem;
+  width: 0.5625rem; /* WT-DC-04: 현재 도트 9px 정합(디자인 L229 큰 핍) */
+  height: 0.5625rem;
   background: var(--surface);
   box-shadow: 0 0 0 2px var(--wt-progress-continent, var(--grade-s));
 }

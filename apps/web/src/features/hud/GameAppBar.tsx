@@ -8,7 +8,7 @@
 // data-testid="hud-bar": 비상호작용 영역 탭 시 hidden input 포커스 유지 계약(E8)의 탭 타깃 —
 // 가로 중앙은 항상 진행바(비상호작용)라 버튼을 누르지 않는다.
 import { useEffect, useRef } from 'react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, RefCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { EngineEvent, GameSessionEngine } from '@wt/engine';
@@ -29,6 +29,9 @@ export interface GameAppBarProps {
   lives: number | null;
   ackIndex?: number | null;
   ghostIndex?: number | null;
+  /** WT-DC-04(②): 하트 요소 ref 바인딩 — 생명 손실 시 GameView가 WAAPI로 바운스/색을 구동한다.
+   *  라이프 없는 모드(하트 미렌더)면 호출되지 않는다. */
+  bindLivesEl?: RefCallback<HTMLElement>;
 }
 
 export function GameAppBar({
@@ -41,6 +44,7 @@ export function GameAppBar({
   lives,
   ackIndex = null,
   ghostIndex = null,
+  bindLivesEl,
 }: GameAppBarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -88,6 +92,7 @@ export function GameAppBar({
       <div className="wt-appbar__right">
         {lives !== null && (
           <span
+            ref={bindLivesEl}
             className="wt-appbar__lives"
             data-testid="hud-lives"
             aria-label={t('hud.lives', { count: lives })}

@@ -115,6 +115,7 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
   const targetRef = useRef<SVGGElement>(null);
   // §11-D63 여정 무대 레이어.
   const stationsRef = useRef<SVGGElement>(null);
+  const checkpointRef = useRef<SVGGElement>(null);
   const vehicleRef = useRef<SVGGElement>(null);
   const labelPrevRef = useRef<SVGTextElement>(null);
   const labelCurRef = useRef<SVGTextElement>(null);
@@ -234,6 +235,7 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
         clearLayer(skippedRef.current);
         clearLayer(targetRef.current);
         clearLayer(stationsRef.current);
+        clearLayer(checkpointRef.current); // WT-DC-04(③): 진행 중 남은 링 제거
         targetIdRef.current = null;
         cameraKRef.current = 1;
         // 이동체 숨김 + 웨이포인트 라벨 비우기(§11-D63).
@@ -352,6 +354,40 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
         apply(labelCurRef.current, labels.cur);
         apply(labelNextRef.current, labels.next);
       },
+      pulseCheckpointRing(id) {
+        // WT-DC-04(③): 앰버 링 scale .5→3 + fade 700ms 후 자동 제거. reduced-motion·juice 강등·
+        // WAAPI 미지원이면 잔상 방지를 위해 링을 아예 표시하지 않는다.
+        const geo = index.byCountry.get(id);
+        const layer = checkpointRef.current;
+        if (!geo || !layer) return;
+        const immediate = juiceRef.current > 0 || prefersReducedMotion();
+        if (immediate) return;
+        const ring = document.createElementNS(SVG_NS, 'circle');
+        ring.setAttribute('cx', String(round(geo.centroid[0], 2)));
+        ring.setAttribute('cy', String(round(geo.centroid[1], 2)));
+        ring.setAttribute('r', String(CIRCLE_RADIUS));
+        ring.setAttribute('vector-effect', 'non-scaling-stroke');
+        // 색·형태는 인라인(토큰 --grade-s = 앰버). scale은 자기 중심 기준(fill-box).
+        ring.style.fill = 'none';
+        ring.style.stroke = 'var(--grade-s)';
+        ring.style.strokeWidth = '3';
+        ring.style.transformBox = 'fill-box';
+        ring.style.transformOrigin = 'center';
+        if (typeof ring.animate !== 'function') return;
+        layer.appendChild(ring);
+        const anim = ring.animate(
+          [
+            { transform: 'scale(0.5)', opacity: 0.9 },
+            { transform: 'scale(3)', opacity: 0 },
+          ],
+          { duration: 700, easing: 'ease-out', fill: 'none' },
+        );
+        const remove = (): void => {
+          if (ring.parentNode === layer) layer.removeChild(ring);
+        };
+        anim.onfinish = remove;
+        anim.oncancel = remove;
+      },
     };
     onReadyRef.current?.(handle);
     // 마운트 1회만 실행한다(빈 deps). index는 마운트 시점 상수(§3.2 계약)이므로 재구독 불필요 —
@@ -420,6 +456,8 @@ function WorldMapImpl({ index, className, onReady }: WorldMapProps): JSX.Element
           {/* §11-D63 여정 무대 레이어(전부 명령형 갱신 — 마운트 후 리렌더 0). 노선 위에 도트,
               그 위에 라벨·이동체 순으로 겹친다. */}
           <g ref={stationsRef} data-layer="stations" />
+          {/* WT-DC-04(③): 경유지 체크포인트 앰버 링(펄스 후 자동 제거 — 마운트 후 리렌더 0). */}
+          <g ref={checkpointRef} data-layer="checkpoint" aria-hidden="true" />
           <g data-layer="labels" aria-hidden="true">
             <text
               ref={labelPrevRef}

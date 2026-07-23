@@ -73,4 +73,12 @@ export interface WorldMapHandle {
    * id의 centroid, 폰트 크기는 현재 카메라 배율 k로 역보정(줌 시 비대 방지). null 슬롯은 숨긴다.
    */
   setWaypointLabels(labels: WaypointLabels): void;
+
+  // ── WT-DC-04(③): 세계일주 경유지 체크포인트 링(디자인 mapCheckpointRing) ──
+  /**
+   * 주어진 국가 centroid에 앰버(--grade-s) 링을 1회 펄스(scale .5→3 + fade, 700ms) 후 자동 제거한다.
+   * **체크포인트 도착당 1회만** 호출(상시 rAF 금지). reduced-motion·juice 강등·WAAPI 미지원 시
+   * 링을 표시하지 않는다(정지 상태로 남는 잔상 방지). 순수 SVG DOM 조작(리렌더 0 불변).
+   */
+  pulseCheckpointRing(id: CountryId): void;
 }

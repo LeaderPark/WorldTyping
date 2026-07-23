@@ -102,21 +102,6 @@ export function ShareCard({ cardRef, platform, shareTitle }: ShareCardProps) {
     trackShareClick({ utmSource: 'copy' });
   }, [capture]);
 
-  const openIntent = useCallback(
-    (kind: 'x' | 'threads') => {
-      const url = buildShareUrl(kind);
-      trackShareClick({ utmSource: kind });
-      if (kind === 'x') {
-        const intent = `https://x.com/intent/post?text=${encodeURIComponent(shareTitle)}&url=${encodeURIComponent(url)}`;
-        window.open(intent, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      const intent = `https://www.threads.net/intent/post?text=${encodeURIComponent(`${shareTitle} ${url}`)}`;
-      window.open(intent, '_blank', 'noopener,noreferrer');
-    },
-    [shareTitle],
-  );
-
   if (platform === 'mobile') {
     return (
       <button
@@ -141,22 +126,6 @@ export function ShareCard({ cardRef, platform, shareTitle }: ShareCardProps) {
         onClick={() => void copyAndDownload()}
       >
         {t('result.action.share')}
-      </button>
-      <button
-        type="button"
-        data-testid="share-card-x"
-        className="wt-btn wt-btn--icon"
-        onClick={() => openIntent('x')}
-      >
-        {t('result.share.x')}
-      </button>
-      <button
-        type="button"
-        data-testid="share-card-threads"
-        className="wt-btn wt-btn--icon"
-        onClick={() => openIntent('threads')}
-      >
-        {t('result.share.threads')}
       </button>
       {status === 'copied' && (
         <p role="status" data-testid="share-card-status">

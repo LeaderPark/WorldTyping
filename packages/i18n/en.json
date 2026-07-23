@@ -92,8 +92,6 @@
   "result.share.text": "{route} · Grade {grade} · {score}pts — Try TypeTrip!",
   "result.share.copied": "Image copied to clipboard and downloaded",
   "result.share.error": "Capture failed. Please try again.",
-  "result.share.x": "X",
-  "result.share.threads": "Threads",
   "result.share.dailyCopy": "Copy share text",
   "result.share.dailyCopied": "Copied!",
 

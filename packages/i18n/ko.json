@@ -92,8 +92,6 @@
   "result.share.text": "{route} · {grade}등급 · {score}점 — TypeTrip에서 나도 도전!",
   "result.share.copied": "이미지가 복사/다운로드되었습니다",
   "result.share.error": "캡처에 실패했어요. 다시 시도해주세요.",
-  "result.share.x": "X",
-  "result.share.threads": "Threads",
   "result.share.dailyCopy": "공유 텍스트 복사",
   "result.share.dailyCopied": "복사했어요!",
 

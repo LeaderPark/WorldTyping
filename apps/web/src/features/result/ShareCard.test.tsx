@@ -115,16 +115,4 @@ describe('ShareCard — 데스크톱', () => {
 
     expect(screen.getByTestId('share-card-status')).toBeInTheDocument();
   });
-
-  it('X/Threads 버튼이 인텐트 URL로 새 창을 연다', () => {
-    const openMock = vi.fn();
-    vi.stubGlobal('open', openMock);
-    renderShareCard('desktop');
-
-    fireEvent.click(screen.getByTestId('share-card-x'));
-    expect(openMock).toHaveBeenCalledWith(expect.stringContaining('https://x.com/intent/post'), '_blank', 'noopener,noreferrer');
-
-    fireEvent.click(screen.getByTestId('share-card-threads'));
-    expect(openMock).toHaveBeenCalledWith(expect.stringContaining('https://www.threads.net/intent/post'), '_blank', 'noopener,noreferrer');
-  });
 });

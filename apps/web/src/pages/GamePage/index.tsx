@@ -347,11 +347,18 @@ export function GamePage() {
               {t('game.confirmLeave.body')}
             </p>
             <div className="wt-confirm-leave__actions">
-              <button type="button" data-testid="confirm-leave-stay" onClick={() => blocker.reset?.()}>
-                {t('game.confirmLeave.stay')}
-              </button>
               <button
                 type="button"
+                className="wt-btn"
+                data-testid="confirm-leave-stay"
+                onClick={() => blocker.reset?.()}
+              >
+                {t('game.confirmLeave.stay')}
+              </button>
+              {/* WT-DC-06 ⑤: 확인(나가기) 버튼만 위험색(globals.css .wt-confirm-leave .wt-btn--danger). */}
+              <button
+                type="button"
+                className="wt-btn wt-btn--danger"
                 data-testid="confirm-leave-go"
                 onClick={() => {
                   abort();

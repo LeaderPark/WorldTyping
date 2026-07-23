@@ -159,10 +159,41 @@ function SettingsOverlay() {
   const isOpen = searchParams.get('modal') === 'settings';
   const theme = useSettingsStore((s) => s.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
+  // WT-DC-06 ③ — 사운드/연출 토글은 기존 스토어 필드만 배선(신규 필드 없음).
+  const keySound = useSettingsStore((s) => s.keySound);
+  const setKeySound = useSettingsStore((s) => s.setKeySound);
+  const setVolume = useSettingsStore((s) => s.setVolume);
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
+  const setReducedMotion = useSettingsStore((s) => s.setReducedMotion);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [dataStatus, setDataStatus] = useState<
     'idle' | 'exporting' | 'confirmingReset' | 'deleting' | 'deleted' | 'error'
   >('idle');
+
+  // 사운드 on/off: keySound + volume.master를 함께 반영한다(§WT-DC-06 ③ "사운드=keySound+volume").
+  // 마스터 볼륨을 조절하는 슬라이더가 아직 없어(이 태스크 범위 밖) 이 pill이 유일한 쓰기 경로다 —
+  // 완전 무음(둘 다 0/off)과 기본 복원(mech + 0.8) 두 상태만 오가므로 왕복이 결정적이다.
+  const soundOn = keySound !== 'off';
+  const toggleSound = () => {
+    if (soundOn) {
+      setKeySound('off');
+      setVolume({ master: 0 });
+    } else {
+      setKeySound('mech');
+      setVolume({ master: 0.8 });
+    }
+  };
+
+  // 연출(모션) on/off: reducedMotion은 3상(boolean | 'auto')이라 이 2상 pill과 직접 맞지 않는다
+  // (에스컬레이션 — 최종 보고의 매핑 표 참조). 'auto'는 위 AppShell 최상단 effect와 동일하게
+  // matchMedia로 해석해 "현재 표시값"만 읽고, 클릭 시에는 항상 명시적 boolean으로 확정한다
+  // (auto를 사용자의 실제 의도로 굳히는 낙관적 결정 — 재클릭하면 다시 반대로 뒤집힌다).
+  const motionReduced =
+    reducedMotion === 'auto'
+      ? typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+      : reducedMotion;
+  const juiceOn = !motionReduced;
+  const toggleJuice = () => setReducedMotion(!motionReduced);
 
   const close = () => {
     const next = new URLSearchParams(searchParams);
@@ -238,6 +269,33 @@ function SettingsOverlay() {
           </button>
         </div>
 
+        {/* WT-DC-06 ③ — 사운드/연출 토글 pill. .wt-pill/.wt-pill--active + 32px 압축 변형
+            .wt-settings-toggle(globals.css 모달 섹션에 정의) 재사용 — 신규 토큰 없음. */}
+        <div className="mb-2 flex items-center justify-between gap-4">
+          <span className="text-sm">{t('settings.sound.label')}</span>
+          <button
+            type="button"
+            data-testid="settings-sound-toggle"
+            aria-pressed={soundOn}
+            className={`wt-pill wt-settings-toggle${soundOn ? ' wt-pill--active' : ''}`}
+            onClick={toggleSound}
+          >
+            {soundOn ? t('common.on') : t('common.off')}
+          </button>
+        </div>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <span className="text-sm">{t('settings.motion.label')}</span>
+          <button
+            type="button"
+            data-testid="settings-motion-toggle"
+            aria-pressed={juiceOn}
+            className={`wt-pill wt-settings-toggle${juiceOn ? ' wt-pill--active' : ''}`}
+            onClick={toggleJuice}
+          >
+            {juiceOn ? t('common.on') : t('common.off')}
+          </button>
+        </div>
+
         {/* WT-M6-06 a11y 수정(docs/03 §7.3, e2e E10 wcag2aa 게이트): text-red-600 단독은 이 모달의
             기본(다크) 배경 dark:bg-slate-800 위에서 실측 3.02:1로 WCAG AA 4.5:1 미달(axe-core
             color-contrast, e10-a11y.spec.ts "S12 설정 모달"에서 발견). 라이트 배경(흰색)에서는
@@ -309,6 +367,9 @@ function SettingsOverlay() {
             {t('settings.credits')}
           </Link>
         </div>
+
+        {/* WT-DC-06 ④ — 정치중립 고지(기존 키 notice.disputed 재사용, 신규 키 없음). */}
+        <p className="mb-4 border-t border-border pt-2.5 text-xs text-text-muted">{t('notice.disputed')}</p>
 
         <button type="button" data-testid="settings-close" className="rounded border px-3 py-1" onClick={close}>
           {t('common.close')}

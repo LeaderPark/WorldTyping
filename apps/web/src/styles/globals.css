@@ -1162,6 +1162,24 @@
   margin-top: 1rem;
 }
 
+/* ── WT-DC-06 ⑤ ── 포기 모달 확인("나가기") 버튼 위험색 — .wt-confirm-leave 스코프에서만
+   .wt-btn--danger를 적용한다(신규 토큰 없음, --continent-asia 레드 재사용 — .wt-btn--primary와
+   같은 color-mix 85%/black 보정 기법으로 흰 텍스트 대비 확보). */
+.wt-confirm-leave .wt-btn--danger {
+  background: color-mix(in srgb, var(--continent-asia) 85%, black);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* ── WT-DC-06 ③ ── SettingsOverlay 사운드/연출 토글 pill. 기존 .wt-pill/.wt-pill--active(§2.3,
+   L2237~/L2352~)를 그대로 재사용하고 높이만 32px로 압축한다 — WT-UI-05의
+   .wt-pill.wt-track-item__cta와 동일한 결합 셀렉터 기법(소스 순서 무관하게 이 규칙이 이긴다). */
+.wt-pill.wt-settings-toggle {
+  height: 2rem;
+  padding: 0 0.875rem;
+  font-size: 0.8125rem;
+}
+
 /* reduced-motion: juice 애니메이션 일괄 제거(§7.3, §13.3-8 "입력 비블로킹" — 연출 자체를
    끄는 것이지 입력 경로엔 영향 없음). [WT-UI-06] .wt-result-card__grade(등급 스탬프 팝인)
    추가 — 기존 셀렉터는 그대로 두고 덧붙였다. */
@@ -2536,8 +2554,9 @@
   }
 }
 
+/* ── WT-DC-06 ② ── 24px → 22px(font-weight 800은 기존 그대로). */
 .wt-passport-page__nickname {
-  font-size: 1.5rem;
+  font-size: 1.375rem;
   font-weight: 800;
   margin-bottom: 0.25rem;
 }
@@ -2556,12 +2575,13 @@
   list-style: none;
 }
 /* 커버 스와치: 색 점(::before) + 라벨 텍스트가 있는 pill 버튼. 색은 각 --cover-color 수정자가
-   대륙/등급 시맨틱 토큰만 참조해 정의한다(신규 토큰 없음). */
+   대륙/등급 시맨틱 토큰만 참조해 정의한다(신규 토큰 없음).
+   [WT-DC-06 ②] 44px → 40px. */
 .wt-cover-swatch {
   position: relative;
   display: inline-flex;
   align-items: center;
-  height: 2.75rem;
+  height: 2.5rem;
   padding: 0 1rem 0 2rem;
   border-radius: var(--radius-pill);
   border: 1.5px solid var(--border);
@@ -2631,11 +2651,12 @@
 }
 
 /* 스탬프 그리드(12노선: 대륙 6 + 티어 5 + 세계일주 1) — .wt-token 재사용, 잠김은
-   .wt-token--locked(WT-UI-01 기존 정의: 서클만 opacity 0.4, 라벨은 대비 유지). */
+   .wt-token--locked(WT-UI-01 기존 정의: 서클만 opacity 0.4, 라벨은 대비 유지).
+   [WT-DC-06 ②] gap 20px/8px → 18px/8px. */
 .wt-passport-page__stamps {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem 0.5rem;
+  gap: 1.125rem 0.5rem;
   padding: 0;
   margin: 0.75rem 0 0;
   list-style: none;
@@ -2644,6 +2665,23 @@
   .wt-passport-page__stamps {
     grid-template-columns: repeat(6, 1fr);
   }
+}
+
+/* ── WT-DC-06 ① ── 스탬프 원 52px/ring 2px + 소유 시 링·배경색(대륙/티어/일주 색 분기는
+   PassportPage/index.tsx의 --stamp-ring/--stamp-bg 인라인 커스텀 프로퍼티가 결정, GameAppBar.tsx의
+   --wt-progress-continent와 동일 기법). 전역 .wt-token__circle(56px/1px, §WT-UI-05 L2260~)을
+   이 여권 스코프에서만 재정의 — 다른 화면(콘솔 트랙 토큰 등)의 .wt-token은 그대로 둔다.
+   잠금(.wt-token--locked)은 --stamp-ring/--stamp-bg 미지정 → var(--border)/var(--surface-sunken)
+   기본값으로 자연 폴백하고, opacity만 이 스코프에서 .4 → .45로 보정한다. */
+.wt-passport-page__stamp .wt-token__circle {
+  width: 52px;
+  height: 52px;
+  border-width: 2px;
+  border-color: var(--stamp-ring, var(--border));
+  background: var(--stamp-bg, var(--surface-sunken));
+}
+.wt-passport-page__stamp.wt-token--locked .wt-token__circle {
+  opacity: 0.45;
 }
 
 .wt-passport-page__achievements {

@@ -6,6 +6,7 @@
 // 표시 최적화일 뿐 이 화면의 진실 소스가 아니다 — 항상 GET /users/:id/passport를 다시 조회한다
 // (docs/06 §4.3 "판정은 기록 제출 핸들러에서 서버 재계산 결과 기준으로만" — 조회도 동일 원칙).
 import { useCallback, useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Continent, DifficultyTier } from '@wt/shared';
 import { useSettingsStore } from '../../stores/settings';
@@ -28,6 +29,43 @@ const STAMP_ROUTES: readonly string[] = [
   ...TIERS.map((t) => `tier:${t}`),
   'worldtour',
 ];
+
+/** WT-DC-06 ① — 스탬프 원(소유 시) 링/배경색 + 글리프. 대륙=대륙색, 티어=--grade-b, 일주=--grade-s
+ *  (디자인 참조 L1620~1626의 색 배정을 시맨틱 토큰으로 옮긴 것 — 배경은 디자인의 리터럴 #ffffff
+ *  대신 var(--surface)로 mix해 다크 테마에서도 성립하게 한다, .wt-rank-table__row--me와 동일 기법).
+ *  잠금 상태는 --stamp-ring/--stamp-bg를 아예 지정하지 않아 globals.css 쪽 기본값
+ *  (--border/--surface-sunken)으로 폴백한다. */
+function stampOwnedVisual(route: string): { ring: string; bg: string; glyph: string } {
+  if (route.startsWith('continent:')) {
+    const continent = route.slice('continent:'.length);
+    const color = `var(--continent-${continent})`;
+    return { ring: color, bg: `color-mix(in srgb, ${color} 16%, var(--surface))`, glyph: '✓' };
+  }
+  if (route.startsWith('tier:')) {
+    return {
+      ring: 'var(--grade-b)',
+      bg: 'color-mix(in srgb, var(--grade-b) 14%, var(--surface))',
+      glyph: '✓',
+    };
+  }
+  // 'worldtour'
+  return {
+    ring: 'var(--grade-s)',
+    bg: 'color-mix(in srgb, var(--grade-s) 18%, var(--surface))',
+    glyph: '✈',
+  };
+}
+
+/** WT-DC-06 ① — 결정적 회전(±6deg). route id 문자열의 단순 해시로 -6~6deg를 얻는다(디자인
+ *  L1620 공식 "((cid.length*7) % 13) - 6" 등의 값 범위를 일반화한 것, Math.random 금지 — 핵심
+ *  함정 5의 "시드 결정성" 원칙과 같은 정신: 같은 route는 항상 같은 각도). */
+function stampRotationDeg(route: string): number {
+  let hash = 0;
+  for (let i = 0; i < route.length; i += 1) {
+    hash = (hash * 31 + route.charCodeAt(i)) | 0;
+  }
+  return (Math.abs(hash) % 13) - 6;
+}
 
 const DEFAULT_COVER = 'basic-green';
 /** achievements.ts의 GRANTABLE_COVERS와 동일 목록(런타임 중복 정의 — @wt/shared 밖 서버 전용
@@ -163,14 +201,22 @@ export function PassportPage() {
               <ul className="wt-passport-page__stamps" data-testid="passport-stamps">
                 {STAMP_ROUTES.map((route) => {
                   const owned = ownedStampRoutes.has(route);
+                  const visual = owned ? stampOwnedVisual(route) : null;
+                  const circleStyle = visual
+                    ? ({
+                        '--stamp-ring': visual.ring,
+                        '--stamp-bg': visual.bg,
+                        transform: `rotate(${stampRotationDeg(route)}deg)`,
+                      } as CSSProperties)
+                    : undefined;
                   return (
                     <li
                       key={route}
                       data-testid={`passport-stamp-${route}`}
                       className={`wt-token wt-passport-page__stamp${owned ? ' wt-passport-page__stamp--owned' : ' wt-token--locked'}`}
                     >
-                      <span className="wt-token__circle" aria-hidden="true">
-                        {owned ? '✓' : '🔒'}
+                      <span className="wt-token__circle" aria-hidden="true" style={circleStyle}>
+                        {visual ? visual.glyph : '🔒'}
                       </span>
                       <span className="wt-token__label">{humanizeUnlockId(route)}</span>
                     </li>

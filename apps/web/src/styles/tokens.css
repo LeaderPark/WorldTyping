@@ -52,8 +52,7 @@
      균일 계수로는 전부를 만족시킬 수 없어(전부 만족시키려면 63% 이하로 낮춰야 하고, 그러면
      asia/europe가 불필요하게 어두워진다) 대륙별로 계수를 개별 조정했다(58~85%, 전부 실측
      ≥4.85:1). 색상 자체(대륙 원색)는 변경하지 않았다 — 텍스트 파생값의 보정 비율만 대륙별로
-     다르다. 리드 검토용 §11 추가 결정 제안(D62 — 오케스트레이터 지정 번호, D59는 카메라 정책
-     WT-UI-02로 예약됨)을 최종 보고에 남긴다. */
+     다르다. 이 조정은 §11-D62로 정식 확정됐다(참고: D59는 자기호스팅 배포 모델, 카메라 정책은 D63). */
   --continent-asia-text: color-mix(in srgb, var(--continent-asia) 85%, black);
   --continent-europe-text: color-mix(in srgb, var(--continent-europe) 82%, black);
   --continent-africa-text: color-mix(in srgb, var(--continent-africa) 70%, black);

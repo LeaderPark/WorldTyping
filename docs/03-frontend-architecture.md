@@ -447,6 +447,7 @@ function computeCamera(ids: CountryId[], padding = 40): { x: number; y: number; 
 
 - 적용: `<g data-layer="camera">`에 `transform: translate(x,y) scale(k)`를 **WAAPI**(`element.animate`)로 800ms `ease-in-out` 전이. React 미개입.
 - 모드별 카메라 정책: 대륙 모드 = 시작 시 해당 대륙 fitExtent 고정 + 타깃 국가가 뷰포트 밖이면 미세 팬(타깃 중심으로 25% 이내 이동만 — 멀미 방지). 세계일주 = 현재 leg 구간(현 타깃 ±2개국 bounds)을 따라가는 추적 카메라. 티어/데일리/멀티 = 국가 위치가 산발적이므로 **월드 전체 고정 + 타깃 펄스만**(카메라 이동 없음 — 매 국가 대륙 점프 팬은 시각 소음).
+  - *(개정 — 00 §11-D63, 2026-07-23)*: 대륙/세계일주는 **현 구간(prev·cur·next) leg 추적 flyTo(padding 70, 600ms)**로 통일 개정("대륙 fitExtent 고정 + 미세 팬"·"타깃 ±2개국 bounds" 서술은 폐기). 티어/데일리/멀티 = 월드 전체 고정은 불변. 구현 원천 `apps/web/src/features/map/camera.ts`.
 - `prefers-reduced-motion` 또는 설정 ON 시: 전이 durationMs=0 (즉시 스냅).
 - **stroke 보정**: scale 시 국경선이 두꺼워지므로 `vector-effect: non-scaling-stroke`를 전 path에 지정.
 

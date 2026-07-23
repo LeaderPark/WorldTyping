@@ -23,21 +23,17 @@ export function DailyPage() {
   const { t } = useTranslation();
 
   return (
-    <main
-      className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center gap-4 p-8 text-center"
-      data-testid="daily-page"
-    >
-      <h1 className="text-2xl font-bold" tabIndex={-1}>
-        {t('home.daily.title')}
-      </h1>
-      <p className="text-sm opacity-80">{t('home.daily.desc', { count: 10 })}</p>
-      <Link
-        to={`/play/daily/${todayDailyKey()}`}
-        data-testid="daily-page-cta"
-        className="rounded-full bg-sky-500 px-6 py-3 text-sm font-semibold text-white"
-      >
-        {t('daily.play.cta')}
-      </Link>
+    <main className="wt-daily-page" data-testid="daily-page">
+      <div className="wt-daily-page__hero wt-card">
+        <p className="wt-kicker">{t('daily.hero.kicker')}</p>
+        <h1 className="wt-daily-page__title" tabIndex={-1}>
+          {t('home.daily.title')}
+        </h1>
+        <p className="wt-daily-page__desc">{t('home.daily.desc', { count: 10 })}</p>
+        <Link to={`/play/daily/${todayDailyKey()}`} data-testid="daily-page-cta" className="wt-pill wt-daily-page__cta">
+          {t('daily.play.cta')}
+        </Link>
+      </div>
     </main>
   );
 }

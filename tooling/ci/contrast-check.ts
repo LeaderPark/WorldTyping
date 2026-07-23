@@ -181,6 +181,14 @@ function buildChecks(tokens: TokenMap): Check[] {
       bg: mix(gradeA, BLACK, 70),
       minRatio: 4.5,
     },
+    // globals.css .wt-pill--active / .wt-daily-page__cta(WT-UI-07) — 채워진 accent 버튼, 동일
+    // 85% 기법(.wt-btn--primary와 같은 계수).
+    {
+      label: '.wt-pill--active / .wt-daily-page__cta white text on color-mix(accent 85%, black)',
+      fg: WHITE,
+      bg: mix(accent, BLACK, 85),
+      minRatio: 4.5,
+    },
 
     // ── WT-UI-01(D57) 라이트 기본 조합 ──────────────────────────────────────
     // .wt-card/.wt-menu-row 본문(15px 규모) — --text on --bg/--surface.

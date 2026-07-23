@@ -56,7 +56,7 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
 
 ## 4. 환경 제약 (이 빌드가 전제한 것)
 
-- **GitHub 원격·Cloudflare 계정 미연결** 상태로 빌드됨 → PR/CI/배포는 실행 이력 없음(파일은 완비). 로컬 커밋만 존재. 원격 연결 후 활성화 절차: `.github/workflows/README.md`.
+- ~~**GitHub 원격·Cloudflare 계정 미연결** 상태로 빌드됨~~ → **2026-07-23 연결·배포 완료**(아래 §8 배포 기록 참조). GitHub 원격 `github.com/LeaderPark/WorldTyping`(main 푸시됨), Cloudflare 계정 연결(OAuth), **prod가 `https://worldtyping.leaderpark.net`에 라이브**. CI/CD 워크플로 자동 활성화 절차는 여전히 미실행(GitHub Secrets/Environments 등록 필요 — `.github/workflows/README.md`).
 - E2E는 밀폐 설계: `workers/api/scripts/e2e-dev-server.mjs`가 실행별 persist 디렉터리 초기화+마이그레이션. 세션 생성 경로는 `e2e/helpers/session-budget.ts`(+`identity.ts`) 경유 필수 — 서버 레이트리밋(10회/60초/IP, 신규 pid 20/h)을 스위트가 스스로 넘지 않게 하는 장치다. **새 E2E 스펙을 추가할 때 반드시 이 헬퍼를 쓸 것.**
 - 로컬 Lighthouse LCP는 정보용(D48) — 규범 게이트는 원격 Lighthouse CI. 로컬 k6 제출 p95도 단일 SQLite 한계로 참고용(staging 재검증 절차는 `tooling/ops/loadtest-report.md`).
 
@@ -83,8 +83,8 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
 
 ### 6.1 수동/원격 항목 (사용자만 가능 — 원천: `tooling/ops/launch-checklist.md`)
 
-1. 도메인/상표 확정(오픈퀘스천 Q1: typetrip.gg → kr → app) + SSL + HSTS preload 제출
-2. GitHub 원격 push + Cloudflare 계정 연결 → 실 리소스(D1/KV/R2/Queue/AE) 발급 → staging 배포 (절차: `.github/workflows/README.md`)
+1. ~~도메인/상표 확정(Q1: typetrip.gg)~~ → **`worldtyping.leaderpark.net` 확정·배포됨**(존 leaderpark.net, 2026-07-23). SSL은 Cloudflare 커스텀 도메인 자동(Universal SSL). **HSTS preload 제출은 여전히 수동**(launch-checklist §1.7).
+2. ~~GitHub push + CF 연결 → 리소스 발급 → staging 배포~~ → **완료(§8)**. 단 무료 플랜이라 **staging이 아닌 prod에 직행**, **R2/Queue/AE는 미발급**(prod 바인딩에서 제거, 코드 no-op 가드). CI/CD 자동화(GitHub Secrets/Environments)는 미설정 — 현재 배포는 로컬 wrangler 수동 배포.
 3. staging에서 k6 부하 3종 정식 실행(제출 200rps/LB 1,000rps/멀티 500방) + 테스트 데이터 정리 (`tooling/ops/loadtest-report.md` §staging 절차)
 4. D1 복구 리허설 1회 (`tooling/ops/runbook.md`)
 5. 링크 미리보기 3종(X/Threads/카카오) 검증 스크린샷
@@ -108,3 +108,54 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
 2. 새 작업은 §3의 파이프라인(구현→독립 검증→커밋)을 유지한다. 문서 충돌 발견 시 코드에서 임의 해석 금지 — §11에 D행 추가 후 진행.
 3. 커밋 메시지에 작업 ID 포함(진행 추적의 원천이 git log다). 마이그레이션 append-only, 시크릿 커밋 금지, 산출물(`generated/`, `public/data/`) 손편집 금지.
 4. 이 문서(§1 스냅샷, §5 매핑, §6 잔여)를 상태 변화 시 함께 갱신한다.
+
+---
+
+## 8. 배포 기록 (2026-07-23 — 최초 prod 라이브)
+
+**라이브 URL: <https://worldtyping.leaderpark.net>** (Cloudflare Workers Free 플랜, prod 환경).
+
+### 8.1 무엇이 어떻게 배포됐나
+
+| 항목 | 값 |
+|---|---|
+| GitHub 원격 | `github.com/LeaderPark/WorldTyping` (main 푸시됨) |
+| Cloudflare 계정 | `132fc163aeb4d9194ddfff699c67af57` (dkdleldjqkr976@gmail.com), OAuth 로그인 |
+| 존 | `leaderpark.net`(active) → 커스텀 도메인 `worldtyping.leaderpark.net` 자동 생성 + Universal SSL |
+| Worker | `typetrip-prod` (`wrangler deploy --env prod`), `workers_dev = false` |
+| D1 | `wt-main-prod` = `2d8ed3d7-9735-46d9-baae-c1c5dab53b02` (APAC), 마이그레이션 0001~0004 적용 |
+| KV | `wt-kv-prod` = `7a23c9d9b86247b48b0c38ea762d1600` |
+| DO | MATCH_ROOM / MATCHMAKER (SQLite classes — 무료 플랜 지원) |
+| 시크릿 | SESSION_HMAC_SECRET·RUN_HMAC_SECRET·DAILY_SALT (`wrangler secret put --env prod`, 랜덤 32B hex) |
+| Cron | 4종 등록(데일리 시드 / lb-refresher / 부정 급증 / 보존 정리) |
+
+### 8.2 무료 플랜 적응 (다음 세션이 알아야 할 것)
+
+- `wrangler.toml`의 **`[env.prod]`에서만** Queues·Analytics Engine·R2 바인딩을 제거했다. top-level(dev)·
+  staging은 그대로라 **vitest 1,099개 영향 없음**(테스트는 top-level 설정 사용).
+- 코드는 전부 미바인딩 가드가 있어 no-op으로 안전 동작: `report.ts`/`MatchRoom.ts`(EVENTS),
+  `telemetry.ts`/`retention.ts`(AE); R2(BUCKET)는 코드 사용처 0. → prod에서 텔레메트리·신고 큐·
+  고스트 수집만 비활성(허용된 저하). 싱글/데일리/멀티/랭킹/DB는 전부 정상.
+- **Workers Paid 전환 시**: `[env.prod]`에 top-level과 동일한 `queues`·`analytics_engine_datasets`·
+  `r2_buckets` 블록을 되살리면 코드 변경 없이 재활성화(R2/Queue 리소스 발급 선행).
+
+### 8.3 인증 함정 (다음 세션 필독)
+
+- 이 환경의 `CLOUDFLARE_API_TOKEN`(env)은 **Zone 권한만** 있어 배포·리소스 발급 불가(D1/KV/Workers 403).
+- 배포 명령 전 **`Remove-Item Env:CLOUDFLARE_API_TOKEN`(PowerShell) / `unset CLOUDFLARE_API_TOKEN`(bash)로
+  env 토큰을 해제**해야 `wrangler login` OAuth 자격증명(`…\xdg.config\.wrangler\config\default.toml`)이 쓰인다.
+
+### 8.4 라이브 스모크 검증 (전부 통과)
+
+- SPA(`/` 200) · `GET /api/v1/config`(200) · 세션 부트스트랩(D1 INSERT, geo=KR) · `session/me`(Bearer) ·
+  `daily/today`(결정적 시드) · `lb`(빈 보드).
+- 멀티: `POST /match/quick`·`POST /rooms`(200, 서명 티켓) → WS 업그레이드 → MatchRoom DO `hello→welcome`
+  핸드셰이크 성공(세션 인증 + dataVersion 검증). 닉네임 검증도 라이브 동작 확인.
+- 스모크로 생긴 GUEST_* 유저 소수는 runs/lb_best 없음 → 리더보드 무영향(정리 불요).
+
+### 8.5 남은 것
+
+- CI/CD 자동화: GitHub Secrets(계정 스코프 `CLOUDFLARE_API_TOKEN`)·Environments·브랜치 보호 등록
+  (`.github/workflows/README.md`). 현재는 로컬 wrangler 수동 배포.
+- HSTS preload 제출 · 실기기 IME 스모크 · 링크 미리보기 3종(launch-checklist).
+- (선택) Workers Paid 전환 시 Queue/AE/R2 재활성화.

@@ -151,11 +151,11 @@ PUBLIC_ORIGIN = "https://worldtyping.leaderpark.net"
 [[env.prod.d1_databases]]
 binding = "DB"
 database_name = "wt-main-prod"
-database_id = "<prod-uuid>"
+database_id = "2d8ed3d7-9735-46d9-baae-c1c5dab53b02"
 
 [[env.prod.kv_namespaces]]
 binding = "KV"
-id = "<prod-kv-id>"
+id = "7a23c9d9b86247b48b0c38ea762d1600"
 
 [env.prod.durable_objects]
 bindings = [

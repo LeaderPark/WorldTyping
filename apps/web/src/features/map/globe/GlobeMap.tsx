@@ -40,6 +40,9 @@ const LOGICAL_H = 500;
 const ARC_SAMPLES = 64;
 /** idle spin 각속도 ~1.2°/s(보딩/결과 배경, 홉·juice 강등·reduced-motion 시 자동 정지). */
 const SPIN_DEG_PER_MS = 1.2 / 1000;
+/** idle spin 재그리기 스로틀(~25fps). 배경 연출은 저프레임으로 충분하고, 상시 60fps 전-폴리곤
+ * 재투영이 헤드리스/저사양·백그라운드에서 렌더러를 넘기던 회귀(E1 크래시·cheat-suite 실패)를 막는다. */
+const IDLE_MIN_DT = 40;
 const TARGET_RING_R = 10;
 const CHECKPOINT_RING_R = 10;
 /** 라벨을 앵커 위로 띄우는 오프셋(logical px). */
@@ -174,6 +177,7 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
   const rampUntilRef = useRef(0);
   const lastTsRef = useRef(0);
   const rafRef = useRef<number | null>(null);
+  const needsDrawRef = useRef(false);
   const juiceRef = useRef<JuiceLevel>(0);
 
   const onReadyRef = useRef(onReady);
@@ -193,6 +197,9 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
     projection.rotate([-cameraRef.current.lng, -cameraRef.current.lat]);
     projectionRef.current = projection;
     paletteRef.current = resolvePalette();
+    // 백그라운드 탭(document.hidden)에서는 rAF를 정지한다 — 2-페이지/비가시 상황에서 idle spin의
+    // 상시 재투영이 렌더러를 넘기던 회귀 방지(schedule 가드 + visibilitychange에서 취소/재개).
+    let hidden = typeof document !== 'undefined' && !!document.hidden;
 
     const immediate = (): boolean =>
       juiceRef.current > 0 ||
@@ -415,11 +422,15 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
         moved = true;
         if (raw >= 1) flyToRef.current = null;
       } else if (idleSpinRef.current && !immediate()) {
-        const dt = lastTsRef.current ? Math.min(64, now - lastTsRef.current) : 16;
-        cam.lng = wrapLng(cam.lng + SPIN_DEG_PER_MS * dt);
-        moved = true;
+        // idle spin은 IDLE_MIN_DT(~25fps)로 스로틀 — 상시 60fps 재투영이 아님(CPU 절감·크래시 방지).
+        const last = lastTsRef.current;
+        if (!last || now - last >= IDLE_MIN_DT) {
+          const dt = last ? Math.min(64, now - last) : 16;
+          cam.lng = wrapLng(cam.lng + SPIN_DEG_PER_MS * dt);
+          lastTsRef.current = now;
+          moved = true;
+        }
       }
-      lastTsRef.current = now;
       applyCameraRotation();
       return moved;
     };
@@ -432,17 +443,23 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
       rafRef.current = null;
       const now = nowMs();
       const moved = advance(now);
-      render(now);
-      if (moved) reprojectMovingOverlays();
+      // moved(카메라 이동)·상태변화(needsDraw)·solved 램프 중에만 재그리기 — idle spin 스로틀 프레임은 스킵.
+      if (moved || needsDrawRef.current || rampUntilRef.current > now) {
+        needsDrawRef.current = false;
+        render(now);
+        if (moved) reprojectMovingOverlays();
+      }
       if (running(now)) schedule();
     };
     function schedule(): void {
+      if (hidden) return;
       if (rafRef.current == null && typeof requestAnimationFrame === 'function') {
         rafRef.current = requestAnimationFrame(frame);
       }
     }
     // 상태 변화 반영용 1프레임 요청(구동기 없으면 그린 뒤 자기 종료 — 상시 루프 아님).
     function requestDraw(): void {
+      needsDrawRef.current = true;
       schedule();
       if (typeof requestAnimationFrame !== 'function') render(nowMs());
     }
@@ -768,11 +785,33 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
       });
     }
 
+    const onVisibility = (): void => {
+      hidden = typeof document !== 'undefined' && !!document.hidden;
+      if (hidden) {
+        if (rafRef.current != null && typeof cancelAnimationFrame === 'function') {
+          cancelAnimationFrame(rafRef.current);
+        }
+        rafRef.current = null;
+      } else {
+        lastTsRef.current = 0; // dt 누적 리셋 후 재개.
+        if (running(nowMs())) {
+          needsDrawRef.current = true;
+          schedule();
+        }
+      }
+    };
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+
     onReadyRef.current?.(handle);
 
     return () => {
       ro?.disconnect();
       mo?.disconnect();
+      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
       if (rafRef.current != null && typeof cancelAnimationFrame === 'function') {
         cancelAnimationFrame(rafRef.current);
       }

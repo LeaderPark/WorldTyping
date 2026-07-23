@@ -133,11 +133,17 @@ function buildChecks(tokens: TokenMap): Check[] {
 
   return [
     // ResultCard(.wt-result-card__grade, font-size:1.5rem/24px font-weight:800) — large text.
-    { label: '.wt-grade--S on dark page bg', fg: gradeS, bg: PAGE_BG_DARK, minRatio: 3 },
-    { label: '.wt-grade--A on dark page bg', fg: gradeA, bg: PAGE_BG_DARK, minRatio: 3 },
-    { label: '.wt-grade--B on dark page bg', fg: gradeB, bg: PAGE_BG_DARK, minRatio: 3 },
-    { label: '.wt-grade--C on dark page bg', fg: gradeC, bg: PAGE_BG_DARK, minRatio: 3 },
-    { label: '.wt-grade--D on dark page bg', fg: gradeD, bg: PAGE_BG_DARK, minRatio: 3 },
+    // [WT-UI-09, 낡은 라벨 정리] 이 다섯 항목의 label 문자열은 여전히 구 클래스명 `.wt-grade--*`를
+    // 가리키고 있었다 — 그 클래스는 WT-UI-06(결과 화면 리스타일)이 이미 제거하고
+    // `.wt-result-card--{S,A,B,C,D}`가 세팅하는 `--wt-grade-color-text`(등급별 개별 대비 보정
+    // 계수)로 대체했다(globals.css 참조). 수치 검사(fg=원색 grade 토큰, bg=다크 페이지 배경,
+    // minRatio=3)는 그 대체와 무관하게 독립적으로 유효해 그대로 통과 중이었다 — 서술 라벨만
+    // 현행 선택자로 정정한다(수치·기준값은 무변경).
+    { label: '.wt-result-card__grade (S, 구 .wt-grade--S — WT-UI-06 제거) on dark page bg', fg: gradeS, bg: PAGE_BG_DARK, minRatio: 3 },
+    { label: '.wt-result-card__grade (A, 구 .wt-grade--A — WT-UI-06 제거) on dark page bg', fg: gradeA, bg: PAGE_BG_DARK, minRatio: 3 },
+    { label: '.wt-result-card__grade (B, 구 .wt-grade--B — WT-UI-06 제거) on dark page bg', fg: gradeB, bg: PAGE_BG_DARK, minRatio: 3 },
+    { label: '.wt-result-card__grade (C, 구 .wt-grade--C — WT-UI-06 제거) on dark page bg', fg: gradeC, bg: PAGE_BG_DARK, minRatio: 3 },
+    { label: '.wt-result-card__grade (D, 구 .wt-grade--D — WT-UI-06 제거) on dark page bg', fg: gradeD, bg: PAGE_BG_DARK, minRatio: 3 },
 
     // 대륙색은 현재 텍스트로 렌더되지 않지만(지도 SVG fill·장식용), §7.3이 명시 지목한 조합이라
     // 회귀 가드로 포함한다(large text 기준 — 향후 노선 배지 등에 쓰일 경우를 대비).

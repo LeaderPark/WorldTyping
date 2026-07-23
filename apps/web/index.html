@@ -54,7 +54,17 @@
          [D57 갱신] 기본 테마가 라이트로 반전되며 body 배색 리터럴을 tokens.css의 새 --bg/--text
          라이트 값(#f4f5ef/#171b19)과 동기했다. 다크 값(#0f172a/#f8fafc)도 tokens.css
          [data-theme='dark'] --bg/--text와 동일하게 유지 — 이 파일이 바뀌면 이 리터럴도 같이
-         갱신해야 한다(자동 동기 아님, 사람이 맞추는 관례). -->
+         갱신해야 한다(자동 동기 아님, 사람이 맞추는 관례).
+
+         [WT-UI-09 갱신] D47 이후 실제 홈(HomePage/index.tsx WT-UI-04)·게이트(LanguageGateOverlay)가
+         .wt-card/.wt-pill 전역 클래스로 굳어진 뒤에도 이 셸의 게이트 다이얼로그·버튼·히어로 태그라인은
+         구 리터럴(#0f172a 텍스트, 0.5rem 사각 카드, 무테두리 회색 버튼, opacity 트릭 태그라인)에
+         머물러 있었다 — 실제 화면과 어긋난 채로 첫 페인트를 담당하고 있었다는 뜻이라 이번에 맞춘다:
+         다이얼로그는 tokens.css --text/--radius-card/--shadow-card를, 버튼은 .wt-pill(46px 필,
+         accent 보더 1.5px, color-mix(accent 80%, black) 텍스트 — .wt-pill의 accent는 라이트/다크
+         동일값이라 버튼 텍스트/보더 리터럴에 테마 분기가 필요 없다)을, 태그라인은 opacity 근사 대신
+         --text-muted 리터럴을 그대로 베꼈다. game 로직·testid·localStorage 스크립트는 무관 — 색·형태
+         리터럴만 갱신했다. -->
     <style>
       #wt-shell-hero,
       #wt-shell-gate {
@@ -80,7 +90,10 @@
       #wt-shell-hero .wt-shell-hero__tagline {
         margin: 0.25rem 0 0;
         font-size: 0.9rem;
-        opacity: 0.75;
+        color: #5e645e; /* = tokens.css :root --text-muted (WT-UI-09: .wt-home__tagline과 동일 토큰) */
+      }
+      :root[data-theme="dark"] #wt-shell-hero .wt-shell-hero__tagline {
+        color: #94a3b8; /* = tokens.css [data-theme='dark'] --text-muted */
       }
       #wt-shell-gate {
         position: fixed;
@@ -89,18 +102,25 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(0, 0, 0, 0.6);
+        background: rgba(0, 0, 0, 0.6); /* = LanguageGateOverlay의 bg-black/60, 이미 동일값 */
       }
       #wt-shell-gate .wt-shell-gate__dialog {
-        border-radius: 0.5rem;
+        max-width: 24rem; /* = LanguageGateOverlay .wt-card의 max-w-sm */
+        border-radius: 1rem; /* = tokens.css :root --radius-card(16px), .wt-card와 동일 */
         padding: 1.5rem;
         text-align: center;
-        background: #ffffff;
-        color: #0f172a;
+        background: #ffffff; /* = tokens.css :root --surface */
+        color: #171b19; /* = tokens.css :root --text (WT-UI-09: 구 #0f172a 오기 수정) */
+        box-shadow:
+          0 1px 2px rgb(23 27 25 / 0.05),
+          0 8px 24px rgb(23 27 25 / 0.08); /* = tokens.css :root --shadow-card */
       }
       :root[data-theme="dark"] #wt-shell-gate .wt-shell-gate__dialog {
-        background: #1e293b;
-        color: #ffffff;
+        background: #1e293b; /* = tokens.css [data-theme='dark'] --surface */
+        color: #f8fafc; /* = tokens.css [data-theme='dark'] --text (WT-UI-09: 구 #ffffff 오기 수정) */
+        box-shadow:
+          0 1px 2px rgb(0 0 0 / 0.35),
+          0 8px 24px rgb(0 0 0 / 0.5); /* = tokens.css [data-theme='dark'] --shadow-card */
       }
       #wt-shell-gate .wt-shell-gate__actions {
         margin-top: 1rem;
@@ -108,22 +128,28 @@
         gap: 0.75rem;
         justify-content: center;
       }
+      /* WT-UI-09: .wt-pill(globals.css §2.3) 형태·색 그대로 — 46px 필, accent 보더, accent를
+         color-mix(80%, black)로 보정한 텍스트(globals.css 주석과 동일 계산: 실측 5.32:1). accent
+         (#0a84ff)는 라이트/다크 tokens.css에서 동일값이라 이 두 리터럴은 테마 분기가 필요 없다. */
       #wt-shell-gate .wt-shell-gate__btn {
-        border-radius: 0.25rem;
-        border: 1px solid #cbd5e1;
-        padding: 0.25rem 0.75rem;
+        height: 46px;
+        border-radius: 999px;
+        border: 1.5px solid #0a84ff;
+        padding: 0 1.25rem;
         font: inherit;
-        background: transparent;
-        color: inherit;
+        font-weight: 700;
+        font-size: 0.9375rem;
+        background: #ffffff; /* = tokens.css :root --surface */
+        color: #086acc; /* = color-mix(in srgb, #0a84ff 80%, black) */
         cursor: pointer;
       }
       :root[data-theme="dark"] #wt-shell-gate .wt-shell-gate__btn {
-        border-color: #475569;
+        background: #1e293b; /* = tokens.css [data-theme='dark'] --surface */
       }
       #wt-shell-gate .wt-shell-gate__hint {
         margin-top: 0.75rem;
         font-size: 0.75rem;
-        opacity: 0.7;
+        opacity: 0.7; /* = LanguageGateOverlay의 실제 text-xs opacity-70, 이미 동일값 */
       }
     </style>
     <!-- 폰트 프리로드 (docs/03 §8.2, docs/00 §11-D58): Pretendard 서브셋(400/700) + JetBrains Mono.

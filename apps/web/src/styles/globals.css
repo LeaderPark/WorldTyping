@@ -2666,3 +2666,24 @@
   border-color: transparent;
   color: #fff;
 }
+
+/* ── WT-UI-09: 런칭 마감 정합 — 404/에러/크레딧 귀환 링크 ──────────────────────────────
+   spec: docs/06 §10-4(404/500 커스텀 페이지)·§10-8(크레딧/라이선스), 이 태스크 지시문.
+   NotFoundPage/ErrorPage 본문은 .wt-card + .wt-pill(둘 다 위 §2.3 전역 정의)만으로 리스타일
+   했고 신규 CSS가 필요 없었다 — 여기서 정의하는 .wt-nav-back 하나만 신규다. CreditsPage(이
+   태스크 대상)를 포함해 ModeSelectPage/TrackSelectPage(이 태스크 범위 밖, 마크업 무수정)도
+   이미 이 클래스명을 쓰고 있었는데 globals.css에 정의가 전혀 없어 브라우저 기본 <a> 렌더(파랑
+   밑줄)로 나가고 있었다 — 새 클래스 신설이 아니라 기존 미정의 클래스를 채우는 순수 추가라
+   대상 밖 페이지에도 부작용 없이 함께 정리된다. */
+.wt-nav-back {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.wt-nav-back:hover,
+.wt-nav-back:focus-visible {
+  color: var(--text);
+}

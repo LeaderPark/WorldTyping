@@ -255,7 +255,7 @@
   "boarding.passenger": "Passenger: {nickname}",
   "boarding.rules": "Rules: {ruleType} · par time {parTime}",
   "boarding.cta": "Tap your passport to depart",
-  "boarding.myBest": "My best: {grade} · {time} · {accuracy}%",
+  "boarding.myBest": "My best: {grade} · {time}",
   "boarding.worldBest": "World #1: {time}",
   "boarding.countries": "{count} countries",
   "boarding.ruleType.continent": "Time Attack",

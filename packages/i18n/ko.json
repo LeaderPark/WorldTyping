@@ -255,7 +255,7 @@
   "boarding.passenger": "탑승자: {nickname}",
   "boarding.rules": "규칙: {ruleType} · 파 타임 {parTime}",
   "boarding.cta": "여권을 탭해서 출국하기",
-  "boarding.myBest": "내 최고: {grade} · {time} · {accuracy}%",
+  "boarding.myBest": "내 최고: {grade} · {time}",
   "boarding.worldBest": "세계 1위: {time}",
   "boarding.countries": "{count}개국",
   "boarding.ruleType.continent": "타임어택",

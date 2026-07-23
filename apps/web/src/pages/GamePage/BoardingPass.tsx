@@ -109,16 +109,13 @@ export function BoardingPass({
   const ruleType = t(ruleTypeKey(mode));
   const displayName = nickname || `GUEST_${guestId.slice(0, 4).toUpperCase()}`;
 
-  // WT-DC-04(⑤): 내 최고 라인(디자인 L210~212). boarding.myBest 키는 {grade}·{time}·{accuracy}%
-  // 3항을 요구하나, 현 meta TrackBest는 정확도를 저장하지 않는다(grade/timeMs/score/completed만).
-  // 정확도가 실제로 존재할 때만 렌더한다 — 스토어가 acc를 싣기 시작하면 자동 노출된다(전방 호환).
-  // [에스컬레이션] TrackBest에 acc 필드 추가(store 소유 태스크) 또는 boarding.myBest를 grade+time
-  // 로 축소(WT-DC-01) 중 하나가 필요하다 — 임의로 store/i18n을 고치지 않고 보고한다.
-  const best = trackBests[`${mode}:${trackId}`] as (TrackBest & { acc?: number }) | undefined;
-  const myBestLine =
-    best && typeof best.acc === 'number'
-      ? t('boarding.myBest', { grade: best.grade, time: formatMMSS(best.timeMs), accuracy: best.acc })
-      : null;
+  // WT-DC-04(⑤)/리드 결정(옵션2): 내 최고 라인(디자인 L210~212). meta TrackBest는 정확도를
+  // 저장하지 않으므로(grade/timeMs/score/completed) boarding.myBest를 grade+time으로 확정
+  // (기존 route.best와 동형). 스토어/기록 경로 수정 리스크를 피한 안전 선택 — 정확도는 후속 과제.
+  const best = trackBests[`${mode}:${trackId}`] as TrackBest | undefined;
+  const myBestLine = best
+    ? t('boarding.myBest', { grade: best.grade, time: formatMMSS(best.timeMs) })
+    : null;
 
   // 기존 testid/속성/핸들러(§7.2 동기 focus 계약 포함)는 전부 그대로 — 클래스 조합만 티켓
   // 억센트(trackId별 노선색)를 더한다.

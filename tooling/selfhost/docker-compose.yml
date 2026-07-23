@@ -55,10 +55,14 @@ services:
   cloudflared:
     container_name: worldtyping-cloudflared
     image: cloudflare/cloudflared:2025.8.1
-    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    # [WT-HOST-02] Remotely-managed(token) 터널 — `cloudflared tunnel login`/cert.pem 불요.
+    # 터널 생성·ingress·DNS(worldtyping.leaderpark.net→<tunnel>.cfargotunnel.com)는 Cloudflare API로
+    # 설정 완료. cloudflared는 TUNNEL_TOKEN(.env, gitignore)만으로 구동하고 ingress(app:8787 프록시 +
+    # /__scheduled·/cdn-cgi/handler/scheduled 외부 404)는 Cloudflare가 원격 관리한다.
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN must be set in tooling/selfhost/.env}
     restart: unless-stopped
-    volumes:
-      - ./cloudflared:/etc/cloudflared:ro
     depends_on:
       app:
         condition: service_healthy

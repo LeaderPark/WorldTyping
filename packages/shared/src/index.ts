@@ -123,6 +123,49 @@ export {
   BOT_OFFER_MS,
 } from './protocol/constants';
 
+// chase (WT-CH-02, docs/09 §6.1): "골드 러너" 심·선택지·상수. 클라·서버 공용 단일 원천(의존성 0).
+export type {
+  ChaseConstants,
+  ChaseConstantsOverride,
+  EscapeReductionConstants,
+  PoliceConstants,
+  GoldConstants,
+  ChaseScoreConstants,
+  GoldRing,
+  PoliceKind,
+  ChaseGraph,
+  ChaseGraphNode,
+  ChaseWorld,
+  CompiledChaseGraph,
+  CandidateContext,
+  MoveLogEntry,
+  ChaseInput,
+  ChaseState,
+  ChaseEvent,
+  StarChangeReason,
+  PoliceUnit,
+  Gold,
+  CarriedGold,
+  RngSnapshot,
+  ChaseVerifyResult,
+} from './chase';
+export {
+  DEFAULT_CHASE_CONSTANTS,
+  CHASE_CONSTANTS_VERSION,
+  ChaseConstantsOverrideSchema,
+  mergeChaseConstants,
+  parseChaseConstants,
+  compileGraph,
+  nextGreedyStep,
+  bfsPath,
+  hopDistanceMap,
+  generateCandidates,
+  candidatesAreValid,
+  simulateChase,
+  advanceChase,
+  verifyMoveLog,
+} from './chase';
+
 // auth (WT-M1-04): wt1 HMAC 토큰 서명/검증 + pid/device_hash 파생. Workers·테스트 공용(WebCrypto).
 export {
   signToken,

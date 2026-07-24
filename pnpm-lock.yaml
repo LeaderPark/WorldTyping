@@ -259,6 +259,9 @@ importers:
       '@vitest/coverage-v8':
         specifier: 3.2.7
         version: 3.2.7(vitest@3.2.7(@types/node@26.1.1)(jsdom@26.1.0)(terser@5.49.0))
+      '@wt/data':
+        specifier: workspace:*
+        version: link:../data
       es-hangul:
         specifier: ^2.3.0
         version: 2.4.0

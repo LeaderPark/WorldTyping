@@ -3384,12 +3384,19 @@ a.wt-brand:focus-visible {
    [D74] 폭·마진·패딩은 공유 .wt-page(마크업 wt-rank-page wt-page)로, 맨 h1은 PageHeader(1.5rem/700
    타이틀 규격 .wt-page-header__title)로 대체 — .wt-rank-page/.wt-rank-page__title 규칙 삭제.
    .wt-rank-page 클래스명 자체는 마크업에 존치(아래 __filters 등 자손 규칙 유지). */
+/* [Tweak N] rank/passport 페이지 수직 리듬 — D74 때 자체 컨테이너 규칙이 .wt-page로 대체되며
+   헤더↔콘텐츠 간격이 사라졌다. 모드/트랙(.wt-mode-select,.wt-track-select L1809~)과 동일 패턴. */
+.wt-rank-page,
+.wt-passport-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
 .wt-rank-page__filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.625rem;
-  margin-bottom: 1.25rem;
 }
 .wt-rank-page__filters [role='group'] {
   display: flex;
@@ -3483,7 +3490,6 @@ a.wt-brand:focus-visible {
 .wt-rank-page__my-row {
   position: sticky;
   bottom: 1rem;
-  margin-top: 1.25rem;
   padding: 0.75rem 1.25rem;
   border-radius: var(--radius-pill);
   background: var(--surface);
@@ -3495,11 +3501,10 @@ a.wt-brand:focus-visible {
 
 .wt-rank-page__load-more {
   display: flex;
-  margin: 1.25rem auto 0;
+  margin: 0 auto;
 }
 
 .wt-rank-page__total {
-  margin-top: 0.75rem;
   font-size: 0.75rem;
   color: var(--text-muted);
   text-align: right;

@@ -169,21 +169,23 @@
   color: inherit;
 }
 
-/* ── 프롬프트 렌더러(features/typing/prompt-renderer.ts) — METRO식 슬롯+입력 에코(D66) ──
-   spec: docs/03 §2.8(슬롯+힌트+입력 에코·오타 색각 이중 부호화·커서), §3.6(레이아웃 프로퍼티
-   불변 — 밑줄 두께 상태 불변·고정 박스·absolute 커서 → 리플로우 0). 색은 전부 변수 경유(원색
-   직접 금지, D50). --wt-prompt-done은 원작 METRO의 정타 적색 계열, --wt-prompt-error는 오타 적색. */
+/* ── 프롬프트 렌더러(features/typing/prompt-renderer.ts) — METRO식 슬롯+입력 에코(D66) + 자모
+   채움 행(D69) ──
+   spec: docs/03 §2.8(슬롯+힌트+입력 에코·오타 색각 이중 부호화·커서), docs/00 §11-D69(자모 슬롯·
+   일치/불일치 색), §3.6(레이아웃 프로퍼티 불변 — 밑줄 두께 상태 불변·고정 박스·absolute 커서 →
+   리플로우 0). 색은 전부 변수 경유(원색 직접 금지, D50 — #ef4444는 토큰 정의부에만).
+   [D69] 일치=--wt-prompt-match(=var(--text), 테마 자동 반전 — 구 done 적색 폐기), 불일치=
+   --wt-prompt-error(#ef4444), partial은 match로 통합, 미입력 자모 슬롯=--wt-prompt-slot(=var(--border)). */
 .wt-prompt {
-  --wt-prompt-done: #d6402d;
-  --wt-prompt-error: #ef4444;
+  --wt-prompt-match: var(--text); /* 일치(정타/조합중 통합) — 테마 자동 반전 */
+  --wt-prompt-error: #ef4444; /* 불일치(오타) — 색+물결 이중 부호화 */
+  --wt-prompt-pending: var(--text-muted); /* 미입력 글리프 */
+  --wt-prompt-slot: var(--border); /* 미채움 자모 밑줄 */
   display: inline-flex;
   flex-direction: column;
   align-items: center;
   gap: 0.25rem;
   will-change: transform;
-}
-:root[data-theme='dark'] .wt-prompt {
-  --wt-prompt-done: #ff7a5e;
 }
 /* 슬롯 행: 힌트+글리프 칼럼들을 flex-end(글리프 바닥 = tail 텍스트)로 정렬, 긴 국가명은 wrap. */
 .wt-prompt__glyphs {
@@ -223,15 +225,16 @@
   box-sizing: border-box;
   width: 1.14em;
   height: 1.18em;
-  color: var(--text-muted);
-  border-bottom: max(2px, 0.088em) solid var(--border);
+  color: var(--wt-prompt-pending);
 }
+/* [D69] ko: 음절 개별 dashed 밑줄 제거 — 아래 자모 행(.wt-slot__jamo)이 밑줄 슬롯을 대체한다. */
 .wt-prompt[data-lang='ko'] .wt-unit {
-  border-bottom-style: dashed;
+  border-bottom: none;
 }
+/* en: 글자 단위 실선 밑줄 유지(자모 행 미생성). */
 .wt-prompt[data-lang='en'] .wt-unit {
   width: 0.78em;
-  border-bottom-style: solid;
+  border-bottom: max(2px, 0.088em) solid var(--border);
 }
 /* 구분자(공백·구두점): 밑줄 없는 좁은 스페이서. 힌트가 원문 문자를 보존한다. */
 .wt-unit--sep {
@@ -243,25 +246,41 @@
   border-bottom: none;
 }
 .wt-unit.is-pending {
-  color: var(--text-muted);
+  color: var(--wt-prompt-pending);
   border-bottom-color: var(--border);
 }
-.wt-unit.is-done {
-  color: var(--wt-prompt-done);
-  border-bottom-color: var(--wt-prompt-done);
-}
-/* 조합 중(파랑 dashed) — accent 토큰 경유. */
+/* [D69] 정타·조합중(partial) 글리프 = 일치색 단일톤(match). partial→match 잉크 통합. */
+.wt-unit.is-done,
 .wt-unit.is-partial {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-  border-bottom-style: dashed;
+  color: var(--wt-prompt-match);
+  border-bottom-color: var(--wt-prompt-match);
 }
-/* 오타: 적색 밑줄 + 글리프 물결 밑줄(색각 이중 부호화 — 색만으로 구분하지 않는다, GDD §11.2). */
+/* 오타: 적색 + 글리프 물결 밑줄(색각 이중 부호화 — 색만으로 구분하지 않는다, GDD §11.2). */
 .wt-unit.is-error {
   color: var(--wt-prompt-error);
   border-bottom-color: var(--wt-prompt-error);
   text-decoration: underline wavy var(--wt-prompt-error);
   text-underline-offset: 0.12em;
+}
+/* [D69] 자모 채움 행(ko 콘텐츠 슬롯 전용) — 캐노니컬 음절 자모 수만큼의 밑줄 슬롯. 치수 고정
+   (height/width/gap 상태 불변) → 상태 변경은 data-fill 색 토글뿐(리플로우 0, §3.6). */
+.wt-slot__jamo {
+  display: inline-flex;
+  gap: 0.08em;
+  height: 0.3em;
+  width: 1.14em;
+  justify-content: center;
+}
+.wt-jamo {
+  flex: 1 1 0;
+  max-width: 0.3em;
+  border-bottom: max(2px, 0.07em) solid var(--wt-prompt-slot); /* empty(미채움) */
+}
+.wt-jamo[data-fill='match'] {
+  border-bottom-color: var(--wt-prompt-match);
+}
+.wt-jamo[data-fill='error'] {
+  border-bottom-color: var(--wt-prompt-error);
 }
 /* 슬롯 초과 입력(error색). 4.5em로 한정 — 넘치면 잘라낸다(레이아웃 안정). */
 .wt-prompt__tail {

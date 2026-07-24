@@ -70,7 +70,12 @@ export function useTypingEngine(engine: GameSessionEngine): UseTypingEngineResul
     controllerRef.current?.focus();
   }, []);
 
-  const getInputValue = useCallback(() => inputElRef.current?.value ?? '', []);
+  // D70: 컨트롤러의 getValue()가 Gboard 가상 접두(basePrefix)를 제외한 실입력을 돌려준다 —
+  // 프롬프트 에코가 재삽입된 옛 값을 표시하지 않게 한다. 컨트롤러 부착 전(초기 렌더)엔 DOM value 폴백.
+  const getInputValue = useCallback(
+    () => controllerRef.current?.getValue() ?? inputElRef.current?.value ?? '',
+    [],
+  );
 
   const requestSkip = useCallback(() => {
     inputElRef.current?.dispatchEvent(

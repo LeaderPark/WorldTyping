@@ -49,6 +49,9 @@ const KOREA = makeCountry({
   acceptedInputsKo: ['대한민국', '한국'],
 });
 const CHAD = makeCountry({ id: 'TD', nameEn: 'Chad', acceptedInputsEn: ['chad'] });
+// D70 Gboard 접두 스트립 테스트용: 옛 값 '가나'가 접두로 재삽입된 뒤 확장분('다')이 이 타깃의
+// 접두(다도=ㄷㅏㄷㅗ)로 평가되는지 확인하기 위한 합성 국가('다'는 ㄷㅏ, '다도' 접두).
+const DADO = makeCountry({ id: 'DD', nameKo: '다도', acceptedInputsKo: ['다도'] });
 
 type EvtOf<T extends TypingEvent['type']> = Extract<TypingEvent, { type: T }>;
 
@@ -64,6 +67,25 @@ function addedSeq(events: TypingEvent[]): number[] {
     if (e.type === 'progress' || e.type === 'miss' || e.type === 'exact') out.push(e.delta.added);
   }
   return out;
+}
+
+/**
+ * "내용 이벤트"(progress/miss/exact) 개수. D70 재삽입/기저붕괴 삼킴 검증에서 flushIme의 자기유발
+ * focus가 내는 refocused 노이즈를 세지 않고 "실제로 계상되는 입력이 있었는가"만 본다.
+ */
+function contentCount(events: TypingEvent[]): number {
+  return events.filter((e) => e.type === 'progress' || e.type === 'miss' || e.type === 'exact')
+    .length;
+}
+
+/** GHANA(가나)를 조합 중 EXACT로 확정해 flushIme의 staleEcho(='ㄱㅏㄴㅏ')를 세팅한다(공통 준비). */
+function reachGhanaExact(h: Harness): void {
+  h.ctrl.setCountry(GHANA);
+  h.compositionStart();
+  h.type('ㄱ', true);
+  h.type('가', true);
+  h.type('간', true);
+  h.type('가나', true); // EXACT → 조합 중 flushIme(staleEcho 세팅)
 }
 
 let nowMs = 0;
@@ -402,19 +424,159 @@ describe('TypingInputController', () => {
     expect(seen).toHaveLength(1);
   });
 
-  // §2.5 안전망: 새 국가 제시 시 잔여 버퍼가 있으면 즉시 재평가
-  it('setCountry with residual buffer re-evaluates immediately', () => {
+  // docs/00 §11-D70: setCountry는 잔여 버퍼를 새 타깃으로 재평가하지 않고 권위적으로 비운다
+  // (구 §2.5 "잔여 즉시 재평가" 안전망 폐기 — 그 재평가가 실버그의 근원이었다).
+  it('setCountry clears a residual buffer instead of re-evaluating it (D70 authoritative clear)', () => {
     const h = harness('ko');
-    h.input.value = '한';
+    h.input.value = '한'; // 이전 국가에서 넘어온 잔여
     h.ctrl.setCountry(KOREA);
-    const prog = eventsOf(h.events, 'progress');
-    expect(prog.length).toBeGreaterThanOrEqual(1);
-    expect(prog[0]?.detail.state).toBe('PREFIX');
+    expect(h.input.value).toBe(''); // 새 타깃으로 평가하지 않고 비운다
+    expect(eventsOf(h.events, 'progress')).toHaveLength(0);
+    expect(eventsOf(h.events, 'miss')).toHaveLength(0);
   });
 
   it('ignores input events before setCountry (empty-targets guard)', () => {
     const h = harness('ko');
     h.type('가');
     expect(h.events).toHaveLength(0);
+  });
+
+  // ── docs/00 §11-D70: flush 후 재삽입/스킵-잔여/Gboard 접두 처리 ─────────────────────────
+  describe('D70 buffer ownership (reinsert / skip-residual / Gboard prefix)', () => {
+    // ① 재삽입 삼킴 + 재플러시: EXACT 플러시 후 IME focus-복귀가 옛 자모열('가나')을 48ms 내 다시
+    //   삽입하면 무이벤트로 삼키고 재플러시한다(유령 miss 없음, 버퍼 비워짐).
+    it('reinserted stale tail within 48ms is swallowed and re-flushed (no content event, buffer cleared)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachGhanaExact(h); // staleEcho='ㄱㅏㄴㅏ', flushAt=0
+      const before = contentCount(h.events);
+      h.setNow(20); // 재삽입 윈도우(≤48ms) 안
+      h.ctrl.setCountry(KOREA); // 권위적 클리어(value=''라 no-op), staleEcho 이월, reinsertFlushes=0
+      h.type('가나', true); // IME focus-복귀 재삽입: ≥2자모 + stale 꼬리일치 → 삼킴
+      expect(contentCount(h.events)).toBe(before); // progress/miss/exact 무증가
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+      expect(h.input.value).toBe(''); // 재플러시로 비워짐
+    });
+
+    // ② 0ms 단일 자모 비삼킴(§2.10 #4 보존): 확정 직후 0ms에 친 다음 국가 첫 타(자모 1개)는
+    //   staleEcho가 세팅돼 있어도 절대 삼켜지지 않는다.
+    it('a single jamo at 0ms after flush is NEVER swallowed (§2.10 #4)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachGhanaExact(h); // staleEcho='ㄱㅏㄴㅏ', flushAt=0
+      const before = contentCount(h.events);
+      h.ctrl.setCountry(KOREA); // 대한민국
+      h.compositionStart();
+      h.type('ㅎ', true); // 0ms, 자모 1개 → genuine
+      expect(contentCount(h.events)).toBe(before + 1);
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX'); // ㅎ은 대한민국/한국 접두
+    });
+
+    // ③ 48ms 초과 비삼킴: 옛 꼬리와 동일한 ≥2자모라도 윈도우를 벗어나면 genuine으로 평가한다.
+    it('stale tail after the 48ms window is NOT swallowed (treated as genuine → MISS)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachGhanaExact(h); // flushAt=0
+      const before = contentCount(h.events);
+      h.setNow(49); // 윈도우 밖
+      h.ctrl.setCountry(KOREA);
+      h.type('가나', true); // '가나'는 대한민국/한국 접두 아님 → genuine MISS
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // ④ Gboard 접두 스트립 + getValue: 옛 전체값('가나')이 접두로 재삽입되고 사용자가 확장('다')을
+    //   더하면, 접두를 가상 스트립해 확장분만 평가하고 getValue도 접두를 제외한다.
+    it('Gboard stale-prefix strip: evaluates only the extension and getValue excludes the virtual prefix', () => {
+      const h = harness('ko');
+      h.setNow(100);
+      reachGhanaExact(h); // staleRaw='가나', flushAt=100
+      h.setNow(300); // 윈도우 밖(Gboard 분기는 시간 제약 없음)
+      h.ctrl.setCountry(DADO); // 다도(ㄷㅏㄷㅗ)
+      h.type('가나다', true); // '가나'(옛 값) 접두 + '다' 확장
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX'); // 확장분 '다'가 '다도' 접두로 평가됨
+      expect(h.ctrl.getValue()).toBe('다'); // 가상 접두 '가나' 제외
+      // 확장을 이어가면 basePrefix 분기가 연장분만 넘긴다.
+      h.type('가나다도', true); // EXACT('다도')
+      const exacts = eventsOf(h.events, 'exact'); // [GHANA '가나', DADO '다도']
+      expect(exacts).toHaveLength(2);
+      expect(exacts.at(-1)?.detail.bestTarget.display).toBe('다도');
+      expect(h.ctrl.getValue()).toBe(''); // EXACT flush로 basePrefix·버퍼 리셋
+    });
+
+    // ⑤ 기저 붕괴 조용 flush: basePrefix가 세워진 뒤 value가 더 이상 접두로 시작하지 않으면
+    //   (IME가 접두를 삼킴) 조용히 재플러시하고 리셋한다(내용 이벤트 없음).
+    it('base-prefix collapse silently flushes and resets (no content event)', () => {
+      const h = harness('ko');
+      h.setNow(100);
+      reachGhanaExact(h);
+      h.setNow(300);
+      h.ctrl.setCountry(DADO);
+      h.type('가나다', true); // Gboard strip → basePrefix='가나', progress '다'
+      const before = contentCount(h.events);
+      h.type('다', true); // value가 더 이상 '가나'로 시작하지 않음 → 기저 붕괴
+      expect(contentCount(h.events)).toBe(before); // 조용한 리셋
+      expect(h.input.value).toBe(''); // 재플러시
+      expect(h.ctrl.getValue()).toBe('');
+    });
+
+    // ⑥ setCountry 스킵 클리어: 조합 중 ESC 스킵(컨트롤러는 버퍼를 비우지 않음) 후 다음 국가
+    //   제시가 잔여를 권위적으로 비운다 → 유령 miss 없음(D70 진단 (1) 스킵 경로).
+    it('setCountry clears residual left by a skip (ESC) — new country starts empty, no ghost miss', () => {
+      const h = harness('ko');
+      h.ctrl.setCountry(GHANA);
+      h.compositionStart();
+      h.type('ㅂ', true); // 가나와 어긋나는 조합 중 잔여
+      h.keydown('Escape'); // 스킵 요청만(컨트롤러는 flush하지 않는다)
+      expect(h.input.value).toBe('ㅂ'); // 잔여 남아 있음
+      const before = contentCount(h.events);
+      h.ctrl.setCountry(KOREA); // 다음 국가 제시 → 권위적 클리어
+      expect(h.input.value).toBe(''); // 새 국가 = 빈 버퍼
+      expect(contentCount(h.events)).toBe(before); // 잔여 재평가로 인한 유령 이벤트 없음
+    });
+
+    // ⑦ MAX_REINSERT_FLUSHES fail-open: 재삽입을 3회 삼킨 뒤에는 더 이상 삼키지 않고 genuine
+    //   처리한다(무한 삼킴/입력 잠금 방지).
+    it('after MAX_REINSERT_FLUSHES swallows, further stale reinsertions fail open (processed)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachGhanaExact(h); // staleEcho='ㄱㅏㄴㅏ', flushAt=0
+      h.ctrl.setCountry(KOREA); // reinsertFlushes=0
+      for (let i = 0; i < 3; i++) {
+        // 3 = MAX_REINSERT_FLUSHES(internal)
+        h.setNow(10); // 매 재플러시가 flushAt=10으로 갱신 → 항상 윈도우 안
+        h.type('가나', true); // 3회 연속 삼킴
+      }
+      const before = contentCount(h.events);
+      h.setNow(10);
+      h.type('가나', true); // 4번째 → reinsertFlushes 상한 도달 → genuine MISS
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // ⑧ 자기유발 compositionend no-op: 조합 중 EXACT 플러시가 유발한 compositionend는 epoch++가
+    //   blur 뒤로 재배열됐으므로 옛 epoch를 캡처 → microtask에서 폐기된다(구세대화). exact가
+    //   유일한 마지막 이벤트여야 한다(재배열 이전에는 여기서 유령 progress가 새어 나왔다).
+    it('self-induced compositionend (from flush blur) is discarded — epoch captured before increment', async () => {
+      const h = harness('ko');
+      h.ctrl.setCountry(GHANA);
+      // 브라우저 실제 동작 모사: blur()가 동기 compositionend를 유발한다.
+      const realBlur = h.input.blur.bind(h.input);
+      vi.spyOn(h.input, 'blur').mockImplementation(() => {
+        realBlur();
+        h.input.dispatchEvent(new CompositionEvent('compositionend'));
+      });
+      h.compositionStart();
+      h.type('ㄱ', true);
+      h.type('가', true);
+      h.type('간', true);
+      h.type('가나', true); // EXACT → flushIme: blur→compositionend(옛 epoch), 이후 epoch++
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(eventsOf(h.events, 'exact')).toHaveLength(1);
+      expect(h.events.at(-1)?.type).toBe('exact'); // 유령 재평가 없음
+    });
   });
 });

@@ -74,6 +74,13 @@ function cursorSlotIndex(): number {
   const slots = Array.from(el.querySelectorAll('.wt-slot'));
   return slots.findIndex((s) => s.classList.contains('is-cursor'));
 }
+/** slotIdx번째 .wt-slot의 자모 슬롯 data-fill 배열(D69). */
+function jamoFillsOfSlot(slotIdx: number): string[] {
+  const slot = Array.from(el.querySelectorAll('.wt-slot'))[slotIdx]!;
+  return Array.from(slot.querySelectorAll<HTMLElement>('.wt-jamo')).map(
+    (j) => j.dataset.fill ?? '',
+  );
+}
 
 describe('PromptRenderer.mount — 슬롯(힌트+에코 글리프) 생성', () => {
   it('한글: 캐노니컬 음절마다 슬롯 1개(힌트=목표 음절, 에코 글리프=빈)', () => {
@@ -266,6 +273,67 @@ describe('juice — 팝/셰이크 (transform/opacity, 끌 수 있음)', () => {
     r.shake();
     expect(el.classList.contains('wt-prompt--pop')).toBe(false);
     expect(el.classList.contains('wt-prompt--shake')).toBe(false);
+  });
+});
+
+describe('자모 채움 행 — 밑줄 슬롯 match/error/empty (docs/00 §11-D69)', () => {
+  it('"간"(가나): 가=[match,match], 나=[match,empty] (받침 ㄴ이 다음 음절로 이월)', () => {
+    r.mount(el, GHANA, 'ko');
+    r.update(detailFor('간', GHANA, 'ko'), '간');
+    expect(r.getJamoFills()).toEqual([
+      { m: 2, x: 0 }, // 가 = ㄱㅏ
+      { m: 1, x: 0 }, // 나 = ㄴ(match) ㅏ(empty)
+    ]);
+    expect(jamoFillsOfSlot(0)).toEqual(['match', 'match']);
+    expect(jamoFillsOfSlot(1)).toEqual(['match', 'empty']);
+  });
+
+  it('"가바"(가나): 오타 음절 "바"의 두 자모가 error로 채워진다', () => {
+    r.mount(el, GHANA, 'ko');
+    r.update(detailFor('가바', GHANA, 'ko'), '가바');
+    expect(r.getJamoFills()).toEqual([
+      { m: 2, x: 0 }, // 가 정타
+      { m: 0, x: 2 }, // 바(ㅂㅏ) 오타
+    ]);
+    expect(jamoFillsOfSlot(1)).toEqual(['error', 'error']);
+  });
+
+  it('클램프: "대한"(대한민국) → 대[m×2]·한[m×3]·민·국 empty (슬롯 경계로 matched 분배)', () => {
+    r.mount(el, KOREA, 'ko');
+    r.update(detailFor('대한', KOREA, 'ko'), '대한');
+    expect(r.getJamoFills()).toEqual([
+      { m: 2, x: 0 }, // 대 ㄷㅐ
+      { m: 3, x: 0 }, // 한 ㅎㅏㄴ
+      { m: 0, x: 0 }, // 민
+      { m: 0, x: 0 }, // 국
+    ]);
+  });
+
+  it('EXACT("몽골"): 전 자모가 match로 채워진다', () => {
+    r.mount(el, MONGOLIA, 'ko');
+    const exact = detailFor('몽골', MONGOLIA, 'ko');
+    expect(exact.state).toBe('EXACT');
+    r.update(exact, '');
+    expect(r.getJamoFills()).toEqual([
+      { m: 3, x: 0 }, // 몽 ㅁㅗㅇ
+      { m: 3, x: 0 }, // 골 ㄱㅗㄹ
+    ]);
+    expect(jamoFillsOfSlot(0)).toEqual(['match', 'match', 'match']);
+  });
+
+  it('.wt-jamo에는 textContent가 없다(에코 글리프·힌트만 텍스트 — prompt-mount textContent 계약 보존)', () => {
+    r.mount(el, GHANA, 'ko');
+    r.update(detailFor('간', GHANA, 'ko'), '간');
+    const jamos = Array.from(el.querySelectorAll('.wt-jamo'));
+    expect(jamos.length).toBeGreaterThan(0);
+    expect(jamos.every((j) => j.textContent === '')).toBe(true);
+  });
+
+  it('영어 모드: 자모 행 미생성(.wt-slot__jamo 없음) + getJamoFills 전부 null', () => {
+    r.mount(el, GHANA, 'en');
+    expect(el.querySelector('.wt-slot__jamo')).toBeNull();
+    expect(el.querySelectorAll('.wt-jamo')).toHaveLength(0);
+    expect(r.getJamoFills().every((f) => f === null)).toBe(true);
   });
 });
 

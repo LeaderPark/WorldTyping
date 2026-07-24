@@ -151,6 +151,11 @@ EXACT 감지 (input 이벤트 핸들러 내부, 동기)
 - blur→focus는 동기 실행이므로 사용자 체감 포커스 상실 없음. iOS Safari에서 blur 시 소프트 키보드가 접히는 문제는 **없다** — 같은 tick 안에서 재포커스하면 키보드가 유지된다(단, iOS는 프로그램적 focus에 제약이 있으므로 반드시 동기 호출; `setTimeout` 금지). 실기기 QA 필수 항목(§11.3).
 - Android Gboard에서 blur로도 조합이 안 끊기는 극소수 케이스 대비: focus 직후 첫 `input` 이벤트의 value가 비어있지 않고 epoch 캡처가 현재와 일치하면 **그 값을 새 국가의 첫 입력으로 그대로 평가**한다(먹힘 방지의 이중 안전망 — 어차피 value-snapshot 방식이라 자연 처리됨).
 
+> **개정(docs/00 §11-D70, WT-DC-09)** — 위 안전망을 flush 후 단일 관문(`resolveRaw`)으로 대체·강화한다. 실전에서 (a) 조합 중 EXACT 플러시의 `blur→focus` 복귀 시 IME가 방금 확정한 자모열을 재삽입하고, (b) 스킵(ESC/타임아웃)이 버퍼를 비우지 않아 잔여가 다음 국가로 새는 두 실버그가 확인됐다. 확정 결정:
+> 1. **`epoch++`를 `blur` 뒤로 재배열** — `blur()`가 동기로 유발하는 자기유발 `compositionend`가 *옛* epoch를 캡처하도록 해, 그 microtask 재평가가 확정 이후 상태를 오염시키지 못하게 한다(위 "1. epoch++"는 이 위치로 이동한 것으로 읽는다; flush의 순 epoch 증가 +1·재진입 가드 의미는 불변).
+> 2. **`setCountry`가 권위적 클리어를 소유** — 진입 시 잔여/열린 조합이 있으면 무조건 flush("새 국가 = 빈 버퍼"). 위 "그 값을 새 국가 첫 입력으로 평가"하던 재평가는 **폐기**한다.
+> 3. **flush 후 첫 입력은 `resolveRaw`가 판별**: 48ms 내 ≥2자모 옛-꼬리 재삽입 = 무이벤트로 삼키고 재플러시(국가당 3회 후 fail-open), 옛 전체값 접두 + 연장 = 접두 가상 스트립 후 연장분만 평가(Gboard 승계), 그 외 = genuine. **단일 자모는 절대 삼키지 않는다**(§2.10 #4 — 확정 직후 0ms 첫 타 보존). `getValue()`가 가상 접두를 제외한 실입력을 노출한다(표시 계층용, additive).
+
 ### 2.6 MISS 처리와 매처 확장
 
 02 §3.1의 `matchInput`은 3-상태만 반환한다. 프론트는 UI 채색과 계상을 위해 확장판을 사용한다(**같은 파일에 추가, 서버와 공유**):
@@ -308,6 +313,12 @@ export class TypingInputController {
 
 **epoch 가드의 정확한 의미론**: 모든 비동기 연속(microtask/이벤트)은 진입 시점에 `cap = this.epoch`를 캡처하고, 실행 시점에 `cap === this.epoch`가 아니면 no-op. `flushIme()`만이 epoch를 증가시킨다. 따라서 "EXACT 확정 이전에 발생한 어떤 IME 이벤트도 확정 이후 상태를 오염시킬 수 없다"가 불변식이다.
 
+> **개정(docs/00 §11-D70, WT-DC-09)** — 위 의사코드는 다음과 같이 확정 구현됐다(실제 원천 `packages/engine/src/input-controller.ts`):
+> - `setCountry`는 잔여 재평가(`if (value.length>0) this.evaluate()`)를 **삭제**하고, 대신 잔여/열린 조합이 있으면 `flushIme()`로 권위적으로 비운다(진입 시 `reinsertFlushes=0` 리셋). "새 국가 = 빈 버퍼" 불변식.
+> - `flushIme`는 `blur()` **뒤에** `epoch++`한다(자기유발 `compositionend` 구세대화). 조합 branch에서 flush 직전 버퍼의 자모열을 `staleEcho`로 기록(48ms 재삽입 윈도우 기준).
+> - `evaluate`는 진입 즉시 `resolveRaw(ev)` 단일 관문을 통과한다 — `null`이면 삼킴(무이벤트·무계상), 아니면 그 반환 문자열로 판정·계상한다(재삽입/기저붕괴 차단, Gboard 접두 스트립). `flushing` 가드로 blur/focus의 동기 재진입을 막는다.
+> - `getValue()`는 Gboard 가상 접두(`basePrefix`)를 제외한 실입력을 돌려주는 additive 메서드다(표시 계층 소비). `TypingEvent`/`EngineEvent` 형태는 불변.
+
 **hidden input 스펙** (데스크톱·모바일 공통, §7.2와 공유):
 
 ```html
@@ -335,6 +346,11 @@ React 리렌더 없이 컨트롤러 이벤트로 직접 DOM을 갱신하는 명�
 - **커서**: 첫 빈 비구분자 슬롯(= typed 유닛 수 위치)에 `.is-cursor`로 깜빡이는 세로 바(`::after`, absolute — 레이아웃 불변). 오버플로 중엔 `tail`에. `reduced-motion`이면 깜빡임 정지(항상 표시).
 - **EXACT**: 확정 순간 `rawValue`는 플러시로 비므로(§2.5) 전 슬롯을 **캐노니컬 글리프 done**으로 되메우고 커서·tail을 정리한다(국가명 전체가 done으로 점등 → pop).
 - 성능: 슬롯별 `{char,state}` 캐시를 diff해 **변경된 슬롯만** DOM을 만진다(`update` 1회당 접촉 ≤ 변경 슬롯 + 커서 이동). 밑줄 두께는 상태 불변(색/스타일만 변함)·글리프 박스 치수 고정·커서 absolute → **레이아웃 write 0**. 스케일 팝(GDD §13.3-1)은 `.wt-prompt--pop` class + CSS `animation`, 셰이크는 컨테이너 1회 class 토글 — transform/opacity만.
+
+> **개정(docs/00 §11-D69, WT-DC-09)** — 색과 ko 슬롯 구조를 확정 개정한다(원천 `apps/web/src/features/typing/prompt-renderer.ts` + `styles/globals.css`):
+> - **색**: 일치(정타)는 `--wt-prompt-match: var(--text)`(테마 자동 반전 — 구 done 적색 `#d6402d`/다크 `#ff7a5e` 폐기), `partial`(조합 중 꼬리)은 match로 **통합**(별도 accent 색 폐기), 불일치는 `--wt-prompt-error: #ef4444`(+글리프 물결 밑줄 이중부호화). 미입력 자모 밑줄은 `--wt-prompt-slot: var(--border)`. 원색은 토큰 정의부에만(D50).
+> - **ko 자모 채움 행**: ko 콘텐츠 슬롯은 힌트/에코 글리프 아래에 캐노니컬 음절 자모 길이(`cap = toJamoSeq(음절).length`)만큼의 밑줄 슬롯 행 `span.wt-slot__jamo > span.wt-jamo × cap`을 mount 1회 생성한다(**en·구분자는 미생성**; ko `.wt-unit` 개별 dashed 밑줄은 제거 — 자모 행이 대체, en 밑줄 유지). `update`는 `detail.matchedLen/inputLen`을 캐노니컬 슬롯 경계 `[s,e)`에 사상해 각 자모 슬롯을 채운다: `m = clamp(matched−s, 0, cap)` match, 다음 `x = clamp(min(e,inputLen)−max(s,matched), 0, cap−m)` error, 나머지 empty(EXACT는 전량 match). 채색은 `data-fill="empty|match|error"` 속성으로만(치수 불변 → 리플로우 0).
+> - **E2E 계약 격리**: `.wt-jamo`는 `textContent`가 없고(→ `prompt-mount` 전체 textContent=국가명 계약 보존) `data-fill` 별도 네임스페이스라 `.wt-unit`/`data-state`/`is-error` 셀렉터 계약과 충돌하지 않는다. 판정·점수·프로토콜·엔진 이벤트 계약 불변.
 
 ### 2.9 영문 입력 경로
 

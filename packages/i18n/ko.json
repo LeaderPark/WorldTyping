@@ -274,8 +274,6 @@
   "home.daily.desc": "오늘 {count}개국",
   "home.single.desc": "대륙/티어/일주",
   "home.multi.desc": "실시간 대결",
-  "home.ticker.today": "오늘의 1위: {nickname} · PI {pi} · {route} {time}",
-  "home.ticker.top1": "세계일주 전체 1위: {nickname} · 점수 {score}",
 
   "home.menu.navLabel": "메인 메뉴",
   "home.menu.singleKicker": "SINGLE PLAYER",

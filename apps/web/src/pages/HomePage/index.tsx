@@ -11,10 +11,9 @@
 // 다이얼로그 표면만 .wt-card로 라이트 재도장한다 — 문구는 손대지 않았다(index.html의 정적
 // 크리티컬 셸이 이 문구를 그대로 복제하고 있어, 카피를 바꾸면 그 파일도 동기해야 한다).
 //
-// [WT-M3-06 / D75] 티커(전체 1위)를 서버에서 채운다(헤더 데일리 뱃지는 D75로 제거 — 데일리
-// 실데이터 조회 alreadyPlayed·dailyNo도 함께 폐지). 조회 실패(오프라인 등)는 화면을 깨뜨리지
-// 않고 조용히 미표시로 폴백한다 — 이 페이지는 "3클릭·15초" 여정의 첫 화면이라 네트워크 대기로
-// 렌더를 막지 않는다(§11.1).
+// [WT-M3-06 / D75 → §11-D87] 홈 중앙 서버 리더보드 "전체 1위" 티커(home-ticker-top1)는 D87에서
+// 제거됐다 — 홈 중앙에는 메뉴 nav 5개만 남는다. 티커 렌더·top1 상태·리더보드 조회 useEffect·
+// 미사용 i18n(home.ticker.*)이 함께 폐지됐다(판정/점수/서버 API·/rank 리더보드 페이지는 불변).
 //
 // [WT-AUTH-07, docs/00 §11-D67-⑦·D68-⑦] 홈 배경을 HeroMap(축소된 실루엣 지도)+
 // RouteMotifBackdrop(정적 장식 아크)에서 HomeGlobe(GlobeMap 자동 데모 — idle spin + 8±3s 랜덤
@@ -29,7 +28,6 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
-import { fetchLbPage, type LbEntry } from '../../net/api-client';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { Mascot } from '../../components/Mascot';
 import { BrandMark } from '../../components/BrandMark';
@@ -72,10 +70,6 @@ export function HomePage() {
     setVolume({ master: isSoundMuted ? lastMasterRef.current || DEFAULT_MASTER_VOLUME : 0 });
   };
 
-  // 티커(전체 1위) — 조회 실패는 조용히 무시하고 미표시로 남는다(파일 상단 주석 — 첫 화면
-  // 렌더를 네트워크로 막지 않는다).
-  const [top1, setTop1] = useState<LbEntry | null>(null);
-
   // §8.3 "홈 렌더 완료 후 … 수동 prefetch로 game 청크 예열(첫 판 진입 지연 0 목표)". router.tsx의
   // lazy(() => import('../pages/GamePage'))와 동일한 모듈 지정자를 써야 Vite가 같은 청크로
   // 식별해 중복 다운로드 없이 브라우저 캐시를 예열한다. requestIdleCallback 미지원 브라우저는
@@ -93,19 +87,6 @@ export function HomePage() {
         cancelIdleCallback(handle);
       }
     };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchLbPage('worldtour|ko|desktop|all')
-      .then((res) => {
-        if (!cancelled) setTop1(res.entries[0] ?? null);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-    // 마운트 시 1회만 실행.
   }, []);
 
   return (
@@ -216,13 +197,6 @@ export function HomePage() {
             <span className="wt-menu-row__chevron" aria-hidden="true">›</span>
           </Link>
         </nav>
-
-        {/* 서버 리더보드 전체 1위(WT-M3-06) — 조회 실패/빈 보드는 조용히 미표시. */}
-        {top1 && (
-          <p className="wt-home__ticker" data-testid="home-ticker-top1">
-            {t('home.ticker.top1', { nickname: top1.nickname, score: top1.score })}
-          </p>
-        )}
       </div>
 
       <LanguageGateOverlay />

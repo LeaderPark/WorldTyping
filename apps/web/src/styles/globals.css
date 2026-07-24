@@ -1849,12 +1849,6 @@
   animation: none;
 }
 
-.wt-home__ticker {
-  font-size: 0.85rem;
-  opacity: 0.75;
-  text-align: center;
-}
-
 /* ── WT-DC-02: 헤더 3버튼 규격(디자인 정본 L52~56) ──────────────────────────
    .wt-pill/.wt-icon-tile 전역 정의(§2.3, L2237~/L2301~)는 그대로 두고, 결합 셀렉터로
    S1 헤더 전용 축소 규격만 덮어쓴다(소스 순서 무관 — 파일 기존 관례와 동일 기법). */

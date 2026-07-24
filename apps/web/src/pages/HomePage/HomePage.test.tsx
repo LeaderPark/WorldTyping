@@ -6,7 +6,7 @@
 // bootLoader를 일부러 목킹하지 않는다 — HomeGlobe(useGlobeIndex)가 부팅 데이터 없이도 안전하게
 // placeholder로 폴백하는지(app/router.test.tsx의 "로더 없이 홈을 렌더" 전제와 동일 계약, 이전
 // HeroMap/useWorldGeoIndex와 동일한 방어 패턴)를 이 파일 자체가 실증한다.
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
@@ -16,18 +16,17 @@ import { HomePage } from './index';
 
 const fetchDailyTodayMock = vi.fn();
 const fetchDailyMeMock = vi.fn();
-const fetchLbPageMock = vi.fn();
 const ensureSessionMock = vi.fn();
-// [WT-AUTH-03] importActual로 실제 모듈을 보존한 뒤 4개 조회 함수만 목킹한다 — HomePage가 이제
+// [WT-AUTH-03] importActual로 실제 모듈을 보존한 뒤 조회 함수만 목킹한다 — HomePage가 이제
 // AuthChip→stores/auth를 거쳐 api-client의 계정 토큰/LOGIN_REQUIRED 시그널 함수를 로드하므로,
 // 전체 대체 목이면 auth 스토어 모듈 로드가 onLoginRequired undefined로 크래시한다.
+// [§11-D87] 홈 전체1위 티커 제거로 fetchLbPage 조회가 없어져 해당 목도 함께 폐지.
 vi.mock('../../net/api-client', async () => {
   const actual = await vi.importActual<typeof import('../../net/api-client')>('../../net/api-client');
   return {
     ...actual,
     fetchDailyToday: (...args: unknown[]) => fetchDailyTodayMock(...args),
     fetchDailyMe: (...args: unknown[]) => fetchDailyMeMock(...args),
-    fetchLbPage: (...args: unknown[]) => fetchLbPageMock(...args),
     ensureSession: (...args: unknown[]) => ensureSessionMock(...args),
   };
 });
@@ -49,7 +48,6 @@ describe('HomePage (S1)', () => {
     useSettingsStore.getState().setLang('ko');
     fetchDailyTodayMock.mockResolvedValue({ dailyNo: 42, dateKst: '2026-07-21', seed: 's', countryIds: [] });
     fetchDailyMeMock.mockResolvedValue({ dateKst: '2026-07-21', alreadyPlayed: false, streakDaily: 0 });
-    fetchLbPageMock.mockResolvedValue({ entries: [], nextCursor: null, total: 0 });
     ensureSessionMock.mockResolvedValue({ token: 't', playerId: 'p1', nickname: 'GUEST_0001', expiresAt: '' });
   });
   afterEach(() => {
@@ -90,23 +88,5 @@ describe('HomePage (S1)', () => {
     const toggle = screen.getByTestId('home-lang-toggle');
     toggle.click();
     expect(useSettingsStore.getState().lang).toBe('en');
-  });
-
-  it('서버 전체 1위가 있으면 home-ticker-top1을 렌더한다', async () => {
-    fetchLbPageMock.mockResolvedValue({
-      entries: [{ rank: 1, userId: 'p1', nickname: 'NIMBUS', passportCover: 'basic-green', score: 61430, elapsedMs: 1000, accMilli: 989, achievedAt: 1 }],
-      nextCursor: null,
-      total: 1,
-    });
-    renderHome();
-
-    await waitFor(() => expect(screen.getByTestId('home-ticker-top1')).toBeInTheDocument());
-    expect(screen.getByTestId('home-ticker-top1').textContent).toContain('NIMBUS');
-    expect(screen.getByTestId('home-ticker-top1').textContent).toContain('61430');
-  });
-
-  it('보드가 비어있으면 home-ticker-top1을 렌더하지 않는다', () => {
-    renderHome();
-    expect(screen.queryByTestId('home-ticker-top1')).not.toBeInTheDocument();
   });
 });

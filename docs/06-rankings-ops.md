@@ -45,6 +45,8 @@ ORDER BY score DESC, elapsed_ms ASC, acc_milli DESC, achieved_at ASC
 
 **보드 등재 단위는 "유저당 베스트 1개"다.** 같은 유저의 하위 기록은 보드에 남지 않는다(runs 원장에는 전부 남는다). daily 보드만 예외 — "첫 정식 기록 1개"이며 갱신 불가(§2.3).
 
+**불변식: lb_best 등재 = acct 세션(Google 계정 로그인) 전용이다(00 §11-D68).** 비로그인(게스트) 제출은 200 + `verdict='practice'`/`reason='guest'`로 강등되어 runs 원장에는 남되 보드에는 등재되지 않는다.
+
 ### 1.3 D1 스키마 (권위 저장소)
 
 D1 데이터베이스 `wt-main` (05 문서의 단일 DB 정책 준수). 마이그레이션 파일 `migrations/0002_leaderboard.sql`:
@@ -251,6 +253,7 @@ sequenceDiagram
 - `token = base64url(payload) + "." + base64url(HMAC-SHA256(payload, RUN_TOKEN_SECRET))`, payload = `{ sid, uid, modeKey, lang, platform, seed, iat }`. Worker secret `RUN_TOKEN_SECRET`.
 - 제출 시 검증: 서명 유효, `sid` 미사용(D1 `runs.session_id` UNIQUE 아님 — 대신 KV `sess:{sid}`에 사용 플래그, TTL 2h. **재사용 = 즉시 reject**), 페이로드의 modeKey/lang/platform이 제출과 일치, `iat` 기준 경과 시간이 물리적으로 타당(§3.3-b).
 - start 없이 제출된 기록, 토큰 위조 → HTTP 200 + `verdict:'rejected'` (공격자에게 실패 신호를 명확히 주지 않기 위해 4xx를 쓰지 않는다. 클라 UI는 "기록이 검토 중입니다"로 표시).
+- **계정 게이팅(00 §11-D68)**: 랭킹 등재는 acct 세션 전용 — 비로그인(게스트) 세션의 제출은 정상 처리하되 200 + `verdict='practice'`/`reason='guest'`로 강등(D39 규약 유지, 보드 미등재). 게스트로 플레이한 뒤 결과 화면에서 로그인해 제출하는 경우(계정 제출인데 `runToken.pid ≠ session.pid`)는 `RunSubmitReq`의 `guestToken`(pid === runToken.pid) 검증으로 두 신원 동시 보유를 증명한 때에만 계정 원장에 등재한다(04 §6.2-①).
 
 ### 3.2 서버 재계산 (authoritative rescoring)
 
@@ -436,7 +439,7 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 
 ### 6.1 설계 원칙: "수집하지 않는 것이 최선의 컴플라이언스"
 
-- 계정·이메일·전화·실명·생년월일 **일절 수집 안 함**. 원 IP는 저장하지 않고 `CF-IPCountry`(국가 코드)만 저장. 쿠키는 사용하지 않으며(신원은 localStorage 토큰) GA4는 **동의 배너 수락 시에만 로드**(EEA/UK/KR 공통 적용 — 지역 분기 없이 단일 정책으로 단순화).
+- 계정·이메일은 **비로그인 이용 시 미수집**. Google 로그인 선택 시 `sub`(계정 식별자)·이메일(`email_verified`인 경우만)·프로필 이름을 수집한다(00 §11-D68). 전화·실명·생년월일은 일절 수집 안 함. 원 IP는 저장하지 않고 `CF-IPCountry`(국가 코드)만 저장. 쿠키는 사용하지 않으며(신원은 localStorage 토큰) GA4는 **동의 배너 수락 시에만 로드**(EEA/UK/KR 공통 적용 — 지역 분기 없이 단일 정책으로 단순화).
 - 이 구성에서 처리하는 개인정보(개인 식별 가능 정보)는 사실상 `deviceId(랜덤)`, `nickname(자유입력)`, `게임 기록` 3종이다. 닉네임에 실명 기입 가능성이 있으므로 개인정보로 취급해 전체 체계를 갖춘다.
 
 ### 6.2 처리 항목 인벤토리
@@ -445,6 +448,7 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 |---|---|---|---|---|
 | deviceId, userId, identity token | 서비스 제공(기록 연속성) | Art.6(1)(b) 계약 이행 | 마지막 활동 후 2년 | D1(서울 아님 — §6.4 고지), localStorage |
 | nickname | 랭킹 표시 | Art.6(1)(b) | 동상 | D1, KV 캐시 |
+| Google 계정 식별자(`sub`)·이메일(`email_verified` 시)·프로필 이름 | 로그인(랭킹 등재·멀티 참가) — 00 §11-D68 | Art.6(1)(b) 계약 이행 | 탈퇴 시 즉시 삭제, 그 외 마지막 활동 후 2년 | D1(auth_identities) |
 | 게임 기록(runs, lb_best, unlocks) | 서비스 제공/랭킹 | Art.6(1)(b) | 동상. detail_json(입력 리듬 통계)은 90일 후 NULL 처리(Cron) | D1 |
 | 국가 코드(geo) | 지역 랭킹/통계 | Art.6(1)(f) 정당 이익 | 동상 | D1 |
 | AE 이벤트(userIdHash) | 서비스 개선 통계 | Art.6(1)(f) — 해시 가명처리 | AE 기본 보존(90일) | Cloudflare AE |
@@ -453,8 +457,8 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 
 ### 6.3 이용자 권리 구현
 
-- **열람/이동권**: 설정 → "내 데이터 내려받기" → `GET /api/users/me/export` — users/runs/unlocks를 JSON 파일로 즉시 응답(수동 처리 없음).
-- **삭제권(잊힐 권리)**: 설정 → "데이터 초기화 및 삭제" → `DELETE /api/users/me` → 트랜잭션으로 runs.detail_json 삭제, nickname → `탈퇴한 여행자`, nickname_norm → `deleted:{userId}`, lb_best 전 행 삭제, unlocks 삭제, status='deleted', deviceId 매핑 해제. KV 캐시는 다음 Cron 사이클에 자연 반영(≤10분). AE는 해시라 개별 삭제 불가·불요(가명처리 고지). 30일 내 처리 의무 대비 **즉시 처리**로 설계.
+- **열람/이동권**: `/privacy` 하단 "내 데이터 내려받기"(SettingsOverlay 제거에 따른 UI 이전 — 00 §11-D68-⑥) → `GET /api/users/me/export` — users/runs/unlocks를 JSON 파일로 즉시 응답(수동 처리 없음).
+- **삭제권(잊힐 권리)**: `/privacy` 하단 "데이터 초기화 및 삭제" → `DELETE /api/users/me` → 트랜잭션으로 runs.detail_json 삭제, nickname → `탈퇴한 여행자`, nickname_norm → `deleted:{userId}`, lb_best 전 행 삭제, unlocks 삭제, status='deleted', deviceId 매핑 해제. KV 캐시는 다음 Cron 사이클에 자연 반영(≤10분). AE는 해시라 개별 삭제 불가·불요(가명처리 고지). 30일 내 처리 의무 대비 **즉시 처리**로 설계.
 - **정정권**: 닉네임 변경 기능이 곧 정정 수단.
 - 문의 채널: `privacy@` 메일(크레딧/방침 페이지 명기), 접수-처리 기록은 `admin_audit`에.
 
@@ -466,11 +470,11 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 ### 6.5 개인정보처리방침 페이지 아웃라인 (`/privacy`, ko/en 병기 — metrotyping.kr/privacy와 동일하게 정적 단일 페이지)
 
 ```
-1. 개요 및 처리자 정보 (서비스명, 운영 주체, 연락처)
-2. 수집하는 항목과 방법 (§6.2 표를 평문화 — "계정/이메일/실명을 수집하지 않습니다" 선명하게)
+1. 개요 및 처리자 정보 (서비스명, 운영 주체: LeaderPark(개인 개발자), 문의: dkdleldjqkr976@gmail.com — 00 §11-D68-⑨)
+2. 수집하는 항목과 방법 (§6.2 표를 평문화 — "비로그인 이용 시 계정/이메일/실명을 수집하지 않습니다" 선명하게 + Google 로그인 선택 시 sub/이메일(검증 시)/프로필 이름 수집 명시)
 3. 처리 목적
 4. 보유 및 이용 기간 (항목별)
-5. 처리 위탁 및 국외 이전 (Cloudflare / Google(GA4, 동의 시))
+5. 처리 위탁 및 국외 이전 (Cloudflare / Google LLC(로그인) / Google(GA4, 동의 시))
 6. 쿠키 및 유사 기술 (쿠키 미사용, localStorage 사용 내역, GA4 동의 관리 방법)
 7. 이용자의 권리와 행사 방법 (인앱 셀프서비스 경로 명시)
 8. 아동의 개인정보

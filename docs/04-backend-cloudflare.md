@@ -101,6 +101,8 @@ interface ApiError {
 | 14 | `WS /ws/quickmatch?ticket=...` | 티켓 | LobbyDO 퀵매치 대기열 |
 | 15 | `GET /api/v1/data/countries` | 없음 | (핫스왑 활성 시에만) KV 데이터 서빙 |
 | 16 | `DELETE /me` | 세션 | 내 데이터 삭제(§10) |
+| 17 | `POST /auth/google` | 없음 | Google GIS ID-token 검증 → 계정 세션 토큰(wt1, `acct:1`) 발급. RL `auth` 10/60s/IP (00 §11-D68) |
+| 18 | `POST /auth/dev` | 없음 | 테스트 심 — `ENVIRONMENT==='dev'`에서만 활성, 그 외 404 (00 §11-D68-⑩) |
 
 ### 2.3 스키마 상세 (TypeScript)
 
@@ -487,6 +489,14 @@ WebSocket은 헤더를 못 실으므로 쿼리스트링 1회용 티켓: `{ v:1, 
 - `players`에 마이그레이션으로 `auth_provider TEXT, auth_subject TEXT` 추가 + `UNIQUE(auth_provider, auth_subject)`.
 - 로그인 시: OAuth(id_token 검증은 Workers에서 JWKS fetch) → 기존 익명 pid와 **병합 API** `POST /auth/link` — scores/match_participants의 player_id를 UPDATE하는 대신 `player_links(old_pid, new_pid)` 매핑 테이블로 조인(대량 UPDATE 회피). 세션 토큰 포맷은 payload에 `sub` 필드만 추가되고 검증 경로 동일 — **현 토큰 설계가 그대로 상위 호환**.
 
+### 5.5 계정 계층 (Google 로그인 — 00 §11-D68)
+
+> §5.4의 "v1 구현 안 함" 전제는 D68로 개정되었다. 단 §5.4의 병합 API(`POST /auth/link`, `player_links`) 구상은 **미채택** — 게스트→계정 데이터 연결(병합)은 v1 비도입이고(D68-④), 결과 화면 등재용 guestToken 브리지(§6.2-①)만 허용된다.
+
+- **플로우**: 클라 GIS(Google Identity Services)가 ID-token 취득(프론트는 `GOOGLE_CLIENT_ID` 공개값만 사용, redirect URI 없음) → `POST /auth/google` → 서버가 Google JWKS(RS256)로 서명·iss·aud·exp 검증(JWKS는 KV `auth:google:jwks` 6h 캐시, client secret 불요) → 계정 세션 토큰(wt1) 발급.
+- **신원 파생**: 계정 `user_id = derivePlayerId(SESSION_HMAC_SECRET, "google:" + sub)` — §5.1의 일방향 파생 규약(D38) 승계. `device_hash`도 동일 입력 파생으로 0001 스키마 무변경, 계정 매핑은 신규 `0005_auth_identities.sql`(provider+subject PK, email은 `email_verified`인 경우만 저장).
+- **토큰**: wt1 포맷 유지 + `SessionPayload`에 `acct?: 1` 옵션 클레임 추가 — 기존 게스트 토큰은 계속 유효. 랭킹 등재는 acct 세션 전용(비로그인 제출은 `verdict='practice'`/`reason='guest'` 강등 — D39), 멀티 REST 4종(방 생성/참가/퀵매치/코드참가)은 `requireAccountAuth`(401 `LOGIN_REQUIRED`). WS 티켓은 계정 pid로만 발급되므로 WS/DO 프로토콜 무수정(D7 불변).
+
 ---
 
 ## 6. 안티치트 — 서버 권위 설계
@@ -514,7 +524,7 @@ sequenceDiagram
 
 | # | 검사 | 실패 시 |
 |---|---|---|
-| 1 | runToken HMAC/exp, `token.pid === session.pid` | 401 `INVALID_TOKEN` |
+| 1 | runToken HMAC/exp, `token.pid === session.pid`. **guestToken 브리지(00 §11-D68-④)**: 계정(acct) 제출인데 `runToken.pid ≠ session.pid`이면 body의 `guestToken`(pid === runToken.pid) 검증으로 두 신원 동시 보유를 증명한 경우에만 통과 → 계정 원장 등재 | 401 `INVALID_TOKEN` |
 | 2 | **리플레이**: `INSERT`가 `run_id` PK 충돌 | 409 `RUN_ALREADY_SUBMITTED` |
 | 3 | **시간 봉투**: `serverElapsed = now − token.startTs`. 요구: `result.elapsedMs ≤ serverElapsed + 3000` (실제 흐른 시간보다 짧게 플레이했다고 주장 불가). 또한 `serverElapsed ≤ 30min`(토큰 exp와 동일) | reject `TIME_ENVELOPE` |
 | 4 | **세트 일치**: `SHA256(perCountry.map(c=>c.code).join(',')) === token.setHash`의 prefix(중도 탈락 시 앞부분 일치), skipped/cleared 수 합계 일치 | reject `SET_MISMATCH` |
@@ -626,6 +636,7 @@ binding = "BUCKET"
 bucket_name = "worldtyping-dev"
 [vars]
 ENVIRONMENT = "dev"
+GOOGLE_CLIENT_ID = "<google-oauth-client-id>"   # 공개 client ID — 시크릿 아님 (00 §11-D68)
 
 # ---------- staging ----------
 [env.staging]
@@ -633,6 +644,7 @@ name = "worldtyping-staging"
 routes = [{ pattern = "staging.worldtyping.gg", custom_domain = true }]
 [env.staging.vars]
 ENVIRONMENT = "staging"
+GOOGLE_CLIENT_ID = "<google-oauth-client-id>"   # 공개 client ID — 시크릿 아님 (00 §11-D68)
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "worldtyping-staging"
@@ -654,6 +666,7 @@ routes = [
 ]
 [env.prod.vars]
 ENVIRONMENT = "prod"
+GOOGLE_CLIENT_ID = "<google-oauth-client-id>"   # 공개 client ID — 시크릿 아님 (00 §11-D68)
 [[env.prod.d1_databases]]
 binding = "DB"
 database_name = "worldtyping-prod"
@@ -797,7 +810,7 @@ ORDER BY rank LIMIT 1000;   -- 스냅샷 상위 1000, KV엔 상위 100만
 
 - 모든 바디는 zod `.strict()` + 길이 상한(닉네임 16자, `perCountry` ≤ 80항목, `inputUsed` ≤ 64자, WS 메시지 ≤ 1KB). JSON 파싱 전 `Content-Length` 상한 64KB.
 - SQL은 전량 D1 prepared statement 바인딩(문자열 조립 금지). 응답의 유저 생성 텍스트(닉네임, 채팅)는 클라에서 textContent 렌더(innerHTML 금지) — API는 저장 원문 그대로 반환하되 제어문자·zero-width 제거(`/[\u0000-\u001f\u200b-\u200f\u2028\u2029\ufeff]/gu`).
-- 보안 헤더(정적 응답 포함, Worker 미들웨어): `Content-Security-Policy: default-src 'self'; connect-src 'self' wss://worldtyping.gg https://*.sentry.io; img-src 'self' data:`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`.
+- 보안 헤더(정적 응답 포함, Worker 미들웨어): `Content-Security-Policy: default-src 'self'; script-src 'self' https://accounts.google.com; frame-src https://accounts.google.com; connect-src 'self' wss://worldtyping.gg https://*.sentry.io https://accounts.google.com; img-src 'self' data: https://*.googleusercontent.com`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`. (accounts.google.com script/frame/connect + `*.googleusercontent.com` img는 GIS 로그인 채널 확장 — 00 §11-D68-⑤)
 - WS 오리진 검사: 업그레이드 시 `Origin`이 자기 도메인 아니면 403(크로스사이트 WS 하이재킹 차단).
 
 ### 10.2 닉네임 모더레이션

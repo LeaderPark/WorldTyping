@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 //
-// 세션 환경 어댑테이션: "라우트 내비게이션 동작, 언어 게이트 1회 표시 후 재방문 시 미표시,
-// 설정 오버레이 열림/닫힘, 다크/라이트 전환"을 수동 dev-server 확인 대신 jsdom 렌더 테스트로
-// 자동화 대체(§3 세션 조정).
+// 세션 환경 어댑테이션: "라우트 내비게이션 동작, 언어 게이트 1회 표시 후 재방문 시 미표시"를
+// 수동 dev-server 확인 대신 jsdom 렌더 테스트로 자동화 대체(§3 세션 조정).
+//
+// [WT-AUTH-03] 구 S12 설정 오버레이(?modal=settings) 열림/닫힘·테마 전환 테스트는 오버레이 자체가
+// 폐기돼(§11-D68-⑥) 이 파일에서 제거했다 — 테마 전환은 features/auth/ThemeToggle.test.tsx가,
+// 로그인 모달은 app/AppShell.test.tsx가 담당한다.
 //
 // 왜 <MemoryRouter>(classic API)이고 createMemoryRouter(데이터 라우터)가 아닌가: 데이터 라우터는
 // initialize() 시점에 내부적으로 fetch Request(+AbortController)를 만드는데, 이 jsdom+Node
@@ -16,7 +19,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from './AppShell';
 import { AppProviders } from './providers';
-import { useSettingsStore } from '../stores/settings';
 import { HomePage } from '../pages/HomePage';
 import { ModeSelectPage } from '../pages/ModeSelectPage';
 import { TrackSelectPage } from '../pages/TrackSelectPage';
@@ -91,35 +93,5 @@ describe('app routing/shell (WT-M2-05 smoke)', () => {
       expect(heading.textContent).not.toBe('');
       unmount();
     }
-  });
-
-  it('opens/closes the S12 settings overlay via ?modal=settings and toggles theme', async () => {
-    localStorage.setItem('wt:lang', 'en');
-    renderAt('/?modal=settings');
-
-    await screen.findByTestId('settings-close');
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-
-    const lightBtn = screen.getByTestId('theme-light');
-    act(() => lightBtn.click());
-    await waitFor(() => expect(useSettingsStore.getState().theme).toBe('light'));
-    await waitFor(() => expect(document.documentElement.getAttribute('data-theme')).toBe('light'));
-
-    const darkBtn = screen.getByTestId('theme-dark');
-    act(() => darkBtn.click());
-    await waitFor(() => expect(document.documentElement.getAttribute('data-theme')).toBe('dark'));
-
-    const closeBtn = screen.getByTestId('settings-close');
-    act(() => closeBtn.click());
-    await waitFor(() => expect(screen.queryByTestId('settings-close')).not.toBeInTheDocument());
-  });
-
-  it('closes the settings overlay on Escape (§7.3 접근성)', async () => {
-    localStorage.setItem('wt:lang', 'en');
-    renderAt('/?modal=settings');
-    await screen.findByTestId('settings-close');
-
-    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })));
-    await waitFor(() => expect(screen.queryByTestId('settings-close')).not.toBeInTheDocument());
   });
 });

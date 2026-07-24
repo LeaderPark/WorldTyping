@@ -1,21 +1,19 @@
-// spec: docs/03 §4.2(AppShell 역할 — 테마 클래스/전역 토스트/설정 오버레이/Outlet),
-//       §7.3(접근성 — 모달 ESC/focus), §8.1(테마 data-theme 속성), §8.4(PWA 업데이트 UX —
-//       "인게임 중에는 토스트 유예"), docs/06 §6.3(열람/삭제권 셀프서비스 UI), WT-M2-05,
-//       WT-M5-01, WT-M6-01
+// spec: docs/03 §4.2(AppShell 역할 — 테마 클래스/전역 토스트/전역 모달/Outlet), §7.3(접근성),
+//       §8.1(테마 data-theme 속성), §8.4(PWA 업데이트 UX), docs/00 §11-D68-⑥(SettingsOverlay 전면
+//       제거 — 기어=테마 토글, 데이터 열람/삭제 UI는 /privacy 하단으로 이전), WT-M6-06, WT-AUTH-03
 //
-// M0 스캐폴드("Hello WORLD TYPING" 한 줄)를 라우팅 루트 레이아웃으로 교체한다.
+// [WT-AUTH-03] S12 SettingsOverlay와 `?modal=settings` 배선을 전면 삭제했다(§11-D68-⑥). 테마
+// 전환은 TopBar/홈 헤더의 ThemeToggle이, 데이터 열람·삭제 셀프서비스는 PrivacyPage 하단이 대신
+// 맡는다. AppShell은 이제 라우트 무관 전역 오버레이로 LoginModal 하나만 마운트한다.
 
-import { Link, Outlet, useSearchParams } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useSettingsStore } from '../stores/settings';
 import { useSessionStore } from '../stores/session';
-import { useHotkeys } from '../lib/hotkeys';
 import { useRouteFocus } from '../lib/useRouteFocus';
-import { useModalA11y } from '../lib/useModalA11y';
-import { deleteMyAccount, fetchMyDataExport } from '../net/api-client';
-import { downloadJson } from '../lib/download-json';
+import { LoginModal } from '../features/auth/LoginModal';
 import { getBootData, type BannerConfig } from './bootLoader';
 import { RouteMeta } from './RouteMeta';
 
@@ -60,22 +58,22 @@ export function AppShell() {
       <RouteMeta />
       {/* WT-M6-06: KV config:banner 장애 배너(docs/06 §10-4). */}
       <BannerBar />
-      {/* 전역 토스트 영역 — 토스트 스토어/디스패처는 이 태스크 범위 밖(스토어 5종 고정, §4.3). */}
+      {/* 전역 토스트 영역 — 토스트 스토어/디스패처는 이 태스크 범위 밖. */}
       <div id="wt-toast-region" aria-live="polite" className="sr-only" />
       <Outlet />
-      <SettingsOverlay />
+      {/* [WT-AUTH-03] 라우트 무관 전역 로그인 모달(§11-D68) — openLogin(reason)으로 어디서든 연다. */}
+      <LoginModal />
       <SwUpdateToast />
     </div>
   );
 }
 
 /**
- * WT-M6-06: KV config:banner(운영자 장애 공지, docs/06 §10-4 "API 장애 시 배너 동작 확인" +
- * §11-D9 D1/DO=canonical과 별개인 운영 핫스왑 채널). `getBootData()`는 데이터 라우터의 root
- * loader(bootLoader)가 이미 resolve된 뒤에만 안전하다 — 이 컴포넌트를 AppShell 없이 classic
- * <MemoryRouter>로 직접 렌더하는 기존 테스트(router.test.tsx 등)에서는 loader가 전혀 실행되지
- * 않으므로, effect 안에서 try/catch로 감싸 "배너 없음"으로 조용히 폴백한다(장애 배너는 부가
- * 기능이라 크래시 사유가 아니다 — HomePage의 데일리/티커 조회 실패 폴백과 같은 정신).
+ * WT-M6-06: KV config:banner(운영자 장애 공지, docs/06 §10-4 + §11-D9 D1/DO=canonical과 별개인
+ * 운영 핫스왑 채널). `getBootData()`는 데이터 라우터의 root loader(bootLoader)가 이미 resolve된
+ * 뒤에만 안전하다 — 이 컴포넌트를 AppShell 없이 classic <MemoryRouter>로 직접 렌더하는 기존
+ * 테스트에서는 loader가 실행되지 않으므로 effect 안에서 try/catch로 감싸 "배너 없음"으로 조용히
+ * 폴백한다(장애 배너는 부가 기능이라 크래시 사유가 아니다).
  */
 function BannerBar() {
   const { t } = useTranslation();
@@ -148,233 +146,6 @@ function SwUpdateToast() {
       >
         {t('pwa.reload')}
       </button>
-    </div>
-  );
-}
-
-/** S12 — 라우트 무관 전역 오버레이, `?modal=settings` 검색 파라미터로 딥링크(§4.1). */
-function SettingsOverlay() {
-  const { t } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const isOpen = searchParams.get('modal') === 'settings';
-  const theme = useSettingsStore((s) => s.theme);
-  const setTheme = useSettingsStore((s) => s.setTheme);
-  // WT-DC-06 ③ — 사운드/연출 토글은 기존 스토어 필드만 배선(신규 필드 없음).
-  const keySound = useSettingsStore((s) => s.keySound);
-  const setKeySound = useSettingsStore((s) => s.setKeySound);
-  const setVolume = useSettingsStore((s) => s.setVolume);
-  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
-  const setReducedMotion = useSettingsStore((s) => s.setReducedMotion);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const [dataStatus, setDataStatus] = useState<
-    'idle' | 'exporting' | 'confirmingReset' | 'deleting' | 'deleted' | 'error'
-  >('idle');
-
-  // 사운드 on/off: keySound + volume.master를 함께 반영한다(§WT-DC-06 ③ "사운드=keySound+volume").
-  // 마스터 볼륨을 조절하는 슬라이더가 아직 없어(이 태스크 범위 밖) 이 pill이 유일한 쓰기 경로다 —
-  // 완전 무음(둘 다 0/off)과 기본 복원(mech + 0.8) 두 상태만 오가므로 왕복이 결정적이다.
-  const soundOn = keySound !== 'off';
-  const toggleSound = () => {
-    if (soundOn) {
-      setKeySound('off');
-      setVolume({ master: 0 });
-    } else {
-      setKeySound('mech');
-      setVolume({ master: 0.8 });
-    }
-  };
-
-  // 연출(모션) on/off: reducedMotion은 3상(boolean | 'auto')이라 이 2상 pill과 직접 맞지 않는다
-  // (에스컬레이션 — 최종 보고의 매핑 표 참조). 'auto'는 위 AppShell 최상단 effect와 동일하게
-  // matchMedia로 해석해 "현재 표시값"만 읽고, 클릭 시에는 항상 명시적 boolean으로 확정한다
-  // (auto를 사용자의 실제 의도로 굳히는 낙관적 결정 — 재클릭하면 다시 반대로 뒤집힌다).
-  const motionReduced =
-    reducedMotion === 'auto'
-      ? typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-      : reducedMotion;
-  const juiceOn = !motionReduced;
-  const toggleJuice = () => setReducedMotion(!motionReduced);
-
-  const close = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete('modal');
-    setSearchParams(next, { replace: true });
-  };
-
-  useHotkeys(isOpen ? { Escape: close } : {});
-  // 배경 inert + 포커스 트랩 + 닫힘 시 트리거로 복귀(§7.3) — ESC는 위 useHotkeys가 이미 처리.
-  useModalA11y(dialogRef, isOpen);
-
-  // docs/06 §6.3 열람/삭제권 셀프서비스 — "내 데이터 내려받기"는 즉시 다운로드, "데이터 초기화
-  // 및 삭제"는 2단계 확인 후 DELETE /users/me + localStorage 전체 삭제(§6.3 "+ localStorage
-  // 삭제") + 새로고침으로 완전히 새 신원처럼 부팅되게 한다(session.ts의 재부트스트랩 리셋과는
-  // 별개의 클라 측 방어 — 둘 다 있어야 "삭제"가 실제로 체감된다).
-  const handleExport = async () => {
-    setDataStatus('exporting');
-    try {
-      const data = await fetchMyDataExport();
-      downloadJson(`typetrip-data-${Date.now()}.json`, data);
-      setDataStatus('idle');
-    } catch {
-      setDataStatus('error');
-    }
-  };
-
-  const handleResetConfirm = async () => {
-    setDataStatus('deleting');
-    try {
-      await deleteMyAccount();
-      setDataStatus('deleted');
-      localStorage.clear();
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-    } catch {
-      setDataStatus('error');
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('menu.settings')}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-    >
-      <div className="min-w-[280px] rounded-lg bg-white p-6 shadow-xl dark:bg-slate-800">
-        <h2 className="mb-4 text-lg font-bold">{t('menu.settings')}</h2>
-
-        <p className="mb-2 text-sm font-medium">{t('settings.theme.label')}</p>
-        <div className="mb-4 flex gap-2">
-          <button
-            type="button"
-            data-testid="theme-dark"
-            aria-pressed={theme === 'dark'}
-            className="rounded border px-3 py-1"
-            onClick={() => setTheme('dark')}
-          >
-            {t('settings.theme.dark')}
-          </button>
-          <button
-            type="button"
-            data-testid="theme-light"
-            aria-pressed={theme === 'light'}
-            className="rounded border px-3 py-1"
-            onClick={() => setTheme('light')}
-          >
-            {t('settings.theme.light')}
-          </button>
-        </div>
-
-        {/* WT-DC-06 ③ — 사운드/연출 토글 pill. .wt-pill/.wt-pill--active + 32px 압축 변형
-            .wt-settings-toggle(globals.css 모달 섹션에 정의) 재사용 — 신규 토큰 없음. */}
-        <div className="mb-2 flex items-center justify-between gap-4">
-          <span className="text-sm">{t('settings.sound.label')}</span>
-          <button
-            type="button"
-            data-testid="settings-sound-toggle"
-            aria-pressed={soundOn}
-            className={`wt-pill wt-settings-toggle${soundOn ? ' wt-pill--active' : ''}`}
-            onClick={toggleSound}
-          >
-            {soundOn ? t('common.on') : t('common.off')}
-          </button>
-        </div>
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <span className="text-sm">{t('settings.motion.label')}</span>
-          <button
-            type="button"
-            data-testid="settings-motion-toggle"
-            aria-pressed={juiceOn}
-            className={`wt-pill wt-settings-toggle${juiceOn ? ' wt-pill--active' : ''}`}
-            onClick={toggleJuice}
-          >
-            {juiceOn ? t('common.on') : t('common.off')}
-          </button>
-        </div>
-
-        {/* WT-M6-06 a11y 수정(docs/03 §7.3, e2e E10 wcag2aa 게이트): text-red-600 단독은 이 모달의
-            기본(다크) 배경 dark:bg-slate-800 위에서 실측 3.02:1로 WCAG AA 4.5:1 미달(axe-core
-            color-contrast, e10-a11y.spec.ts "S12 설정 모달"에서 발견). 라이트 배경(흰색)에서는
-            red-600이 이미 AA를 충족하므로 dark: 변형만 더 밝은 red-400으로 교체한다(D50과 같은
-            정신 — 원색을 텍스트로 쓸 때는 배경별 대비를 보정해야 한다). */}
-        <div className="mb-4 flex flex-col gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-          <button
-            type="button"
-            data-testid="settings-data-export"
-            className="rounded border px-3 py-1 text-left"
-            disabled={dataStatus === 'exporting'}
-            onClick={() => void handleExport()}
-          >
-            {t('settings.data.export')}
-          </button>
-
-          {dataStatus === 'confirmingReset' ? (
-            <div className="rounded border border-red-400 p-3">
-              <p className="text-sm font-semibold">{t('settings.resetConfirm.title')}</p>
-              <p className="mt-1 text-sm">{t('settings.resetConfirm.body')}</p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  data-testid="settings-data-reset-confirm"
-                  className="rounded border border-red-500 px-3 py-1 text-red-600 dark:text-red-400"
-                  onClick={() => void handleResetConfirm()}
-                >
-                  {t('settings.resetConfirm.confirm')}
-                </button>
-                <button
-                  type="button"
-                  data-testid="settings-data-reset-cancel"
-                  className="rounded border px-3 py-1"
-                  onClick={() => setDataStatus('idle')}
-                >
-                  {t('settings.resetConfirm.cancel')}
-                </button>
-              </div>
-            </div>
-          ) : dataStatus === 'deleting' || dataStatus === 'deleted' ? (
-            <p role="status" data-testid="settings-data-reset-done" className="text-sm">
-              {t('settings.resetConfirm.done')}
-            </p>
-          ) : (
-            <button
-              type="button"
-              data-testid="settings-data-reset"
-              className="rounded border px-3 py-1 text-left text-red-600 dark:text-red-400"
-              onClick={() => setDataStatus('confirmingReset')}
-            >
-              {t('settings.data.reset')}
-            </button>
-          )}
-
-          {dataStatus === 'error' && (
-            <p role="alert" data-testid="settings-data-error" className="text-sm text-red-600 dark:text-red-400">
-              {t('settings.data.error')}
-            </p>
-          )}
-        </div>
-
-        {/* WT-M6-06: docs/06 §10-8 크레딧/라이선스 고지 페이지 + §6.5 처리방침 페이지의 실제
-            진입점(둘 다 라우트는 이미 존재했지만 이전까지 앱 내 어디에서도 링크되지 않았다). */}
-        <div className="mb-4 flex gap-4 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
-          <Link to="/privacy" data-testid="settings-link-privacy" onClick={close}>
-            {t('settings.privacy')}
-          </Link>
-          <Link to="/credits" data-testid="settings-link-credits" onClick={close}>
-            {t('settings.credits')}
-          </Link>
-        </div>
-
-        {/* WT-DC-06 ④ — 정치중립 고지(기존 키 notice.disputed 재사용, 신규 키 없음). */}
-        <p className="mb-4 border-t border-border pt-2.5 text-xs text-text-muted">{t('notice.disputed')}</p>
-
-        <button type="button" data-testid="settings-close" className="rounded border px-3 py-1" onClick={close}>
-          {t('common.close')}
-        </button>
-      </div>
     </div>
   );
 }

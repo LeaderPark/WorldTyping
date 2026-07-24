@@ -14,6 +14,10 @@ import type { Continent, DifficultyTier, GameMode } from '@wt/shared';
 
 const API_BASE = '/api/v1';
 const SESSION_TOKEN_KEY = 'wt:sessiontoken';
+// [WT-AUTH-03] 계정(Google 로그인) 세션 토큰. 게스트 세션 토큰('wt:sessiontoken')과 별개의 원시
+// 키로 둔다 — 로그인해도 게스트 세션은 그대로 살아 있어야 하고(싱글/데일리 비로그인 플레이 유지,
+// §11-D68-①), Authorization은 "계정 > 게스트" 우선순위로 계정 토큰이 있으면 그것을 먼저 쓴다.
+const AUTH_TOKEN_KEY = 'wt:authtoken';
 
 export interface ApiErrorBody {
   error: {
@@ -65,9 +69,53 @@ function setSessionToken(token: string | null): void {
   else store.removeItem(SESSION_TOKEN_KEY);
 }
 
+/** [WT-AUTH-03] 계정 세션 토큰 원문(원시 키 'wt:authtoken'). 없으면 null(게스트). */
+export function getAuthToken(): string | null {
+  return safeLocalStorage()?.getItem(AUTH_TOKEN_KEY) ?? null;
+}
+
+/** [WT-AUTH-03] 계정 세션 토큰 저장/삭제. 스토어(stores/auth)의 login/logout만 이 함수를 호출한다. */
+export function setAuthToken(token: string | null): void {
+  const store = safeLocalStorage();
+  if (!store) return;
+  if (token) store.setItem(AUTH_TOKEN_KEY, token);
+  else store.removeItem(AUTH_TOKEN_KEY);
+}
+
+/** Authorization에 실을 토큰 — 계정 > 게스트 우선순위(§11-D68-①: 로그인 시 계정 신원으로 등재). */
+function bearerToken(): string | null {
+  return getAuthToken() ?? getSessionToken();
+}
+
+// ── LOGIN_REQUIRED 전역 시그널(§11-D68-①: 멀티 4종은 401 LOGIN_REQUIRED) ──
+// net은 스토어를 직접 import하지 않는다(순수 유지) — 대신 콜백 등록 채널만 노출하고, 스토어
+// (stores/auth)가 모듈 로드 시 onLoginRequired로 자기 핸들러를 건다. 401 + code==='LOGIN_REQUIRED'
+// 응답을 만나면 등록된 모든 핸들러를 호출한다("로그인 필요" 모달 트리거 등).
+type LoginRequiredHandler = () => void;
+const loginRequiredHandlers = new Set<LoginRequiredHandler>();
+
+/** LOGIN_REQUIRED 시그널 구독. 반환 함수로 해제. */
+export function onLoginRequired(handler: LoginRequiredHandler): () => void {
+  loginRequiredHandlers.add(handler);
+  return () => {
+    loginRequiredHandlers.delete(handler);
+  };
+}
+
+function emitLoginRequired(): void {
+  for (const handler of loginRequiredHandlers) {
+    try {
+      handler();
+    } catch (err) {
+      // 한 구독자의 예외가 다른 구독자/요청 흐름을 막지 않게 격리.
+      console.warn('[auth] onLoginRequired handler threw:', err);
+    }
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = path.startsWith('/api/') ? path : `${API_BASE}${path}`;
-  const token = getSessionToken();
+  const token = bearerToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(init?.headers as Record<string, string> | undefined) };
   if (token && !headers.Authorization) headers.Authorization = `Bearer ${token}`;
 
@@ -81,6 +129,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // 서버가 JSON이 아닌 에러 바디를 준 경우(프록시 502 HTML 등) — 상태 텍스트로 폴백.
     }
     if (isApiErrorBody(body)) {
+      if (res.status === 401 && body.error.code === 'LOGIN_REQUIRED') emitLoginRequired();
       throw new ApiError(res.status, body.error.code, body.error.message, body.error.retryAfterSec);
     }
     throw new ApiError(res.status, 'UNKNOWN', res.statusText || `HTTP ${res.status}`);
@@ -137,10 +186,39 @@ export function ensureSession(deviceId: string): Promise<SessionInfo | null> {
   return sessionPromise;
 }
 
-/** 테스트 전용: 모듈 캐시(세션 프라미스)를 리셋한다. */
+/** 테스트 전용: 모듈 캐시(세션 프라미스)와 저장된 토큰(게스트+계정)을 리셋한다. */
 export function __resetSessionForTests(): void {
   sessionPromise = null;
   setSessionToken(null);
+  setAuthToken(null);
+}
+
+// ───────────────────────── 계정 로그인(§11-D68-②, WT-AUTH-01/03) ─────────────────────────
+
+/**
+ * 계정 세션 응답(workers/api/src/routes/auth.ts issueAccountSession가 원천). SessionInfo와 동형 +
+ * acct:true, 이메일은 email_verified인 경우에만. 아바타/표시이름 등 프로필은 이 응답이 아니라
+ * 클라가 credential(Google ID-token JWT)을 디코드해 얻는다(gis 표준 — decode-jwt.ts).
+ */
+export interface AuthAccountRes {
+  token: string;
+  playerId: string;
+  nickname: string;
+  /** ISO 8601 문자열(서버). 스토어는 epoch ms로 환산해 보관한다. */
+  expiresAt: string;
+  geo: string;
+  acct: true;
+  email?: string;
+}
+
+/** POST /auth/google — Google GIS ID-token(credential) → 계정 세션 발급. */
+export function authGoogle(credential: string): Promise<AuthAccountRes> {
+  return apiClient.post<AuthAccountRes>('/auth/google', { credential });
+}
+
+/** POST /auth/dev — dev 전용 테스트 심(ENVIRONMENT!=='dev'면 서버가 404). GIS 미설정 DEV 폴백. */
+export function authDev(body: { sub: string; name?: string; email?: string }): Promise<AuthAccountRes> {
+  return apiClient.post<AuthAccountRes>('/auth/dev', body);
 }
 
 export interface SessionMeRes {

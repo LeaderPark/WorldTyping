@@ -13,8 +13,11 @@
 // 정리했지만 이 두 <hr>은 그때 누락됐다). tokens.css --border(라이트 #e3e6db/다크 #334155)를
 // 참조하는 border-border 유틸로 교체 — 값 자체는 슬레이트와 육안상 거의 동일해 시각 델타는
 // 미세하지만, 토큰 회귀 가드(테마 전환·향후 팔레트 조정)에 편입된다는 점이 핵심이다.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { deleteMyAccount, fetchMyDataExport } from '../../net/api-client';
+import { downloadJson } from '../../lib/download-json';
 import privacyKo from './privacy.ko.md?raw';
 import privacyEn from './privacy.en.md?raw';
 import { parseInlineSegments, parseMarkdownLite, type MdBlock } from './markdown-lite';
@@ -90,6 +93,105 @@ function BlockView({ block, keyPrefix }: { block: MdBlock; keyPrefix: string }) 
   }
 }
 
+/**
+ * [WT-AUTH-03, §11-D68-⑥] 데이터 열람/삭제 셀프서비스(docs/06 §6.3). 이전 S12 SettingsOverlay에서
+ * 이 페이지 하단으로 이전됐다 — testid/로직/2단계 확인 계약은 그대로 승계한다. "내 데이터 내려받기"는
+ * 즉시 다운로드, "데이터 초기화 및 삭제"는 2단계 확인 후 DELETE /users/me + localStorage 전체 삭제
+ * + 새로고침으로 새 신원처럼 부팅되게 한다.
+ */
+function MyDataSection() {
+  const { t } = useTranslation();
+  const [status, setStatus] = useState<
+    'idle' | 'exporting' | 'confirmingReset' | 'deleting' | 'deleted' | 'error'
+  >('idle');
+
+  const handleExport = async () => {
+    setStatus('exporting');
+    try {
+      const data = await fetchMyDataExport();
+      downloadJson(`typetrip-data-${Date.now()}.json`, data);
+      setStatus('idle');
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  const handleResetConfirm = async () => {
+    setStatus('deleting');
+    try {
+      await deleteMyAccount();
+      setStatus('deleted');
+      localStorage.clear();
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch {
+      setStatus('error');
+    }
+  };
+
+  return (
+    <section aria-label={t('privacy.myData.heading')} data-testid="privacy-my-data">
+      <h2 className="text-base font-semibold">{t('privacy.myData.heading')}</h2>
+      <div className="mt-2 flex flex-col gap-2">
+        <button
+          type="button"
+          data-testid="settings-data-export"
+          className="rounded border px-3 py-1 text-left"
+          disabled={status === 'exporting'}
+          onClick={() => void handleExport()}
+        >
+          {t('settings.data.export')}
+        </button>
+
+        {status === 'confirmingReset' ? (
+          <div className="rounded border border-red-400 p-3">
+            <p className="text-sm font-semibold">{t('settings.resetConfirm.title')}</p>
+            <p className="mt-1 text-sm">{t('settings.resetConfirm.body')}</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                data-testid="settings-data-reset-confirm"
+                className="rounded border border-red-500 px-3 py-1 text-red-600 dark:text-red-400"
+                onClick={() => void handleResetConfirm()}
+              >
+                {t('settings.resetConfirm.confirm')}
+              </button>
+              <button
+                type="button"
+                data-testid="settings-data-reset-cancel"
+                className="rounded border px-3 py-1"
+                onClick={() => setStatus('idle')}
+              >
+                {t('settings.resetConfirm.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : status === 'deleting' || status === 'deleted' ? (
+          <p role="status" data-testid="settings-data-reset-done" className="text-sm">
+            {t('settings.resetConfirm.done')}
+          </p>
+        ) : (
+          <button
+            type="button"
+            data-testid="settings-data-reset"
+            className="rounded border px-3 py-1 text-left text-red-600 dark:text-red-400"
+            onClick={() => setStatus('confirmingReset')}
+          >
+            {t('settings.data.reset')}
+          </button>
+        )}
+
+        {status === 'error' && (
+          <p role="alert" data-testid="settings-data-error" className="text-sm text-red-600 dark:text-red-400">
+            {t('settings.data.error')}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function MarkdownBody({ source, testId }: { source: string; testId: string }) {
   const blocks = parseMarkdownLite(source);
   return (
@@ -150,6 +252,11 @@ export function PrivacyPage() {
           </Link>
         </p>
       </section>
+
+      <hr className="my-8 border-border" />
+
+      {/* [WT-AUTH-03, §11-D68-⑥] 데이터 열람/삭제 셀프서비스(구 S12 설정 오버레이에서 이전). */}
+      <MyDataSection />
     </div>
   );
 }

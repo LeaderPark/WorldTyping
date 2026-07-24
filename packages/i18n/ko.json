@@ -375,5 +375,45 @@
   "daily.hero.kicker": "매일 자정 새로 열리는 여정",
   "daily.play.cta": "오늘의 챌린지 시작",
 
-  "banner.ariaLabel": "서비스 공지"
+  "banner.ariaLabel": "서비스 공지",
+
+  "auth.login": "로그인",
+  "auth.logout": "로그아웃",
+  "auth.cancel": "취소",
+  "auth.error": "로그인에 실패했어요. 잠시 후 다시 시도해 주세요.",
+  "auth.devLogin": "개발용 로그인",
+  "auth.modal.title": "로그인",
+  "auth.reason.general": "로그인하고 더 많은 기능을 즐겨보세요.",
+  "auth.reason.multi": "멀티플레이는 로그인이 필요해요.",
+  "auth.reason.ranking": "랭킹 등록에는 로그인이 필요해요.",
+
+  "theme.toggle": "테마 전환(라이트/다크)",
+
+  "footer.privacy": "개인정보처리방침",
+  "footer.terms": "이용약관",
+  "footer.support": "고객지원",
+  "footer.copyright": "© {year} TypeTrip. All rights reserved.",
+
+  "lobby.banner.guest": "멀티플레이는 로그인이 필요해요. 로그인하고 방을 만들거나 참가하세요.",
+  "lobby.banner.member": "같은 노선에서 함께 출발해요. 방을 만들거나 진행 중인 공개방에 참가하세요.",
+  "lobby.search.placeholder": "초대 코드 또는 방 제목 검색",
+  "lobby.filter.all": "전체",
+  "lobby.filter.public": "공개방",
+  "lobby.filter.private": "비밀방",
+  "lobby.room.title": "멀티플레이 방 목록",
+  "lobby.room.enter": "입장",
+  "lobby.room.inProgress": "게임 중",
+  "lobby.room.passengers": "{current}/{max}명 탑승",
+  "lobby.create.title": "방 만들기",
+  "lobby.create.titlePlaceholder": "방 제목 (선택)",
+
+  "result.loginToRank": "로그인하고 랭킹에 등록하세요",
+  "result.registered": "랭킹에 등록됐어요",
+
+  "rank.loginCta": "로그인하고 내 기록을 등록하세요",
+
+  "legal.terms.title": "이용약관",
+  "legal.support.title": "고객지원",
+
+  "privacy.myData.heading": "내 데이터"
 }

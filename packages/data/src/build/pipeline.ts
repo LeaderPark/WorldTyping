@@ -240,7 +240,7 @@ export function assemble(inputs: PipelineInputs): BuildResult {
     }
   }
 
-  // (b) acceptedInputs 언어별 전역 유일성 + (c) ko 자모 시퀀스 유일성
+  // (b) acceptedInputs 언어별 전역 유일성 + (c) ko 자모 시퀀스 유일성 + (f) 진접두-별칭 금지(D82)
   const koSeen = new Map<string, string>();
   const koJamoSeen = new Map<string, string>();
   const enSeen = new Map<string, string>();
@@ -258,6 +258,26 @@ export function assemble(inputs: PipelineInputs): BuildResult {
       const prev = enSeen.get(input);
       if (prev && prev !== c.id) throw new Error(`en acceptedInput collision "${input}": ${prev} vs ${c.id} (§10 Step 7-b)`);
       enSeen.set(input, c.id);
+    }
+
+    // (f) 국가 내부 진접두-별칭 금지(D82) — 별칭이 표시 정식명(canonical=acceptedInputs[0])
+    // 키의 진접두이면 표시명 타이핑 도중 조기 EXACT가 발화하므로 throw. 방향은 별칭⊂canonical
+    // 만 에러 — canonical⊂별칭(체코⊂체코공화국류)·별칭⊂별칭(us⊂usa)은 조기 발화가 아니라 허용.
+    const koCanonicalInput = c.acceptedInputsKo[0]!; // Step 4 보장: acceptedInputs[0] = 정식명(항상 존재)
+    const koCanonical = toJamoSeq(koCanonicalInput);
+    for (const input of c.acceptedInputsKo.slice(1)) {
+      const k = toJamoSeq(input);
+      if (k.length < koCanonical.length && koCanonical.startsWith(k))
+        throw new Error(
+          `ko premature-EXACT alias "${input}" is a strict prefix of canonical "${koCanonicalInput}": ${c.id} (§10 Step 7-f, D82)`,
+        );
+    }
+    const enCanonical = c.acceptedInputsEn[0]!; // Step 4 보장: acceptedInputs[0] = 정식명(항상 존재)
+    for (const input of c.acceptedInputsEn.slice(1)) {
+      if (input.length < enCanonical.length && enCanonical.startsWith(input))
+        throw new Error(
+          `en premature-EXACT alias "${input}" is a strict prefix of canonical "${enCanonical}": ${c.id} (§10 Step 7-f, D82)`,
+        );
     }
   }
 

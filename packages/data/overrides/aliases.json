@@ -1,8 +1,8 @@
 {
   "AE": { "ko": ["UAE", "아랍에미리트연합"], "en": [] },
   "BR": { "ko": [], "en": ["Brasil", "Federative Republic of Brazil"] },
-  "CD": { "ko": ["민주콩고", "DR콩고", "콩고민주공화국"], "en": ["Democratic Republic of the Congo", "DRC"] },
-  "CG": { "ko": ["콩고"], "en": ["Congo", "Congo-Brazzaville"] },
+  "CD": { "ko": ["민주콩고", "DR콩고", "콩고민주공화국"], "en": ["Democratic Republic of the Congo"] },
+  "CG": { "ko": [], "en": ["Congo", "Congo-Brazzaville"] },
   "CH": { "ko": ["스위스연방"], "en": [] },
   "CI": { "ko": ["아이보리코스트"], "en": ["Côte d'Ivoire", "Republic of Côte d'Ivoire"] },
   "CN": { "ko": ["중화인민공화국"], "en": ["PRC"] },
@@ -19,7 +19,6 @@
   "MM": { "ko": ["버마"], "en": ["Burma"] },
   "NL": { "ko": ["홀란드"], "en": ["Holland"] },
   "RU": { "ko": ["러시아연방"], "en": [] },
-  "SA": { "ko": ["사우디"], "en": [] },
   "SZ": { "ko": ["스와질란드"], "en": ["Swaziland"] },
   "TL": { "ko": ["티모르레스테"], "en": ["East Timor"] },
   "TR": { "ko": ["터키"], "en": ["Turkey"] },

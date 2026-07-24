@@ -778,8 +778,7 @@ export const COUNTRIES: Country[] = [
       "콩고민주공화국"
     ],
     "aliasesEn": [
-      "Democratic Republic of the Congo",
-      "DRC"
+      "Democratic Republic of the Congo"
     ],
     "continent": "africa",
     "subregion": "Middle Africa",
@@ -800,8 +799,7 @@ export const COUNTRIES: Country[] = [
     ],
     "acceptedInputsEn": [
       "drcongo",
-      "democraticrepublicofthecongo",
-      "drc"
+      "democraticrepublicofthecongo"
     ]
   },
   {
@@ -835,9 +833,7 @@ export const COUNTRIES: Country[] = [
     "iso3": "COG",
     "nameKo": "콩고 공화국",
     "nameEn": "Republic of the Congo",
-    "aliasesKo": [
-      "콩고"
-    ],
+    "aliasesKo": [],
     "aliasesEn": [
       "Congo",
       "Congo-Brazzaville"
@@ -855,8 +851,7 @@ export const COUNTRIES: Country[] = [
     ],
     "mapFeatureId": "178",
     "acceptedInputsKo": [
-      "콩고공화국",
-      "콩고"
+      "콩고공화국"
     ],
     "acceptedInputsEn": [
       "republicofthecongo",
@@ -4058,9 +4053,7 @@ export const COUNTRIES: Country[] = [
     "iso3": "SAU",
     "nameKo": "사우디아라비아",
     "nameEn": "Saudi Arabia",
-    "aliasesKo": [
-      "사우디"
-    ],
+    "aliasesKo": [],
     "aliasesEn": [],
     "continent": "asia",
     "subregion": "Western Asia",
@@ -4075,8 +4068,7 @@ export const COUNTRIES: Country[] = [
     ],
     "mapFeatureId": "682",
     "acceptedInputsKo": [
-      "사우디아라비아",
-      "사우디"
+      "사우디아라비아"
     ],
     "acceptedInputsEn": [
       "saudiarabia"

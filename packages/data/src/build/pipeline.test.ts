@@ -1,6 +1,7 @@
 // spec: docs/02 §10·§11·§4.3·§5.1, docs/00 §11-D1·D3·D22, WT-M1-05
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { compileTargets, matchInput } from '@wt/shared';
 import type { Country } from '../index';
 import { assemble, buildDataset, loadInputs, type PipelineInputs } from './pipeline';
 
@@ -181,9 +182,32 @@ describe('전역 유일성(§10 Step 7-b·c)', () => {
         seen.set(i, c.id);
       }
   });
-  it('"콩고" 단독은 CG의 EXACT(§3.4 note)', () => {
-    expect(byId.get('CG')?.acceptedInputsKo).toContain('콩고');
-    expect(byId.get('CD')?.acceptedInputsKo).not.toContain('콩고');
+});
+
+describe('D82 — 표시명 진접두 별칭 제거(버그 Y 회귀)', () => {
+  it('제거 확인: CG "콩고"·SA "사우디"·CD(en) "drc"는 accepted가 아니다', () => {
+    expect(byId.get('CG')!.acceptedInputsKo).toEqual(['콩고공화국']);
+    expect(byId.get('SA')!.acceptedInputsKo).toEqual(['사우디아라비아']);
+    expect(byId.get('CD')!.acceptedInputsEn).toEqual(['drcongo', 'democraticrepublicofthecongo']);
+    expect(byId.get('CD')!.acceptedInputsKo).not.toContain('콩고');
+    expect(byId.get('CG')!.acceptedInputsKo).not.toContain('콩고');
+    expect(byId.get('SA')!.acceptedInputsKo).not.toContain('사우디');
+  });
+  it('표시명 타이핑 중간은 PREFIX, 끝에서만 EXACT (조기 EXACT 재현 방지)', () => {
+    const sa = compileTargets(byId.get('SA')!, 'ko');
+    expect(matchInput('사우디', sa, 'ko')).toBe('PREFIX');
+    expect(matchInput('사우디아라비아', sa, 'ko')).toBe('EXACT');
+    const cg = compileTargets(byId.get('CG')!, 'ko');
+    expect(matchInput('콩고', cg, 'ko')).toBe('PREFIX');
+    expect(matchInput('콩고 공화국', cg, 'ko')).toBe('EXACT');
+    const cd = compileTargets(byId.get('CD')!, 'en');
+    expect(matchInput('DR C', cd, 'en')).toBe('PREFIX');
+    expect(matchInput('DR Congo', cd, 'en')).toBe('EXACT');
+  });
+  it('안전 별칭 컨트롤: 한국(KR)·usa(US)·Congo(CG en)는 여전히 EXACT', () => {
+    expect(matchInput('한국', compileTargets(byId.get('KR')!, 'ko'), 'ko')).toBe('EXACT');
+    expect(matchInput('usa', compileTargets(byId.get('US')!, 'en'), 'en')).toBe('EXACT');
+    expect(matchInput('Congo', compileTargets(byId.get('CG')!, 'en'), 'en')).toBe('EXACT');
   });
 });
 
@@ -262,6 +286,17 @@ describe('예외 계약(§10 — 누락은 throw)', () => {
   it('en acceptedInput 충돌이면 throw', () => {
     const aliases = { ...base.aliases, JP: { ko: [], en: ['United States'] } };
     expect(() => assemble({ ...base, aliases })).toThrow(/en acceptedInput collision/);
+  });
+  it('ko 별칭이 표시 정식명의 진접두면 throw (D82 게이트)', () => {
+    const aliases = { ...base.aliases, SA: { ko: ['사우디'], en: [] } };
+    expect(() => assemble({ ...base, aliases })).toThrow(/premature-EXACT/);
+  });
+  it('en 별칭이 표시 정식명의 진접두면 throw (D82 게이트)', () => {
+    const aliases = {
+      ...base.aliases,
+      CD: { ko: base.aliases.CD?.ko ?? [], en: [...(base.aliases.CD?.en ?? []), 'DRC'] },
+    };
+    expect(() => assemble({ ...base, aliases })).toThrow(/premature-EXACT/);
   });
   it('capital 이 비면 capitalEn 은 nameEn 으로 폴백', () => {
     const src = cloneSource((id, s) => (id === 'KR' ? { ...s, capital: [] } : s));

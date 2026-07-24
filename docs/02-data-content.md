@@ -276,7 +276,7 @@ export function matchInput(
 }
 ```
 
-**EXACT의 자모 동치 주의**: "간"과 "가나"처럼 자모 시퀀스가 같은데 음절이 다른 경우는 없다(자모→음절 결합은 IME가 결정하며, 같은 자모 시퀀스의 서로 다른 결합은 동일 keystroke 열의 다른 시각 표현일 뿐이다). 따라서 `t.key === key`로 EXACT를 판정해도 안전하다. 단, 목표가 다른 목표의 접두인 경우(예: "가나" GH ⊂ "가봉" 없음—실존 케이스: "인도" IN ⊂ "인도네시아" ID)를 위해 **한 국가의 targets 안에서만** 비교하므로 문제없다. 콘텐츠 제작 시 같은 국가의 acceptedInputs 안에서 한 항목이 다른 항목의 진접두이면 짧은 쪽 EXACT가 우선한다(위 루프가 EXACT를 먼저 반환하므로 자동 보장).
+**EXACT의 자모 동치 주의**: "간"과 "가나"처럼 자모 시퀀스가 같은데 음절이 다른 경우는 없다(자모→음절 결합은 IME가 결정하며, 같은 자모 시퀀스의 서로 다른 결합은 동일 keystroke 열의 다른 시각 표현일 뿐이다). 따라서 `t.key === key`로 EXACT를 판정해도 안전하다. 단, 목표가 다른 목표의 접두인 경우(예: "가나" GH ⊂ "가봉" 없음—실존 케이스: "인도" IN ⊂ "인도네시아" ID)를 위해 **한 국가의 targets 안에서만** 비교하므로 문제없다. 콘텐츠 제작 시 같은 국가의 acceptedInputs 안에서 한 항목이 다른 항목의 진접두이면 짧은 쪽 EXACT가 우선한다(위 루프가 EXACT를 먼저 반환하므로 자동 보장). 단, **D82(docs/00 §11) 콘텐츠 규칙**: 별칭이 같은 국가의 **표시 정식명 정규화 키의 진접두**가 되는 것은 금지 — 플레이어가 화면 표시명을 그대로 타이핑하는 도중 별칭에서 조기 EXACT가 발화한다(SA "사우디"·CG "콩고"·CD(en) "DRC" 3건 실측, 전부 제거됨). 짧은 쪽이 정식명 자신인 경우(체코⊂체코공화국 등)는 표시명 끝에서 정확히 EXACT라 정상. 위반은 빌드 §10 Step 7-(f)가 에러로 차단한다.
 
 **테스트 케이스(필수 구현, vitest)**:
 
@@ -310,7 +310,7 @@ export function matchInput(
 | CZ | 체코 | 체코공화국 |
 | AE | 아랍에미리트 | UAE, 아랍에미리트연합 |
 | CD | 콩고 민주 공화국 | 민주콩고, DR콩고, 콩고민주공화국 |
-| CG | 콩고 공화국 | 콩고 |
+| CG | 콩고 공화국 | — ("콩고"는 D82로 제거: 표시명 진접두 → 조기 EXACT 유발) |
 | MK | 북마케도니아 | 마케도니아 |
 | SZ | 에스와티니 | 스와질란드 |
 | TL | 동티모르 | 티모르레스테 |
@@ -320,10 +320,10 @@ export function matchInput(
 | VA | 바티칸 | 바티칸시국, 교황청 |
 | RU | 러시아 | 러시아연방 |
 | DE | 독일 | 독일연방공화국 |
-| SA | 사우디아라비아 | 사우디 |
+| SA | 사우디아라비아 | — ("사우디"는 D82로 제거: 표시명 진접두 → 조기 EXACT 유발) |
 | NZ | 뉴질랜드 | 신서란 제외 — 등록하지 않음(사어) |
 
-(표에 없는 국가는 aliasesKo = [] 로 시작하고 QA 중 추가한다. "콩고" 단독 입력은 CG의 EXACT이므로 CD와 충돌하지 않음을 전역 검사로 확인할 것.)
+(표에 없는 국가는 aliasesKo = [] 로 시작하고 QA 중 추가한다. "콩고"·"사우디" 단독은 D82로 더 이상 어느 국가의 정답도 아니다 — 각각 CG·SA 표시명의 진접두라 PREFIX로 판정되어 계속 입력해야 한다. 별칭 추가 시 D82 진접두 금지 규칙을 지킬 것. 위반은 빌드 §10 Step 7-(f)가 에러로 차단한다.)
 
 ---
 
@@ -598,7 +598,7 @@ flowchart TD
 4. **acceptedInputs 생성**: §3.2 정규화 + §3.4 자동 변형 규칙 적용, 순서 = [정식명, ...수동 별칭, ...자동 변형], `Array.from(new Set(...))`.
 5. **mapFeatureId 바인딩**: `world-atlas/countries-110m.json`의 `objects.countries.geometries[].id` 집합 구성 → `ccn3` 3자리 문자열이 집합에 있으면 채택, 없으면 null. 코소보 특례: `geometries.find(g => g.properties?.name === 'Kosovo')`의 id를 XK에 바인딩(없으면 null). 바인딩 결과 통계(매칭 n, circle-fallback m)를 stdout에 출력.
 6. **티어 계산**: §4.1 산식으로 F 계산 → 경계값 배정 → `overrides/tiers.json` 적용. 티어별 분포를 stdout 표로 출력하고 목표 분포 ±5 이탈 시 경고(에러 아님).
-7. **검증**: (a) zod 전체 파싱, (b) **acceptedInputs 전역 유일성** — 언어별로 `Map<normalizedInput, CountryId>`를 만들며 서로 다른 국가가 같은 입력을 가지면 throw(예: "콩고" 충돌 방지), (c) 한국어 acceptedInputs의 **자모 시퀀스 유일성**도 동일 검사, (d) routes.ts의 모든 id 존재·중복·§6 검증, (e) i18n ko/en 키 집합 동일성.
+7. **검증**: (a) zod 전체 파싱, (b) **acceptedInputs 전역 유일성** — 언어별로 `Map<normalizedInput, CountryId>`를 만들며 서로 다른 국가가 같은 입력을 가지면 throw(예: "콩고" 충돌 방지), (c) 한국어 acceptedInputs의 **자모 시퀀스 유일성**도 동일 검사, (d) routes.ts의 모든 id 존재·중복·§6 검증, (e) i18n ko/en 키 집합 동일성, (f) **국가 내부 진접두-별칭 금지(D82)** — 언어별 canonical 키(acceptedInputs[0]; ko는 자모 시퀀스)에 대해 별칭 유래 입력의 키가 진접두이면 throw.
 8. **emit**: (a) `public/data/countries.json` — `JSON.stringify(dataset)`(공백 없음, 키 순서 고정: id 오름차순 정렬), (b) `public/data/countries-110m.json` 복사, (c) `packages/data/src/generated/countries.ts` — `export const COUNTRIES = [...] as const satisfies Country[]` 형태로 **Workers 서버 번들용** 산출(D1/KV 조회 없이 메모리 상수로 검증 가능, 198개 × ~300B ≈ 60KB로 Workers 번들 한도에 무해), (d) SHA-256 해시를 `public/data/manifest.json`에 기록(클라이언트 캐시 버스팅 키).
 
 ---

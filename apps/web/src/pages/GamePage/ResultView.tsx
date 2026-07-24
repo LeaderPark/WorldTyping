@@ -15,6 +15,12 @@
 // 순위 표시(shadow — flagged를 구분 표시하지 않는다, docs/06 §3.5), practice="연습 기록",
 // rejected="기록이 검토 중입니다".
 //
+// [WT-AUTH-04 랭킹 게이팅, §11-D68-①] 비로그인은 useRunSubmit이 제출을 시도하지 않고 idle로
+// 남는다 — 이 화면은 그 상태에서 로그인 CTA(result-login-cta)를 그린다. CTA는 openLogin('ranking')
+// 만 트리거하고, 로그인 성공은 useRunSubmit 자신이 감지해 자동 제출한다(이 컴포넌트는 별도로
+// "제출 재시도"를 호출하지 않는다). 등재 완료(valid/flagged)는 순위 표시에 더해 result.registered
+// 문구를 추가로 보여준다.
+//
 // [WT-M5-04] 공유 이미지(ShareCard/capture.ts)·데일리 공유 텍스트(DailyShareText)·자기 최고
 // 기록 고스트(features/typing/ghost.ts) 배선 추가. shareId(서버 발급 공유 랜딩)는 M6-02
 // 소관이라 ShareCard는 항상 홈 URL 폴백을 쓴다(세션 조정 §3-2).
@@ -24,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
 import type { Continent, Country, DifficultyTier, GameMode } from '@wt/shared';
 import { useHotkeys } from '../../lib/hotkeys';
+import { useAuthStore } from '../../stores/auth';
 import { useMetaStore } from '../../stores/meta';
 import { useSettingsStore } from '../../stores/settings';
 import { checkNickname, putNickname } from '../../net/api-client';
@@ -244,10 +251,27 @@ export function ResultView({
  * verdict별 UI 문구(구현 세부 지시 4). valid/flagged는 순위 표시(flagged를 구분하지 않는다 —
  * shadow 원칙, docs/06 §3.5). practice="연습 기록", rejected="기록이 검토 중입니다".
  * submitting/queued는 그 자체로 상태 라벨(아직 verdict 없음).
+ *
+ * [WT-AUTH-04] status==='idle'은 이제 "아직 결정 안 됨"이 아니라 랭킹 게이팅으로 제출을 보류한
+ * 상태다(§11-D68-①) — 로그인 CTA를 그린다. 클릭은 openLogin('ranking')만 하고, 로그인 성공은
+ * useRunSubmit이 스스로 감지해 제출한다(이 컴포넌트가 재호출하지 않는다).
  */
 function SubmissionStatus({ submission }: { submission: ReturnType<typeof useRunSubmit> }) {
   const { t } = useTranslation();
+  const openLogin = useAuthStore((s) => s.openLogin);
 
+  if (submission.status === 'idle') {
+    return (
+      <button
+        type="button"
+        data-testid="result-login-cta"
+        className="wt-btn wt-btn--primary"
+        onClick={() => openLogin('ranking')}
+      >
+        {t('result.loginToRank')}
+      </button>
+    );
+  }
   if (submission.status === 'submitting') {
     return (
       <p className="wt-result-view__submission" data-testid="result-verdict-label">
@@ -278,18 +302,27 @@ function SubmissionStatus({ submission }: { submission: ReturnType<typeof useRun
       </p>
     );
   }
-  // valid | flagged — 서버 응답의 순위를 그대로 표시(§1.4-③ 인라인). flagged도 본인 화면에는
-  // 정상 표시(shadow — 구분 UI 없음, docs/06 §3.5).
+  // valid | flagged — 로그인 계정으로 등재 완료(§11-D68-①, 이 상태는 항상 로그인 후 제출된
+  // 결과다). 서버 응답의 순위를 그대로 표시(§1.4-③ 인라인). flagged도 본인 화면에는 정상 표시
+  // (shadow — 구분 UI 없음, docs/06 §3.5).
+  const registered = (
+    <p className="wt-result-view__submission" data-testid="result-registered">
+      {t('result.registered')}
+    </p>
+  );
   if (submission.rank !== null && submission.total !== null && submission.total > 0) {
     const topPercent = Math.max(1, Math.round((submission.rank / submission.total) * 100));
     return (
-      <p className="wt-result-view__submission" data-testid="result-rank">
-        {t('result.rank.value', { rank: submission.rank, percent: topPercent })}
-        {submission.isPersonalBest && ` · ${t('result.rank.personalBest')}`}
-      </p>
+      <>
+        {registered}
+        <p className="wt-result-view__submission" data-testid="result-rank">
+          {t('result.rank.value', { rank: submission.rank, percent: topPercent })}
+          {submission.isPersonalBest && ` · ${t('result.rank.personalBest')}`}
+        </p>
+      </>
     );
   }
-  return null;
+  return registered;
 }
 
 /**

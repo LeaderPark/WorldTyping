@@ -1,11 +1,23 @@
 // @vitest-environment jsdom
 //
-// spec: docs/01 §10.2(S8), docs/06 §1.4(조회 계약), WT-M3-06
+// spec: docs/01 §10.2(S8), docs/06 §1.4(조회 계약), docs/00 §11-D68, WT-M3-06·WT-AUTH-04(랭킹 게이팅)
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppProviders } from '../../app/providers';
+import { useAuthStore, type AccountSession } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settings';
 import { RankPage } from './index';
+
+function loginSession(): AccountSession {
+  return {
+    token: 'wt1.acct',
+    playerId: 'p1',
+    nickname: 'NIMBUS',
+    expiresAt: Date.now() + 60_000,
+    geo: 'KR',
+    profile: { name: 'NIMBUS', picture: null, email: null },
+  };
+}
 
 const fetchLbPageMock = vi.fn();
 const fetchLbMeMock = vi.fn();
@@ -53,6 +65,9 @@ function renderPage() {
 
 describe('RankPage', () => {
   beforeEach(() => {
+    localStorage.clear();
+    useAuthStore.getState().logout();
+    useAuthStore.getState().closeLogin();
     useSettingsStore.getState().setLang('ko');
     ensureSessionMock.mockResolvedValue({ token: 't', playerId: 'p1', nickname: 'NIMBUS', expiresAt: '', geo: 'XX' });
     fetchSessionMeMock.mockResolvedValue({ playerId: 'p1', nickname: 'NIMBUS', status: 'active', geo: 'XX' });
@@ -63,6 +78,8 @@ describe('RankPage', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    useAuthStore.getState().logout();
+    useAuthStore.getState().closeLogin();
   });
 
   it('마운트 시 기본 필터(전체·세계일주)로 조회한다', async () => {
@@ -114,13 +131,35 @@ describe('RankPage', () => {
     expect(screen.getByTestId('rank-total').textContent).toBe('2');
   });
 
-  it('내 행이 페이지 밖이면 /lb/me 요약을 고정 표시한다', async () => {
+  it('로그인 상태 + 내 행이 페이지 밖이면 /lb/me 요약을 고정 표시한다', async () => {
+    act(() => useAuthStore.getState().login(loginSession()));
     fetchLbPageMock.mockResolvedValue({ entries: [mkEntry({ userId: 'other' })], nextCursor: null, total: 2000 });
     fetchLbMeMock.mockResolvedValue({ rank: 841, total: 2000, percentile: 0.42, onBoard: true });
     renderPage();
 
     await waitFor(() => expect(screen.getByTestId('rank-my-row-pinned')).toBeInTheDocument());
     expect(screen.getByTestId('rank-my-row-pinned').textContent).toContain('841');
+    expect(screen.queryByTestId('rank-login-cta')).not.toBeInTheDocument();
+  });
+
+  // ── 랭킹 게이팅(WT-AUTH-04, §11-D68-①) ────────────────────────────────────
+  describe('로그인 게이팅', () => {
+    it('비로그인이면 "내 순위" 자리에 로그인 CTA를 보여준다(등재된 순위가 있을 수 없다)', async () => {
+      fetchLbMeMock.mockResolvedValue({ rank: 841, total: 2000, percentile: 0.42, onBoard: true }); // 실제로는 불가능한 값이어도 CTA가 우선한다.
+      renderPage();
+
+      await waitFor(() => expect(screen.getByTestId('rank-login-cta')).toBeInTheDocument());
+      expect(screen.getByTestId('rank-login-cta').textContent).toBe('로그인하고 내 기록을 등록하세요');
+      expect(screen.queryByTestId('rank-my-row-pinned')).not.toBeInTheDocument();
+    });
+
+    it('로그인 CTA 클릭 → 로그인 모달을 "랭킹" 사유로 연다', async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId('rank-login-cta')).toBeInTheDocument());
+
+      act(() => fireEvent.click(screen.getByTestId('rank-login-cta')));
+      expect(useAuthStore.getState().loginReason).toBe('ranking');
+    });
   });
 
   it('더 보기 클릭 시 커서로 다음 페이지를 이어붙인다', async () => {

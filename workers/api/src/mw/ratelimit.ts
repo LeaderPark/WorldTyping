@@ -22,6 +22,8 @@ export const LIMITS = {
   auth: { per: "ip", window: 60, max: 10 },
   "runs/start": { per: "pid", window: 60, max: 10 },
   "runs/submit": { per: "pid", window: 60, max: 10 },
+  // POST /chase/start(WT-CH-09, docs/09 §9.1) — runs/start와 동일 한도(단발성 시드 발급, 재발급 자유).
+  "chase/start": { per: "pid", window: 60, max: 10 },
   nickname: { per: "pid", window: 3600, max: 5 },
   "rooms(create)": { per: "pid", window: 60, max: 5 },
   leaderboard: { per: "ip", window: 60, max: 60 },

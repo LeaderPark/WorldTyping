@@ -18,6 +18,14 @@
 // 유닛의 자모 길이를 toJamoSeq로 계산해 구분자(공백·구두점 = 자모 len 0)를 식별한다(기법은 WT-M2-03
 // 마운트와 동일). update는 rawValue를 같은 기법으로 쪼개 각 입력 유닛의 자모 구간 [s,e)를 얻고,
 // detail.matchedLen과 비교해 상태를 산정한다.
+//
+// [자모 채움 행 — docs/00 §11-D69] ko 콘텐츠 슬롯은 힌트/에코 글리프 아래에 캐노니컬 음절 자모
+// 길이(cap=toJamoSeq(음절).length)만큼의 밑줄 슬롯 행(.wt-slot__jamo > .wt-jamo × cap)을 mount 시
+// 1회 만든다(en·구분자는 미생성). update는 detail.matchedLen/inputLen을 캐노니컬 슬롯 경계 [s,e)에
+// 사상해 각 자모 슬롯을 match(정타)/error(오타)/empty(미입력)로 채운다(data-fill — .wt-unit의
+// data-state와 별도 네임스페이스라 E2E 셀렉터 계약과 격리). 색: 일치=--wt-prompt-match(=var(--text),
+// 테마 자동), 불일치=--wt-prompt-error(#ef4444), 미채움=--wt-prompt-slot(=var(--border)). 치수는
+// 상태 불변(색/클래스만) — 리플로우 0(§3.6).
 import {
   normalizeEn,
   normalizeKo,
@@ -38,6 +46,11 @@ const SHAKE_MS = 120;
 /** 슬롯을 넘어선 초과 입력을 tail에 최대 몇 유닛까지 보일지(§2.8 D66). */
 const TAIL_MAX_UNITS = 4;
 
+/** [lo,hi]로 클램프(자모 채움 산식 — docs/00 §11-D69). */
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
 interface Slot {
   /** 세로 칼럼 컨테이너(.wt-slot) — 커서 ::after 앵커. */
   root: HTMLSpanElement;
@@ -53,6 +66,15 @@ interface Slot {
   char: string;
   /** 마지막으로 적용된 상태(sep은 항상 null). */
   state: SyllableState | null;
+  // ── D69: 자모 채움 행(ko 콘텐츠 슬롯만 생성; en·구분자는 빈 배열/미생성) ──
+  /** 자모 밑줄 슬롯 요소들(.wt-jamo × cap). textContent 없음 — data-fill로만 채색(E2E 격리). */
+  jamoEls: HTMLSpanElement[];
+  /** 이 슬롯 캐노니컬의 자모 시작 오프셋(콘텐츠 슬롯 누적 cap). matched/inputLen 사상 기준. */
+  jamoStart: number;
+  /** 마지막으로 적용된 match 자모 수(diff 캐시). */
+  jamoM: number;
+  /** 마지막으로 적용된 error 자모 수(diff 캐시). */
+  jamoX: number;
 }
 
 /**
@@ -86,6 +108,11 @@ export class PromptRenderer {
     this.root = el;
 
     el.classList.add('wt-prompt');
+    // 국가당 clean-slate: 직전 국가에서 진행 중이던 팝/셰이크 애니 class를 제거한다. clearTimers()가
+    // 그 제거 타이머를 이미 취소했으므로, 같은 el을 재사용하는 국가 전환에서 이 class가 stuck으로
+    // 남지 않게 여기서 명시적으로 지운다(그렇지 않으면 직전 국가의 정타 miss 셰이크가 다음 국가
+    // 프롬프트로 새어 보인다 — WT-DC-09 E9b(ii)). unmount()의 정리와 대칭.
+    el.classList.remove('wt-prompt--pop', 'wt-prompt--shake');
     el.setAttribute('data-lang', lang);
 
     el.replaceChildren();
@@ -96,6 +123,7 @@ export class PromptRenderer {
     this.glyphLayer = glyphLayer;
 
     const displayText = lang === 'ko' ? country.nameKo : country.nameEn;
+    let jamoOffset = 0; // ko 콘텐츠 슬롯 누적 자모 오프셋(자모 채움 사상 기준, D69)
     for (const ch of displayText) {
       const len = this.unitLen(ch);
       const isSep = len === 0;
@@ -114,8 +142,40 @@ export class PromptRenderer {
       glyph.className = isSep ? 'wt-unit wt-unit--sep' : 'wt-unit';
       slotEl.appendChild(glyph);
 
+      // 자모 채움 행(D69): ko 콘텐츠 슬롯만. 캐노니컬 음절 자모 수(len=cap)만큼 빈 밑줄 슬롯.
+      // textContent는 절대 넣지 않는다(prompt-mount textContent=국가명 계약 + .wt-unit 격리).
+      const jamoEls: HTMLSpanElement[] = [];
+      let jamoStart = 0;
+      if (lang === 'ko' && !isSep) {
+        jamoStart = jamoOffset;
+        const jamoRow = document.createElement('span');
+        jamoRow.className = 'wt-slot__jamo';
+        jamoRow.setAttribute('aria-hidden', 'true');
+        for (let i = 0; i < len; i++) {
+          const j = document.createElement('span');
+          j.className = 'wt-jamo';
+          j.dataset.fill = 'empty';
+          jamoRow.appendChild(j);
+          jamoEls.push(j);
+        }
+        slotEl.appendChild(jamoRow);
+        jamoOffset += len;
+      }
+
       glyphLayer.appendChild(slotEl);
-      const slot: Slot = { root: slotEl, hint, glyph, canonical: ch, isSep, char: '', state: null };
+      const slot: Slot = {
+        root: slotEl,
+        hint,
+        glyph,
+        canonical: ch,
+        isSep,
+        char: '',
+        state: null,
+        jamoEls,
+        jamoStart,
+        jamoM: 0,
+        jamoX: 0,
+      };
       this.slots.push(slot);
       if (!isSep) this.contentSlots.push(slot);
     }
@@ -137,17 +197,21 @@ export class PromptRenderer {
     if (!this.root) return;
 
     // EXACT: rawValue가 플러시로 비었으므로(§2.5) 에코 대신 캐노니컬 글리프로 전 슬롯을 done
-    // 채우고 커서·tail을 정리한다(확정 순간 국가명 전체가 done으로 점등 → pop).
+    // 채우고 커서·tail을 정리한다(확정 순간 국가명 전체가 done으로 점등 → pop). 자모 행은 전량 match.
     if (detail.state === 'EXACT') {
-      for (const s of this.contentSlots) this.setGlyph(s, s.canonical, 'done');
+      for (const s of this.contentSlots) {
+        this.setGlyph(s, s.canonical, 'done');
+        this.fillJamo(s, s.jamoEls.length, 0); // 전 자모 match
+      }
       this.setTail('');
       this.moveCursor(null);
       return;
     }
 
     const matched = Math.max(0, detail.matchedLen);
+    const inputLen = detail.inputLen;
     // 오타 구간 존재 여부: 정타 접두를 넘어선 입력 자모가 있으면(=MISS) [matched, inputLen)이 오타.
-    const hasError = matched < detail.inputLen;
+    const hasError = matched < inputLen;
 
     // rawValue를 코드포인트 유닛으로 분해해 자모 구간 [s,e) 계산(len 0 입력 문자는 슬롯 미점유).
     let offset = 0;
@@ -170,6 +234,18 @@ export class PromptRenderer {
     // 잔여(미입력) 슬롯 = 빈 pending(빈 밑줄) [리드 확정 A안].
     for (let k = typedCount; k < this.contentSlots.length; k++) {
       this.setGlyph(this.contentSlots[k]!, '', 'pending');
+    }
+
+    // 자모 채움(D69): 캐노니컬 슬롯 경계 [start,end)에 matched/inputLen을 사상한다(글리프 에코와
+    // 독립 — rawValue가 아니라 detail만으로 결정). 각 슬롯: 앞 m개 match, 다음 x개 error, 나머지 empty.
+    for (const s of this.contentSlots) {
+      const cap = s.jamoEls.length;
+      if (cap === 0) continue; // en·구분자(자모 행 미생성)
+      const start = s.jamoStart;
+      const end = start + cap;
+      const m = clamp(matched - start, 0, cap);
+      const x = clamp(Math.min(end, inputLen) - Math.max(start, matched), 0, cap - m);
+      this.fillJamo(s, m, x);
     }
 
     this.setTail(overflow.join(''));
@@ -219,6 +295,11 @@ export class PromptRenderer {
   /** 진단/테스트용: 각 슬롯 글리프의 현재 상태(구분자는 null). */
   getUnitStates(): (SyllableState | null)[] {
     return this.slots.map((s) => (s.isSep ? null : s.state));
+  }
+
+  /** 진단/테스트용: 각 슬롯 자모 행의 채움(match m·error x). 자모 행이 없는 슬롯(en·구분자)은 null. */
+  getJamoFills(): Array<{ m: number; x: number } | null> {
+    return this.slots.map((s) => (s.jamoEls.length > 0 ? { m: s.jamoM, x: s.jamoX } : null));
   }
 
   /** 마운트 해제 — 타이머 정리 + DOM 비움(hibernation/누수 방지 습관). */
@@ -273,6 +354,22 @@ export class PromptRenderer {
     }
   }
 
+  /**
+   * 자모 채움 행 diff 반영(D69) — 앞 m개 match, 다음 x개 error, 나머지 empty. (m,x)가 바뀐 슬롯만
+   * DOM을 만진다. 치수 불변이라 data-fill 속성만 토글 → 레이아웃 write 0(§3.6).
+   */
+  private fillJamo(slot: Slot, m: number, x: number): void {
+    if (slot.jamoEls.length === 0) return; // en·구분자: 자모 행 없음
+    if (slot.jamoM === m && slot.jamoX === x) return;
+    slot.jamoM = m;
+    slot.jamoX = x;
+    for (let i = 0; i < slot.jamoEls.length; i++) {
+      const fill = i < m ? 'match' : i < m + x ? 'error' : 'empty';
+      const el = slot.jamoEls[i]!;
+      if (el.dataset.fill !== fill) el.dataset.fill = fill;
+    }
+  }
+
   /** tail(초과 입력) diff 반영. 비었으면 텍스트만 비운다(색은 CSS 고정). */
   private setTail(text: string): void {
     if (!this.tail || this.tailText === text) return;
@@ -288,9 +385,12 @@ export class PromptRenderer {
     this.cursorEl = next;
   }
 
-  /** 초기/재설정: 전 비구분자 슬롯 빈 pending, tail 비움, 커서를 첫 슬롯에. */
+  /** 초기/재설정: 전 비구분자 슬롯 빈 pending + 자모 행 empty, tail 비움, 커서를 첫 슬롯에. */
   private renderClear(): void {
-    for (const s of this.contentSlots) this.setGlyph(s, '', 'pending');
+    for (const s of this.contentSlots) {
+      this.setGlyph(s, '', 'pending');
+      this.fillJamo(s, 0, 0);
+    }
     this.setTail('');
     this.moveCursor(this.contentSlots[0]?.root ?? null);
   }

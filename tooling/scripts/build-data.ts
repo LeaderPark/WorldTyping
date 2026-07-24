@@ -7,13 +7,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname } from 'node:path';
-import { buildDataset } from '../../packages/data/src/build/pipeline.ts';
+import { BUILT_AT, buildDataset, sha256 } from '../../packages/data/src/build/pipeline.ts';
 import {
   routeDistanceReport,
   un195ContinentIndex,
   validateContinentRoute,
   validateWorldTour,
 } from '../../packages/data/src/build/route.ts';
+import {
+  buildChaseGraph,
+  renderChaseGraphTs,
+  validateChaseGraph,
+} from '../../packages/data/src/build/chase-graph.ts';
 import { buildOgMaps } from './lib/og-maps-extract.ts';
 import type { Continent, Country } from '@wt/shared';
 
@@ -86,6 +91,33 @@ async function validateRoutesStep(dataset: { countries: Country[] }): Promise<vo
   }
 }
 
+/**
+ * Step: chase-graph(WT-CH-01, docs/09 §5.1 + docs/00 §11-D90·D91-⑥) — un195 전용 nearest-12 +
+ * homeEligible + 전쌍 정수 km 행렬. buildChaseGraph는 순수 함수, validateChaseGraph가 검증 룰
+ * 4종(nearest 정확히 12·연결성·homeEligible>=30·행렬 대칭/양수/일치)을 통과 못 하면 throw한다
+ * (빌드 실패 — 우회 금지). anchor 좌표는 dataset.countries의 latlng(GlobeIndex와 동일 원천).
+ */
+function buildChaseGraphStep(dataset: { countries: Country[] }): {
+  chaseGraphJson: string;
+  chaseGraphTs: string;
+  homeEligibleCount: number;
+  idsCount: number;
+} {
+  const contentSets = JSON.parse(readFileSync(p('packages/data/overrides/content-sets.json'), 'utf8')) as {
+    un195: string[];
+    extended: string[];
+  };
+  const un195 = new Set(contentSets.un195);
+  const graph = buildChaseGraph(dataset.countries, un195, BUILT_AT);
+  const { homeEligibleCount } = validateChaseGraph(graph, un195);
+  return {
+    chaseGraphJson: JSON.stringify(graph),
+    chaseGraphTs: renderChaseGraphTs(graph),
+    homeEligibleCount,
+    idsCount: graph.ids.length,
+  };
+}
+
 async function main(): Promise<void> {
   console.log('[build-data] building deterministic country dataset…');
 
@@ -115,10 +147,25 @@ async function main(): Promise<void> {
 
   await validateRoutesStep(dataset);
 
+  // Step: chase-graph(WT-CH-01) — un195 nearest-12 + 전쌍 정수 km 행렬(docs/09 §5.1, §11-D91-⑥).
+  const chase = buildChaseGraphStep(dataset);
+
   writeOut('apps/web/public/data/countries.json', countriesJson);
   writeOut('apps/web/public/data/countries-110m.json', topojsonJson);
-  writeOut('apps/web/public/data/manifest.json', manifestJson);
   writeOut('packages/data/src/generated/countries.ts', generatedTs);
+  writeOut('apps/web/public/data/chase-graph.json', chase.chaseGraphJson);
+  writeOut('packages/data/src/generated/chase-graph.ts', chase.chaseGraphTs);
+
+  // manifest.json: 기존 countries/map 체크섬(§10) + chase-graph 체크섬(WT-CH-01) 병합 — 필드
+  // 추가만(기존 소비자는 manifest.countries.sha256만 읽으므로 §10 계약 무회귀, apps/web/src/app/
+  // bootLoader.ts·workers/api/src/routes/config.ts 실사 완료).
+  const manifestObj = JSON.parse(manifestJson) as Record<string, unknown>;
+  manifestObj.chaseGraph = {
+    ids: chase.idsCount,
+    homeEligible: chase.homeEligibleCount,
+    sha256: sha256(chase.chaseGraphJson),
+  };
+  writeOut('apps/web/public/data/manifest.json', JSON.stringify(manifestObj));
 
   // Step 7-(f): OG 공유 카드용 대륙 지도 사전 추출(WT-M6-02, docs/06 §9.1 — 런타임 topojson 파싱
   // 금지). 게임과 동일한 960×500 geoNaturalEarth1 투영으로 대륙별 단순 SVG path + 국가 중심점을
@@ -147,6 +194,11 @@ async function main(): Promise<void> {
     console.log(`  T${t}   | ${String(n).padStart(5)} | ${String(target[t]).padStart(6)} | ${delta >= 0 ? '+' : ''}${delta}${flag}`);
   }
   console.log(`\n  tier overrides applied: ${stats.tierOverridesApplied}`);
+
+  // ── stats: chase-graph(WT-CH-01) ────────────────────────────────
+  console.log('\n[build-data] chase-graph (docs/09 §5.1)');
+  console.log(`  ids: ${chase.idsCount} (un195)`);
+  console.log(`  homeEligible (tier<=2): ${chase.homeEligibleCount} (>= 30 required)`);
 
   console.log(
     `\n[build-data] done. total=${stats.total} un195=${stats.un195} extended=${stats.extended}`,

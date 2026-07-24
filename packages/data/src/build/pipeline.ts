@@ -320,7 +320,8 @@ export function buildDataset(): BuildResult {
   return assemble(loadInputs());
 }
 
-function sha256(s: string): string {
+/** sha256 hex — manifest 체크섬 공통 유틸(WT-CH-01: chase-graph manifest 항목도 이 함수를 재사용). */
+export function sha256(s: string): string {
   return createHash('sha256').update(s, 'utf8').digest('hex');
 }
 

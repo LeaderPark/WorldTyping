@@ -160,9 +160,10 @@ test.describe('E-AUTH — 로그인/크롬/게이팅/Footer (WT-AUTH)', () => {
     await expect(page.getByTestId('topbar-login')).toBeVisible();
   });
 
-  test('Footer — 브라우징 화면 노출·링크 3종·인게임 미노출', async ({ page }) => {
+  test('Footer — 브라우징 화면 노출·법적 모달(URL 불변·포커스 복귀)·인게임 미노출', async ({ page }) => {
     // §11-D68-⑨: Footer는 브라우징 화면(홈·로비·rank·passport·daily·privacy·terms·support·credits·404)
-    // 에만 노출되고 인게임(/play/*)·대기실(/multi/:code)에는 없다.
+    // 에만 노출되고 인게임(/play/*)·대기실(/multi/:code)에는 없다. §11-D72: 개인정보/약관/지원은
+    // 라우트 이동 없이(URL·히스토리 불변) 현재 화면 위 제자리 딤 스크림 모달로 열린다.
     await reserveSessionSlot();
     await page.goto('/');
     await dismissLangGate(page);
@@ -173,9 +174,27 @@ test.describe('E-AUTH — 로그인/크롬/게이팅/Footer (WT-AUTH)', () => {
     await expect(page.getByTestId('footer-link-terms')).toBeVisible();
     await expect(page.getByTestId('footer-link-support')).toBeVisible();
 
-    // 링크 이동(클라 내비): 개인정보처리방침.
+    const homeUrl = page.url();
+
+    // 개인정보 → 제자리 모달(라우트 이동 없음). ko 게이트 통과 상태라 활성 언어 본문(ko)이 뜬다.
     await page.getByTestId('footer-link-privacy').click();
+    await expect(page.getByTestId('legal-modal')).toBeVisible();
     await expect(page.getByTestId('privacy-body-ko')).toBeVisible();
+    expect(page.url()).toBe(homeUrl); // URL·히스토리 불변(§11-D72).
+
+    // 닫기 버튼 → 모달 사라지고 여전히 홈(라우트 불변).
+    await page.getByTestId('legal-modal-close').click();
+    await expect(page.getByTestId('legal-modal')).toHaveCount(0);
+    await expect(page.getByTestId('home-page')).toBeVisible();
+    expect(page.url()).toBe(homeUrl);
+
+    // 약관 → 모달 → ESC → 모달 닫히고 포커스가 트리거(footer-link-terms)로 복귀(useModalA11y 계약).
+    await page.getByTestId('footer-link-terms').click();
+    await expect(page.getByTestId('legal-modal')).toBeVisible();
+    await expect(page.getByTestId('terms-body-ko')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('legal-modal')).toHaveCount(0);
+    await expect(page.getByTestId('footer-link-terms')).toBeFocused();
 
     // 인게임 진입 → Footer 미노출(브라우징 화면 아님).
     await gotoBoarding(page, 'continent', 'south-america');

@@ -138,20 +138,31 @@ test.describe('E10 — 접근성(wcag2a/wcag2aa, 전 페이지)', () => {
     await assertNoViolations(page, 'S13 개인정보처리방침(+데이터 섹션)');
   });
 
-  test('S-legal 이용약관(/terms)·고객지원(/support) + Footer (직접 URL 1회 + Footer 클라 내비)', async ({
+  test('S-legal 이용약관(/terms) 직접 URL + Footer 법적 모달(열린 상태 axe) — §11-D72', async ({
     page,
   }) => {
-    // [WT-AUTH-06] 법적 3페이지 중 신규 /terms·/support를 a11y 스윕에 편입한다(§11-D68-⑨). Footer는
-    // 브라우징 화면에 상시 노출되므로(AppShell.isBrowsingRoute) 두 페이지 모두 site-footer를 포함해
-    // 스캔된다 — 추가 세션 없이 Footer의 지원 링크로 /terms→/support를 클라 내비로 잇는다.
+    // [WT-AUTH-06 → WT-LGL-01] /terms 라우트는 존치(§11-D72)하므로 직접 URL 스윕은 유지한다. 단
+    // footer는 이제 라우트로 잇지 않고 제자리 모달을 연다 — /support 직접 스윕(추가 goto=세션 슬롯
+    // +1) 대신, /terms 위에서 footer로 모달을 열어 열린 상태의 dialog a11y(role=dialog·aria-modal·
+    // scrollable-region-focusable)를 스캔한다. /support는 /terms와 100% 동일 파이프라인(LegalArticle
+    // +MarkdownLiteBody)이라 라우트 렌더 자체는 router.test.ts h1 순회가 가드한다.
     await reserveSessionSlot();
     await page.goto('/terms');
     await expect(page.getByTestId('terms-page')).toBeVisible();
     await expect(page.getByTestId('site-footer')).toBeVisible();
     await assertNoViolations(page, 'S 이용약관(/terms, +Footer)');
 
+    // Footer 지원 → 제자리 모달(URL은 /terms 유지). 모달 열린 상태로 axe 스캔.
+    const termsUrl = page.url();
     await page.getByTestId('footer-link-support').click();
-    await expect(page.getByTestId('support-page')).toBeVisible();
-    await assertNoViolations(page, 'S 고객지원(/support, +Footer)');
+    await expect(page.getByTestId('legal-modal')).toBeVisible();
+    // 본문은 활성 언어(신규 컨텍스트 기본 로케일)로 렌더되므로 언어 무관 래퍼 testid로 확인한다.
+    await expect(page.getByTestId('legal-modal-body')).toBeVisible();
+    expect(page.url()).toBe(termsUrl); // 라우트 불변.
+    await assertNoViolations(page, 'S 법적 모달(dialog 열린 상태, /support 콘텐츠)');
+
+    // ESC로 닫힘.
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('legal-modal')).toHaveCount(0);
   });
 });

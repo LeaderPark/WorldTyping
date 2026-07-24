@@ -88,6 +88,7 @@ M6 완료 후 리드 지시로 추가된 후속 태스크 계열. `docs/00` §11
 | 디자인 정합 (WT-DC) | DC-01 `d1f9011` · DC-02 `50948bd` · DC-03 `8b695e8` · DC-04 `8146fc1` · DC-05 `b9468a8` · DC-06 `8c382cc` · DC-07 `2597a67`(D66) · DC-08 `90fd7a1`(D67, idle-spin 후속 `928ad72`) · DC-09 `42f72f6`(D69·D70) · DC-10 `26061a2`+`08f6aa9` · myBest 표기 확정 `2b6730c` · 공유 X/Threads 버튼 제거 `967cebc` |
 | 계정 로그인 (WT-AUTH, D68) | AUTH-01 `6b05bb0` · AUTH-03 `d505837` · AUTH-02 `37032d7` · AUTH-04 `50765f9` · AUTH-07 `c7b1b98` · AUTH-05 `024666b` · AUTH-06 `f120a78` · 기어→테마 토글 `b6e549a` · AUTH-08(e2e 이행) `64983b1`+`875f4de` · a11y 대비 회귀 3종 후속 `98b1cda` |
 | 리드 결정 (docs) | `ffc5ba5`+`3922c5c`(D59~D65) · `191cd0f`(D68) · D66·D67·D69·D70은 해당 태스크 커밋에 동봉 · D71(멀티 라이브 검증 정책 — §8.7) |
+| footer 튜닝 (WT-LGL-01·Tweak C, D72) | WT-LGL-01 — footer 법적 링크(개인정보/약관/지원)를 제자리 딤 스크림 모달로 전환 + 법적 본문 settings.lang 단일 언어화(신규 `features/legal/*`, 페이지·모달 공유 `LegalArticle`, `privacy.lang.*` 키 양쪽 삭제, §11-D72) · Tweak C — footer 하단 고정(AppShell flex 레이아웃) + 희소 페이지(로비) 방 목록 내부 스크롤. 표시/레이아웃 계층만(판정·점수·프로토콜·엔진 불변). 커밋 2개(Tweak C / WT-LGL-01) |
 
 a11y 후속 3종(`98b1cda`)은 표시 계층 CSS/className만 변경(판정·점수·프로토콜·엔진 불변): ① `.wt-footer__copyright` opacity 0.8 제거(3.62:1 미달 → `--text-muted` 5.54:1) ② `text-red-600`→`red-700` 라이트(PrivacyPage×3·LoginModal×2, `dark:red-400` 유지) ③ `.wt-strip__secondary`(WT-DC-10 보조행)를 `--continent-*-text` 토큰으로 repoint(골드/시안 2.83:1 미달 → D62 대륙·테마별 튜닝 토큰, BoardingStrip이 `--wt-strip-continent-text` 주입).
 

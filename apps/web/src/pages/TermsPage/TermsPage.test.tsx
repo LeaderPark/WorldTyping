@@ -1,14 +1,24 @@
 // @vitest-environment jsdom
-// spec: docs/00 §11-D68-⑨(/terms 신설 — 표준 초안 9항, LeaderPark 명의, 법률 자문 아님 고지), WT-AUTH-06
+// spec: docs/00 §11-D68-⑨(/terms — 표준 초안 9항, LeaderPark 명의, 법률 자문 아님 고지),
+//       §11-D72(단일 언어 렌더 — ko/en 병기 폐기), WT-AUTH-06 → WT-LGL-01. 본문은 settings.lang
+//       단일 언어만 렌더하므로 언어별 단언은 스토어 전환 후 각각 수행한다.
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
+import { useSettingsStore } from '../../stores/settings';
 import { TermsPage } from './index';
 
-afterEach(() => cleanup());
+beforeEach(() => {
+  localStorage.clear();
+});
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
-function renderPage() {
+function renderPage(lang: 'ko' | 'en' = 'ko') {
+  useSettingsStore.getState().setLang(lang);
   return render(
     <AppProviders>
       <MemoryRouter>
@@ -26,50 +36,56 @@ describe('TermsPage', () => {
     expect(heading.textContent).not.toBe('');
   });
 
-  it('renders both the Korean and English bodies (ko/en 병기, same convention as PrivacyPage)', () => {
-    renderPage();
+  it('renders only the active-language body (§11-D72 단일 언어)', () => {
+    renderPage('ko');
     expect(screen.getByTestId('terms-body-ko').textContent).toContain('이용약관');
+    expect(screen.queryByTestId('terms-body-en')).not.toBeInTheDocument();
+
+    cleanup();
+    renderPage('en');
     expect(screen.getByTestId('terms-body-en').textContent).toContain('Terms of Service');
+    expect(screen.queryByTestId('terms-body-ko')).not.toBeInTheDocument();
   });
 
-  it('contains the 9 required sections (목적/서비스/계정/의무/제재/지재권/변경중단/면책/준거법) in both languages', () => {
-    renderPage();
-    const koHeadings = within(screen.getByTestId('terms-body-ko'))
-      .getAllByRole('heading')
-      .map((h) => h.textContent ?? '');
-    const enHeadings = within(screen.getByTestId('terms-body-en'))
-      .getAllByRole('heading')
-      .map((h) => h.textContent ?? '');
-    for (let n = 1; n <= 9; n += 1) {
-      const prefix = `${n}. `;
-      expect(koHeadings.some((h) => h.startsWith(prefix)), `ko section ${n} missing (${JSON.stringify(koHeadings)})`).toBe(true);
-      expect(enHeadings.some((h) => h.startsWith(prefix)), `en section ${n} missing (${JSON.stringify(enHeadings)})`).toBe(true);
+  it('contains the 9 required sections (목적/서비스/계정/의무/제재/지재권/변경중단/면책/준거법) in each language', () => {
+    for (const lang of ['ko', 'en'] as const) {
+      renderPage(lang);
+      const headings = within(screen.getByTestId(`terms-body-${lang}`))
+        .getAllByRole('heading')
+        .map((h) => h.textContent ?? '');
+      for (let n = 1; n <= 9; n += 1) {
+        const prefix = `${n}. `;
+        expect(headings.some((h) => h.startsWith(prefix)), `${lang} section ${n} missing (${JSON.stringify(headings)})`).toBe(true);
+      }
+      cleanup();
     }
   });
 
   it('names the operator (LeaderPark) and fixed contact email, and references /credits for licenses', () => {
-    renderPage();
-    const ko = screen.getByTestId('terms-body-ko').textContent ?? '';
-    const en = screen.getByTestId('terms-body-en').textContent ?? '';
-    for (const body of [ko, en]) {
+    for (const lang of ['ko', 'en'] as const) {
+      renderPage(lang);
+      const body = screen.getByTestId(`terms-body-${lang}`).textContent ?? '';
       expect(body).toContain('LeaderPark');
       expect(body).toContain('dkdleldjqkr976@gmail.com');
       expect(body).toContain('/credits');
       expect(body).toContain('/privacy');
+      cleanup();
     }
   });
 
-  it('carries the "standard draft, not legal advice" disclaimer in both languages', () => {
-    renderPage();
-    const ko = screen.getByTestId('terms-body-ko').textContent ?? '';
-    const en = screen.getByTestId('terms-body-en').textContent ?? '';
-    expect(ko).toContain('법률 자문');
-    expect(en.toLowerCase()).toContain('legal advice');
+  it('carries the "standard draft, not legal advice" disclaimer in each language', () => {
+    renderPage('ko');
+    expect(screen.getByTestId('terms-body-ko').textContent).toContain('법률 자문');
+    cleanup();
+    renderPage('en');
+    expect((screen.getByTestId('terms-body-en').textContent ?? '').toLowerCase()).toContain('legal advice');
   });
 
   it('states Korean law as the governing law (준거법 대한민국)', () => {
-    renderPage();
+    renderPage('ko');
     expect(screen.getByTestId('terms-body-ko').textContent).toContain('대한민국');
+    cleanup();
+    renderPage('en');
     expect(screen.getByTestId('terms-body-en').textContent).toContain('Republic of Korea');
   });
 

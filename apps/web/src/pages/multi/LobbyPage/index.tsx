@@ -257,7 +257,9 @@ export function LobbyPage() {
   return (
     <>
       <TopBar back />
-      <main className="wt-lobby" data-testid="lobby-page">
+      {/* [Tweak C] flex-1·min-h-0로 뷰포트를 채워(AppShell flex 레이아웃) 방 목록만 내부
+          스크롤하게 한다 — 헤더 카드는 고정, footer는 뷰포트 하단 유지. */}
+      <main className="wt-lobby min-h-0 flex-1" data-testid="lobby-page">
         {/* 안내 배너 — 비로그인/로그인 분기(§11-D68 로비 재구성). */}
         <p
           className="wt-lobby__banner"
@@ -351,18 +353,22 @@ export function LobbyPage() {
           </div>
         </section>
 
-        {/* 방 카드 리스트 / 비밀방 안내 / 빈 목록. */}
-        {filter === 'private' ? (
-          <p className="wt-lobby__notice" data-testid="lobby-private-hint">
-            {t('multi.room.join')}
-          </p>
-        ) : visibleRooms.length === 0 ? (
-          <p className="wt-lobby__notice" data-testid="lobby-empty">
-            {t('multi.publicRooms.empty')}
-          </p>
-        ) : (
-          <ul className="wt-lobby__rooms" data-testid="lobby-rooms">
-            {visibleRooms.map((r) => {
+        {/* 방 카드 리스트 / 비밀방 안내 / 빈 목록. [Tweak C] 이 영역만 내부 스크롤(flex-1·min-h-0·
+            overflow-y-auto)한다 — 목록이 많으면 여기서 스크롤하고, 적거나 없어도 flex-1로 크기를
+            유지해 헤더 카드/footer 위치가 흔들리지 않는다. tabIndex={0}은 axe scrollable-region-
+            focusable(wcag2a) 대비(전 항목이 잠긴 방이라 포커서블 자식이 없어도 키보드로 스크롤 가능). */}
+        <div className="wt-lobby__list" tabIndex={0}>
+          {filter === 'private' ? (
+            <p className="wt-lobby__notice" data-testid="lobby-private-hint">
+              {t('multi.room.join')}
+            </p>
+          ) : visibleRooms.length === 0 ? (
+            <p className="wt-lobby__notice" data-testid="lobby-empty">
+              {t('multi.publicRooms.empty')}
+            </p>
+          ) : (
+            <ul className="wt-lobby__rooms" data-testid="lobby-rooms">
+              {visibleRooms.map((r) => {
               const joinable = r.phase === 'WAITING' || r.phase === 'CREATED';
               const roomLang = r.lang === 'en' ? 'en' : 'ko';
               return (
@@ -405,8 +411,9 @@ export function LobbyPage() {
                 </li>
               );
             })}
-          </ul>
-        )}
+            </ul>
+          )}
+        </div>
 
         {createOpen && (
           <CreateRoomModal

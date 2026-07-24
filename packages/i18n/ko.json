@@ -337,8 +337,6 @@
   "settings.resetConfirm.cancel": "취소",
   "settings.resetConfirm.done": "삭제가 완료됐어요. 리더보드 반영까지 최대 10분이 걸릴 수 있어요.",
 
-  "privacy.lang.ko": "한국어",
-  "privacy.lang.en": "English",
   "privacy.credits.heading": "데이터 출처 및 라이선스 고지",
   "privacy.credits.worldCountries": "국가 데이터: world-countries — ODbL 1.0",
   "privacy.credits.naturalEarth": "지도 데이터: Natural Earth / world-atlas — Public Domain / ISC",

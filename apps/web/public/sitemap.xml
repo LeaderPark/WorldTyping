@@ -45,6 +45,18 @@
     <changefreq>monthly</changefreq>
     <priority>0.2</priority>
   </url>
+  <!-- §11-D72: footer가 <a>에서 <button>이 되며 /terms·/support로의 내부 앵커 크롤 경로가
+       사라졌다 — 라우트는 존치(SEO·직접 링크)하므로 sitemap이 그 발견 경로를 보완한다. -->
+  <url>
+    <loc>https://typetrip.example/terms</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  <url>
+    <loc>https://typetrip.example/support</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.2</priority>
+  </url>
   <url>
     <loc>https://typetrip.example/credits</loc>
     <changefreq>monthly</changefreq>

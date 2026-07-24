@@ -70,14 +70,23 @@ export function AppShell() {
   return (
     // WT-UI-01(D57): bg-white/dark:bg-slate-900 하드코딩 → --bg/--text 시맨틱 토큰(tailwind.config.ts
     // var() 매핑). 토큰 자체가 [data-theme='dark']에서 반전되므로 dark: 변형이 더 이상 필요 없다.
-    <div className="min-h-screen bg-bg text-text">
+    //
+    // [Tweak C] 루트를 세로 flex 컬럼(min-h-screen)으로 두고 Outlet을 flex-1 래퍼로 감싼다 —
+    // 래퍼가 남는 높이를 채워(flex-1) SiteFooter를 루트 flex-col의 마지막 in-flow 자식으로서
+    // 뷰포트 하단에 고정한다(콘텐츠가 적은 브라우징 화면에서 footer가 말려 올라오지 않게). 래퍼는
+    // overflow/transform을 걸지 않아(min-h-0·flex만) 문서 스크롤 기준 sticky(랭킹 내 행 등)를
+    // 훼손하지 않는다. footer 마운트 조건(isBrowsingRoute)·LoginModal 배선은 무변경.
+    <div className="flex min-h-screen flex-col bg-bg text-text">
       {/* WT-M6-06: 라우트별 SEO 메타(title/description/OG/Twitter/hreflang) — 시각 출력 없음. */}
       <RouteMeta />
       {/* WT-M6-06: KV config:banner 장애 배너(docs/06 §10-4). */}
       <BannerBar />
       {/* 전역 토스트 영역 — 토스트 스토어/디스패처는 이 태스크 범위 밖. */}
       <div id="wt-toast-region" aria-live="polite" className="sr-only" />
-      <Outlet />
+      {/* [Tweak C] Outlet 래퍼 — 남는 높이를 채워(flex-1) footer를 뷰포트 하단으로 밀어낸다. */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <Outlet />
+      </div>
       {/* [WT-AUTH-06] 브라우징 화면 한정 Footer(§11-D68-⑨) — 인게임·대기실/레이스 제외. */}
       {isBrowsingRoute(pathname) && <SiteFooter />}
       {/* [WT-AUTH-03] 라우트 무관 전역 로그인 모달(§11-D68) — openLogin(reason)으로 어디서든 연다. */}

@@ -17,6 +17,7 @@
   "devDependencies": {
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "3.2.7",
+    "@wt/data": "workspace:*",
     "es-hangul": "^2.3.0"
   }
 }

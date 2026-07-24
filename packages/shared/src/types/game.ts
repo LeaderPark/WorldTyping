@@ -2,10 +2,13 @@
 // 게임 전반의 공용 타입. 판정·점수·프로토콜·랭킹이 공유한다.
 
 /**
- * 게임 모드. 싱글 3모드(continent/tier/worldtour) + daily 챌린지 + race 멀티.
+ * 게임 모드. 싱글 4모드(continent/tier/worldtour + chase) + daily 챌린지 + race 멀티.
  * spec: docs/03 §5, docs/07 WT-M1-01 산출물 정의.
+ * 'chase'(골드 러너)는 docs/09 §0·§13 + docs/00 §11-D90 채택 — 유니온 원천은 이 파일이며
+ * (docs/09 §13의 protocol/constants.ts 표기는 D90에서 착오로 정정), auth 토큰·엔진 rules 타입은
+ * 유니온 확장으로 자동 수용된다.
  */
-export type GameMode = 'continent' | 'tier' | 'worldtour' | 'daily' | 'race';
+export type GameMode = 'continent' | 'tier' | 'worldtour' | 'daily' | 'race' | 'chase';
 
 /**
  * 매 keystroke마다 현재 입력 문자열 전체를 평가해 반환하는 3-상태.

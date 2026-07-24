@@ -76,7 +76,10 @@ export const RunTokenPayloadSchema = z
   .object({
     rid: z.string().min(1),
     pid: z.string().min(1),
-    mode: z.enum(['continent', 'tier', 'worldtour', 'daily', 'race']),
+    // 'chase'(골드 러너, §11-D90)를 GameMode 유니온에 추가하면 하단 _CheckRunToken(Equal 컴파일 검증)이
+    // 이 enum과 정확히 일치해야 하므로 여기도 반드시 동기화한다(WT-CH-02 — 유니온 확장이 auth를 자동
+    // 수용하지 못하는 실제 좌표. 킷의 "auth 무수정" 전제 정정). chase runToken(CH-09) 검증에도 필수.
+    mode: z.enum(['continent', 'tier', 'worldtour', 'daily', 'race', 'chase']),
     modeKey: z.string(),
     lang: z.enum(['ko', 'en']),
     platform: z.enum(['desktop', 'mobile']),

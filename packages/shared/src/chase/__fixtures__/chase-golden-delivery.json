@@ -1,0 +1,237 @@
+{
+  "name": "delivery",
+  "description": "발령 거리 완화(800km), ~12홉: 금 획득 후 홈 귀환 배송(콤보 배수 정산·★−2). 체포 없음.",
+  "seed": 1193046,
+  "constantsOverride": {
+    "firstWantedDistanceKm": 800
+  },
+  "moveLog": [
+    {
+      "hopIndex": 0,
+      "countryId": "MN",
+      "tMs": 1500
+    },
+    {
+      "hopIndex": 1,
+      "countryId": "KR",
+      "tMs": 3000
+    },
+    {
+      "hopIndex": 2,
+      "countryId": "PW",
+      "tMs": 4500
+    },
+    {
+      "hopIndex": 3,
+      "countryId": "KR",
+      "tMs": 6000
+    }
+  ],
+  "endMs": 7000,
+  "expected": {
+    "home": "KR",
+    "player": "PW",
+    "stars": 1,
+    "police": [
+      {
+        "id": 1,
+        "kind": "chaser",
+        "at": "PW",
+        "nextTickMs": 9900,
+        "spawnedAtMs": 1500
+      }
+    ],
+    "golds": [
+      {
+        "at": "MH",
+        "ring": "mid",
+        "value": 700
+      },
+      {
+        "at": "ER",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "at": "KN",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "at": "PG",
+        "ring": "mid",
+        "value": 700
+      }
+    ],
+    "carried": [
+      {
+        "value": 400,
+        "ring": "near"
+      }
+    ],
+    "events": [
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "MH",
+        "ring": "mid",
+        "value": 700
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "MN",
+        "ring": "near",
+        "value": 400
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "PW",
+        "ring": "near",
+        "value": 400
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "ER",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 0,
+        "hopIndex": 0,
+        "candidates": [
+          "VN",
+          "MM",
+          "MN"
+        ]
+      },
+      {
+        "type": "goldPicked",
+        "tMs": 1500,
+        "at": "MN",
+        "ring": "near",
+        "value": 400
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 1500,
+        "at": "KN",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "type": "starChanged",
+        "tMs": 1500,
+        "from": 0,
+        "to": 1,
+        "direction": "up",
+        "reason": "issued"
+      },
+      {
+        "type": "policeSpawned",
+        "tMs": 1500,
+        "id": 1,
+        "kind": "chaser",
+        "at": "KP"
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 1500,
+        "hopIndex": 1,
+        "candidates": [
+          "RU",
+          "MM",
+          "KR"
+        ]
+      },
+      {
+        "type": "delivered",
+        "tMs": 3000,
+        "count": 1,
+        "payout": 400,
+        "starsAfter": 1
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 3000,
+        "hopIndex": 2,
+        "candidates": [
+          "JP",
+          "LA",
+          "PW"
+        ]
+      },
+      {
+        "type": "goldPicked",
+        "tMs": 4500,
+        "at": "PW",
+        "ring": "near",
+        "value": 400
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 4500,
+        "at": "PG",
+        "ring": "mid",
+        "value": 700
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 4500,
+        "hopIndex": 3,
+        "candidates": [
+          "JP",
+          "KH",
+          "KR"
+        ]
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 5700,
+        "id": 1,
+        "from": "KP",
+        "to": "PW"
+      },
+      {
+        "type": "arrested",
+        "tMs": 5700,
+        "by": "chaser",
+        "at": "PW"
+      }
+    ],
+    "arrestedAtMs": 5700,
+    "timeMs": 5700,
+    "hopsProcessed": 3,
+    "visited": [
+      "KR",
+      "MN",
+      "KR",
+      "PW"
+    ],
+    "candidates": [
+      "JP",
+      "KH",
+      "KR"
+    ],
+    "wantedStartMs": 1500,
+    "nextStarUpMs": 46500,
+    "lastPoliceCloseMs": 5700,
+    "lastEscapeMs": -1,
+    "nextPoliceId": 2,
+    "rngCandidates": {
+      "seed": 1193047,
+      "draws": 12
+    },
+    "rngGold": {
+      "seed": 1193044,
+      "draws": 12
+    },
+    "rngPolice": {
+      "seed": 1193045,
+      "draws": 0
+    }
+  }
+}

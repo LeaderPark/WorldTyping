@@ -1,0 +1,227 @@
+{
+  "name": "issuance-pickup",
+  "description": "기본 상수, ~6홉: 홈 3홉 발령(★1) + 금 국가 경유 획득. 체포 없음(짧은 도주).",
+  "seed": 10855845,
+  "constantsOverride": {},
+  "moveLog": [
+    {
+      "hopIndex": 0,
+      "countryId": "MY",
+      "tMs": 1500
+    },
+    {
+      "hopIndex": 1,
+      "countryId": "TH",
+      "tMs": 3000
+    },
+    {
+      "hopIndex": 2,
+      "countryId": "CN",
+      "tMs": 4500
+    },
+    {
+      "hopIndex": 3,
+      "countryId": "VN",
+      "tMs": 6000
+    },
+    {
+      "hopIndex": 4,
+      "countryId": "SG",
+      "tMs": 7500
+    },
+    {
+      "hopIndex": 5,
+      "countryId": "ID",
+      "tMs": 9000
+    }
+  ],
+  "endMs": 11000,
+  "expected": {
+    "home": "VN",
+    "player": "SG",
+    "stars": 1,
+    "police": [
+      {
+        "id": 1,
+        "kind": "chaser",
+        "at": "SG",
+        "nextTickMs": 12900,
+        "spawnedAtMs": 4500
+      }
+    ],
+    "golds": [
+      {
+        "at": "NG",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "at": "SO",
+        "ring": "mid",
+        "value": 700
+      },
+      {
+        "at": "DK",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "at": "BB",
+        "ring": "far",
+        "value": 1200
+      }
+    ],
+    "carried": [],
+    "events": [
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "NG",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "SO",
+        "ring": "mid",
+        "value": 700
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "DK",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "type": "goldSpawned",
+        "tMs": 0,
+        "at": "BB",
+        "ring": "far",
+        "value": 1200
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 0,
+        "hopIndex": 0,
+        "candidates": [
+          "MY",
+          "BD",
+          "BT"
+        ]
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 1500,
+        "hopIndex": 1,
+        "candidates": [
+          "TH",
+          "BD",
+          "PW"
+        ]
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 3000,
+        "hopIndex": 2,
+        "candidates": [
+          "CN",
+          "LK",
+          "BN"
+        ]
+      },
+      {
+        "type": "starChanged",
+        "tMs": 4500,
+        "from": 0,
+        "to": 1,
+        "direction": "up",
+        "reason": "issued"
+      },
+      {
+        "type": "policeSpawned",
+        "tMs": 4500,
+        "id": 1,
+        "kind": "chaser",
+        "at": "MY"
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 4500,
+        "hopIndex": 3,
+        "candidates": [
+          "VN",
+          "KH",
+          "KG"
+        ]
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 6000,
+        "hopIndex": 4,
+        "candidates": [
+          "SG",
+          "MM",
+          "BT"
+        ]
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 7500,
+        "hopIndex": 5,
+        "candidates": [
+          "ID",
+          "LK",
+          "TL"
+        ]
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 8700,
+        "id": 1,
+        "from": "MY",
+        "to": "SG"
+      },
+      {
+        "type": "arrested",
+        "tMs": 8700,
+        "by": "chaser",
+        "at": "SG"
+      }
+    ],
+    "arrestedAtMs": 8700,
+    "timeMs": 8700,
+    "hopsProcessed": 5,
+    "visited": [
+      "VN",
+      "MY",
+      "TH",
+      "CN",
+      "VN",
+      "SG"
+    ],
+    "candidates": [
+      "ID",
+      "LK",
+      "TL"
+    ],
+    "wantedStartMs": 4500,
+    "nextStarUpMs": 49500,
+    "lastPoliceCloseMs": 8700,
+    "lastEscapeMs": -1,
+    "nextPoliceId": 2,
+    "rngCandidates": {
+      "seed": 10855844,
+      "draws": 18
+    },
+    "rngGold": {
+      "seed": 10855847,
+      "draws": 8
+    },
+    "rngPolice": {
+      "seed": 10855846,
+      "draws": 0
+    }
+  }
+}

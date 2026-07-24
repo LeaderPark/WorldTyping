@@ -139,10 +139,7 @@ export function PassportPage() {
 
   return (
     <main className="wt-passport-page wt-page" data-testid="passport-page">
-      <PageHeader
-        back={{ to: '/', labelKey: 'nav.back.home', testId: 'passport-back' }}
-        title={t('passport.title')}
-      />
+      <PageHeader title={t('passport.title')} />
 
       {status === 'loading' && (
         <p data-testid="passport-loading">{t('passport.loading')}</p>

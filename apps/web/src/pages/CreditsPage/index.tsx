@@ -10,11 +10,8 @@
 // LICENSES는 그 상태 그대로이고, WT-UI-09는 표면 리스타일만 담당한다.
 //
 // [WT-UI-09] 본문을 전역 .wt-card(surface+radius-card+shadow-card)로 감싸고, 텍스트는
-// opacity 트릭 대신 --text-muted 토큰으로 통일했다. .wt-nav-back(귀환 링크)은 이 컴포넌트를
-// 포함해 여러 페이지가 이미 참조하던 클래스인데 globals.css에 정의가 전혀 없어(브라우저 기본
-// <a> 렌더) 이번에 처음 정의한다 — 새 클래스가 아니라 기존 미정의 클래스를 채우는 것이라 다른
-// 소비처(ModeSelectPage/TrackSelectPage)에도 동일하게 적용되지만 그 페이지들의 마크업은
-// 무수정이다(순수 CSS 추가, WT-UI-09 §2.3 근처 마킹 블록 참조).
+// opacity 트릭 대신 --text-muted 토큰으로 통일했다. 상단 크롬은 공용 PageHeader(D74)를 쓴다 —
+// [D75] 뒤로가기 링크(.wt-nav-back)는 폐지됐고 홈 이동은 좌상단 BrandMark가 담당한다.
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from '../../components/PageHeader';
 
@@ -41,10 +38,7 @@ export function CreditsPage() {
 
   return (
     <div className="wt-page" data-testid="credits-page">
-      <PageHeader
-        back={{ to: '/', labelKey: 'nav.back.home', testId: 'credits-back' }}
-        title={t('credits.title')}
-      />
+      <PageHeader title={t('credits.title')} />
       <div className="wt-card mt-3 p-6">
         <p className="text-sm text-text-muted">{t('credits.intro')}</p>
 

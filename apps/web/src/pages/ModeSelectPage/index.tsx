@@ -42,10 +42,7 @@ export function ModeSelectPage() {
 
   return (
     <main className="wt-mode-select wt-page" data-testid="mode-select-page">
-      <PageHeader
-        back={{ to: '/', labelKey: 'nav.back.home', testId: 'mode-select-back' }}
-        title={t('mode.select.title')}
-      />
+      <PageHeader title={t('mode.select.title')} />
 
       {/* 위트 헤드라인 히어로(WT-UI-05) — 순수 장식용 카피, 판정/점수/진행도 로직과 무관. h1은
           위 헤더의 것 하나만 유지한다(useRouteFocus가 문서의 첫 h1을 찾는다, docs/03 §7.3). */}

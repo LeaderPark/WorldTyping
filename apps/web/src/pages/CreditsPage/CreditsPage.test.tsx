@@ -27,6 +27,5 @@ describe('CreditsPage', () => {
     expect(links.length).toBe(3);
 
     expect(screen.getByTestId('credits-disputed-notice')).toBeInTheDocument();
-    expect(screen.getByTestId('credits-back')).toHaveAttribute('href', '/');
   });
 });

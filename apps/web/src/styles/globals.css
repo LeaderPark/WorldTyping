@@ -1638,15 +1638,8 @@
   align-items: center;
   gap: 0.75rem;
 }
-.wt-home__daily-badge {
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--map-border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 13.5px; /* [WT-DC-02] 디자인 정본 L119 리터럴 — 종전 0.85rem(13.6px)에서 정합 */
-  text-decoration: none;
-}
+/* [D75] .wt-home__daily-badge는 홈 헤더 데일리 뱃지 제거로 소비처가 사라져 규칙을 제거했다
+   (데일리 진입은 메뉴 카드 .wt-home__menu-row--daily가 유지). */
 
 /* [WT-AUTH-07] .wt-home__hero(HeroMap을 감싸던 축소·배경화 래퍼, D45)는 폐기 — 로고 카드는 이제
    .wt-home__content(flex column)의 직계 자식으로 align-self:center만으로 중앙 정렬한다(아래
@@ -3165,15 +3158,11 @@
   padding: 1.5rem 1.25rem 2.5rem;
 }
 
-/* 하위 페이지 공용 헤더(홈 제외 — 홈은 자체 .wt-home__header 유지). 1행 bar(좌 브랜드 + 우 액션)
-   기하는 홈 헤더와 동일하고, 뒤로가기·타이틀은 하위 전용 2행(nav)으로 분리한다(한 행에 욱여넣지
-   않음). components/PageHeader.tsx가 소비. */
+/* 하위 페이지 공용 헤더(홈 제외 — 홈은 자체 .wt-home__header 유지). [D75] 2행 nav(뒤로가기 + 페이지
+   타이틀)를 시각 폐지하고 홈과 픽셀 동일한 1행 bar만 남긴다(홈↔하위 진입 시 헤더 크기 점프 0) —
+   기하는 .wt-home__header(위 §홈 헤더)와 동일. 페이지 제목은 PageHeader가 sr-only h1로만 유지
+   (useRouteFocus 첫 h1·axe 계약). components/PageHeader.tsx가 소비. */
 .wt-page-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-.wt-page-header__bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3186,15 +3175,14 @@
   align-items: center;
   gap: 0.75rem;
 }
-.wt-page-header__nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.wt-page-header__title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
+/* [D75] 우측 액션의 테마 토글(전역 .wt-icon-tile 44px)을 홈 헤더와 동일한 34px 컴팩트 규격
+   (.wt-home__settings-btn — globals §WT-DC-02)으로 맞춰 홈↔하위 헤더 bar 높이를 픽셀 일치시킨다
+   (AuthChip은 이미 .wt-pill--compact 34px라 이 규칙만으로 두 헤더가 동일 높이가 된다). */
+.wt-page-header__actions .wt-icon-tile {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 1rem;
 }
 
 /* 좌상단 워드마크(✈ + app.title) — 홈 로고 카드 --brand 수정자와 동일 문법(font-weight 800·
@@ -3731,26 +3719,8 @@ a.wt-brand:focus-visible {
   color: #fff;
 }
 
-/* ── WT-UI-09: 런칭 마감 정합 — 404/에러/크레딧 귀환 링크 ──────────────────────────────
-   spec: docs/06 §10-4(404/500 커스텀 페이지)·§10-8(크레딧/라이선스), 이 태스크 지시문.
-   NotFoundPage/ErrorPage 본문은 .wt-card + .wt-pill(둘 다 위 §2.3 전역 정의)만으로 리스타일
-   했고 신규 CSS가 필요 없었다 — 여기서 정의하는 .wt-nav-back 하나만 신규다. CreditsPage(이
-   태스크 대상)를 포함해 ModeSelectPage/TrackSelectPage(이 태스크 범위 밖, 마크업 무수정)도
-   이미 이 클래스명을 쓰고 있었는데 globals.css에 정의가 전혀 없어 브라우저 기본 <a> 렌더(파랑
-   밑줄)로 나가고 있었다 — 새 클래스 신설이 아니라 기존 미정의 클래스를 채우는 순수 추가라
-   대상 밖 페이지에도 부작용 없이 함께 정리된다. */
-.wt-nav-back {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-decoration: none;
-}
-.wt-nav-back:hover,
-.wt-nav-back:focus-visible {
-  color: var(--text);
-}
+/* [D75] .wt-nav-back(하위 페이지 뒤로가기 링크)은 PageHeader 2행 nav 폐지로 소비처가 사라져
+   규칙을 제거했다(404/에러/크레딧 본문은 .wt-card + .wt-pill만 쓰므로 영향 없음). */
 
 /* ── WT-DC-01: 디자인 정본 키프레임 4종 + 소비 클래스 ──────────────────────────────────
    spec: 디자인 정본 L27~30(ttBob/ttChip/ttConfetti/ttToast)의 정확값 이식. 전부 transform/opacity

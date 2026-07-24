@@ -545,13 +545,14 @@ const router = createBrowserRouter([
 ├─ multi/RoomPage (S10–S11)
 │   ├─ WaitingRoom | RaceView(GameView 재사용 + OpponentTracks) | RaceResult
 └─ RankPage / PassportPage / ...
-    └─ PageHeader (브라우징 하위 페이지 공용 크롬 — 홈 제외)  // 00 §11-D74
+    └─ PageHeader (브라우징 하위 페이지 공용 크롬 — 홈 제외)  // 00 §11-D74·D75
         ├─ BrandMark (✈+app.title — 하위=/ 링크, 홈=비링크 span)
-        └─ [기본 액션] AuthChip + ThemeToggle / [2행] .wt-nav-back + h1
+        ├─ [기본 액션] AuthChip + ThemeToggle (홈과 동일 34px 컴팩트)
+        └─ [title 있으면] sr-only h1(tabIndex=-1)  // D75: 2행 nav·뒤로가기 폐지, 홈과 1행 동일
 ```
 
 - `GameView`는 싱글/멀티가 **동일 컴포넌트**: 멀티는 `variant="race"` prop으로 OpponentTracks·하드캡 타이머만 추가. 타이핑 파이프라인 코드는 1벌.
-- `PageHeader`/`BrandMark`(00 §11-D74)는 브라우징 하위 페이지(/play·/play/:mode·/rank·/multi 로비·/passport·/daily·/privacy·/terms·/support·/credits) 공용 상단 크롬이다 — 홈은 자체 `.wt-home__header`를 기준으로 유지하고, 인게임/대기실·레이스는 몰입 예외라 쓰지 않는다. 콘텐츠 폭은 공유 클래스 `.wt-page`(토큰 `--wt-page-max` 42rem)로 홈과 픽셀 동일하게 통일한다.
+- `PageHeader`/`BrandMark`(00 §11-D74)는 브라우징 하위 페이지(/play·/play/:mode·/rank·/multi 로비·/passport·/daily·/privacy·/terms·/support·/credits) 공용 상단 크롬이다 — 홈은 자체 `.wt-home__header`를 기준으로 유지하고, 인게임/대기실·레이스는 몰입 예외라 쓰지 않는다. 콘텐츠 폭은 공유 클래스 `.wt-page`(토큰 `--wt-page-max` 42rem)로 홈과 픽셀 동일하게 통일한다. **[00 §11-D75] 헤더는 홈과 동일한 1행 bar만**(`.wt-page-header` 기하 = `.wt-home__header`, 우측 액션도 34px 컴팩트로 top/height 픽셀 일치) — D74의 2행 nav(뒤로가기 `.wt-nav-back` + 시각 h1)는 폐지했고, 홈 이동은 좌상단 BrandMark가 담당한다. 페이지 제목은 `title` prop이 있을 때 **sr-only h1**(tabIndex=-1)로만 남아 useRouteFocus 첫 h1·axe 계약을 지킨다(DailyPage/LobbyPage는 자체 콘텐츠 h1을 갖고 title 미전달). 홈 헤더의 데일리 뱃지도 제거됐고 데일리 진입은 홈 메뉴 카드가 전담한다.
 
 ### 4.3 상태 슬라이스 (Zustand)
 

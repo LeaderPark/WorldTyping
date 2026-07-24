@@ -172,10 +172,7 @@ export function RankPage() {
 
   return (
     <main className="wt-rank-page wt-page" data-testid="rank-page">
-      <PageHeader
-        back={{ to: '/', labelKey: 'nav.back.home', testId: 'rank-back' }}
-        title={t('rank.title')}
-      />
+      <PageHeader title={t('rank.title')} />
 
       <div className="wt-rank-page__filters" data-testid="rank-filters">
         <div role="group" aria-label="period" data-testid="rank-filter-period">

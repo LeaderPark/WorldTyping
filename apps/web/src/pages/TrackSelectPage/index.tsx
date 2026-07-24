@@ -46,10 +46,7 @@ export function TrackSelectPage() {
 
   return (
     <main className="wt-track-select wt-page" data-testid="track-select-page">
-      <PageHeader
-        back={{ to: '/play', labelKey: 'nav.back.mode', testId: 'track-select-back' }}
-        title={t('route.select.title')}
-      />
+      <PageHeader title={t('route.select.title')} />
 
       {/* 다크 콘솔 카드("여행 설정", WT-UI-05) — .wt-console/.wt-token은 WT-UI-01 전역 정의를
           재사용한다. 토큰 그리드 내부 로직(진행도/기록 판정)은 기존 trackBests/bestStatusLabel

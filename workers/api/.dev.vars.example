@@ -9,6 +9,11 @@ SESSION_HMAC_SECRET_PREV=
 RUN_HMAC_SECRET=dev-secret-run
 DAILY_SALT=dev-secret-daily-salt
 
+# GOOGLE_CLIENT_ID (WT-AUTH-01): Google GIS ID-token 검증의 aud 값. **공개값(시크릿 아님)** — 실값을
+# 그대로 둔다. wrangler.toml [vars]에도 동일값이 있어(공개값이라 커밋됨) 로컬 wrangler dev는 이
+# 항목이 없어도 동작하지만, .dev.vars를 쓰는 경우 [vars]를 덮어쓰므로 여기에 명시해 둔다.
+GOOGLE_CLIENT_ID=615582111042-oq4vmmcnr5i2apap4d01b21a4laup3dj.apps.googleusercontent.com
+
 # AE SQL API(선택, WT-M6-03 cron/retention.ts kpi_daily 스냅샷용). 계정 미연결 상태에서는
 # 비워둔다 — 비어 있으면 해당 조회만 건너뛰고 D1 직접 계산 열만 채운다(스킵 로그로 확인).
 # 실 발급 절차: Cloudflare 대시보드 → My Profile → API Tokens → "Account Analytics" 읽기 권한

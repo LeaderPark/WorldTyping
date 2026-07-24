@@ -65,6 +65,13 @@ RUN pnpm install --frozen-lockfile --filter "@wt/api..." --filter "@wt/web..." \
 COPY . .
 RUN chmod +x tooling/selfhost/entrypoint.sh
 
+# VITE_GOOGLE_CLIENT_ID(WT-AUTH-01): 프론트 GIS 로그인이 쓰는 **공개** client ID. Vite는 빌드
+# 시점에 VITE_* 환경변수를 정적으로 구워 넣으므로 반드시 `pnpm build` **이전**에 ENV로 노출해야
+# 한다(런타임 주입 불가). docker-compose.yml build.args가 이 ARG를 채운다(.env의 GOOGLE_CLIENT_ID →
+# build.args → 여기 ARG). 기본값으로 공개 client ID를 박아 두어 build.args 미전달 시에도 동작한다.
+ARG VITE_GOOGLE_CLIENT_ID=615582111042-oq4vmmcnr5i2apap4d01b21a4laup3dj.apps.googleusercontent.com
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+
 # build:data(국가 데이터 재생성)는 여기서 실행하지 않는다 — packages/data/src/generated/*와
 # apps/web/public/data/*는 이 레포에서 커밋된 산출물이라(CLAUDE.md "국가 데이터 추가/갱신") 이미
 # 최신 상태다. `pnpm build`는 apps/web/dist(Vite 프로덕션 빌드, wrangler assets가 서빙)와 나머지

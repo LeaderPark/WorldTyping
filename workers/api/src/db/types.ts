@@ -175,3 +175,15 @@ export interface AdminAuditRow {
   reason: string | null;
   created_at: number;
 }
+
+// ---- 0005_auth_identities.sql ---------------------------------------------------
+
+export interface AuthIdentityRow {
+  provider: "google";
+  subject: string;
+  user_id: string;
+  email: string | null;
+  name: string | null;
+  created_at: number;
+  last_login: number;
+}

@@ -25,12 +25,18 @@ export const WS_TICKET_TTL_MS = 60 * 1000;
 // 타입 정의(interface)와 zod 스키마를 함께 두고, 컴파일 타임 Equal 단언으로 둘의 일치를 강제한다
 // (protocol/schemas.ts와 동일 패턴). verifyToken은 호출측이 이 스키마 중 하나를 주입한다.
 
-/** 세션 토큰 페이로드. exp = iat + 30일. */
+/**
+ * 세션 토큰 페이로드. exp = iat + 30일.
+ * acct: Google 로그인으로 발급된 "계정" 세션이면 1(docs/00 §11-D68, docs/04 §5.5). 게스트(익명
+ * 디바이스) 세션은 이 필드가 없다 — 기존 게스트 토큰 하위호환을 위해 옵션 필드로 둔다. 랭킹 등재·
+ * 멀티 REST는 acct 세션 전용(requireAccountAuth)이고, 게스트 세션도 싱글/데일리 플레이는 그대로다.
+ */
 export interface SessionPayload {
   v: 1;
   pid: string;
   iat: number;
   exp: number;
+  acct?: 1;
 }
 
 /** 싱글 판 runToken 페이로드(docs/04 §6.1). exp = startTs + 30분. */
@@ -62,6 +68,7 @@ export const SessionPayloadSchema = z
     pid: z.string().min(1),
     iat: z.number().int().nonnegative(),
     exp: z.number().int().nonnegative(),
+    acct: z.literal(1).optional(),
   })
   .strict();
 
@@ -195,13 +202,28 @@ export async function verifyToken<P extends { exp: number }>(
 // ───────────────────────── 편의 서명기(TTL 고정) ─────────────────────────
 // 발급 시점의 iat/startTs + 규정 TTL로 exp를 계산해 오사용을 막는다. 시크릿은 여전히 호출측 주입.
 
-/** 세션 토큰 발급. exp = iat + 30일. secret = SESSION_HMAC_SECRET. */
+/** 게스트(익명 디바이스) 세션 토큰 발급. exp = iat + 30일. secret = SESSION_HMAC_SECRET. */
 export function signSessionToken(
   secret: string,
   pid: string,
   iat: number = Date.now(),
 ): Promise<string> {
   const payload: SessionPayload = { v: 1, pid, iat, exp: iat + SESSION_TTL_MS };
+  return signToken(payload, secret);
+}
+
+/**
+ * 계정(Google 로그인) 세션 토큰 발급 — `acct: 1` 클레임을 실어 게스트 세션과 구별한다
+ * (docs/00 §11-D68, docs/04 §5.5). exp = iat + 30일, secret = SESSION_HMAC_SECRET로 게스트와 동일.
+ * pid는 계정 신원 파생값(derivePlayerId(secret, "google:" + sub))이 들어온다 — 이 함수는 pid를
+ * 어떻게 파생하는지 알지 못하며, 게스트/계정의 유일한 차이는 이 클레임 하나다.
+ */
+export function signAccountSessionToken(
+  secret: string,
+  pid: string,
+  iat: number = Date.now(),
+): Promise<string> {
+  const payload: SessionPayload = { v: 1, pid, iat, exp: iat + SESSION_TTL_MS, acct: 1 };
   return signToken(payload, secret);
 }
 

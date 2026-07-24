@@ -128,6 +128,7 @@ export {
   signToken,
   verifyToken,
   signSessionToken,
+  signAccountSessionToken,
   signRunToken,
   signWsTicket,
   SESSION_TTL_MS,

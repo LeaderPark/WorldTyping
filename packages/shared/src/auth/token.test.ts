@@ -10,6 +10,7 @@ import {
   SessionPayloadSchema,
   WS_TICKET_TTL_MS,
   WsTicketPayloadSchema,
+  signAccountSessionToken,
   signRunToken,
   signSessionToken,
   signToken,
@@ -37,6 +38,52 @@ describe('세션 토큰 서명/검증 왕복', () => {
       expect(r.payload.pid).toBe(PID);
       expect(r.payload.exp).toBe(NOW + SESSION_TTL_MS);
     }
+  });
+});
+
+// WT-AUTH-01(docs/00 §11-D68, docs/04 §5.5): 계정 세션 토큰(acct:1) 왕복 + 게스트 토큰 하위호환.
+describe('계정 세션 토큰(acct 클레임)', () => {
+  it('signAccountSessionToken은 acct:1 클레임을 실어 발급하고 왕복 검증된다', async () => {
+    const token = await signAccountSessionToken(SESSION_SECRET, PID, NOW);
+    expect(token.startsWith('wt1.')).toBe(true);
+    const r = await verifyToken(token, SESSION_SECRET, SessionPayloadSchema, NOW + 1000);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.payload.pid).toBe(PID);
+      expect(r.payload.exp).toBe(NOW + SESSION_TTL_MS);
+      expect(r.payload.acct).toBe(1);
+    }
+  });
+
+  it('게스트 세션 토큰은 acct 필드가 없다(undefined) — 계정과 구별 가능', async () => {
+    const guest = await signSessionToken(SESSION_SECRET, PID, NOW);
+    const r = await verifyToken(guest, SESSION_SECRET, SessionPayloadSchema, NOW + 1000);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.payload.acct).toBeUndefined();
+    }
+  });
+
+  it('하위호환: acct 없이 발급된 (구) 게스트 토큰도 그대로 스키마 통과', async () => {
+    // acct 클레임 도입 이전 포맷(옵션 필드 부재)을 명시적으로 재현 — 여전히 유효해야 한다.
+    const legacy = await signToken(
+      { v: 1 as const, pid: PID, iat: NOW, exp: NOW + SESSION_TTL_MS },
+      SESSION_SECRET,
+    );
+    const r = await verifyToken(legacy, SESSION_SECRET, SessionPayloadSchema, NOW + 1000);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.payload.acct).toBeUndefined();
+  });
+
+  it('acct의 허용값은 1뿐 — acct:0 등 다른 값은 스키마 거부', async () => {
+    const bogus = await signToken(
+      { v: 1 as const, pid: PID, iat: NOW, exp: NOW + SESSION_TTL_MS, acct: 0 } as unknown as {
+        exp: number;
+      },
+      SESSION_SECRET,
+    );
+    const r = await verifyToken(bogus, SESSION_SECRET, SessionPayloadSchema, NOW + 1000);
+    expect(r).toEqual({ ok: false, reason: 'schema' });
   });
 });
 

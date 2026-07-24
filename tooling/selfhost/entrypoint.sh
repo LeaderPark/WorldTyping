@@ -68,6 +68,12 @@ DEV_VARS_FILE="${API_DIR}/.dev.vars"
   echo "SESSION_HMAC_SECRET=${SESSION_HMAC_SECRET}"
   echo "RUN_HMAC_SECRET=${RUN_HMAC_SECRET}"
   echo "DAILY_SALT=${DAILY_SALT}"
+  # GOOGLE_CLIENT_ID(WT-AUTH-01): 서버 aud 검증값(공개값, 시크릿 아님). 미설정이면 wrangler.toml
+  # [vars]의 커밋된 공개값이 그대로 쓰이지만, .dev.vars가 [vars]를 덮어쓰므로 .env에 설정돼 있으면
+  # 명시적으로 기록해 둔다(다른 프로젝트 client ID로 교체하는 자기호스터 대응).
+  if [ -n "${GOOGLE_CLIENT_ID:-}" ]; then
+    echo "GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}"
+  fi
   if [ -n "${SESSION_HMAC_SECRET_PREV:-}" ]; then
     echo "SESSION_HMAC_SECRET_PREV=${SESSION_HMAC_SECRET_PREV}"
   fi

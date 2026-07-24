@@ -79,6 +79,10 @@ bucket_name = "wt-dev"
 
 [vars]
 ENVIRONMENT = "dev"
+# GOOGLE_CLIENT_ID (WT-AUTH-01): Google GIS ID-token 검증의 aud 값. **공개값이라 커밋해도 안전**
+# (client secret 아님 — GIS ID-token 방식은 secret 불요). 서버 aud 검증 + 프론트 VITE_GOOGLE_CLIENT_ID가
+# 동일 공개값을 쓴다. 자기호스팅 컨테이너는 tooling/selfhost/.env → .dev.vars가 이 값을 덮어쓴다.
+GOOGLE_CLIENT_ID = "615582111042-oq4vmmcnr5i2apap4d01b21a4laup3dj.apps.googleusercontent.com"
 
 # RL(Rate Limiting binding)은 자리만 — v1 초반은 KV 고정윈도(§6.5)로 방어하고,
 # 트래픽이 임계에 닿으면 아래 형태로 활성화한다(docs/04 §9.3).
@@ -95,6 +99,8 @@ routes = [{ pattern = "staging.typetrip.example", custom_domain = true }]
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
+# GOOGLE_CLIENT_ID: 공개값(위 [vars] 주석 참조). 승인 오리진에 localhost + worldtyping.leaderpark.net 포함.
+GOOGLE_CLIENT_ID = "615582111042-oq4vmmcnr5i2apap4d01b21a4laup3dj.apps.googleusercontent.com"
 
 [[env.staging.d1_databases]]
 binding = "DB"
@@ -147,6 +153,8 @@ routes = [{ pattern = "worldtyping.leaderpark.net", custom_domain = true }]
 [env.prod.vars]
 ENVIRONMENT = "prod"
 PUBLIC_ORIGIN = "https://worldtyping.leaderpark.net"
+# GOOGLE_CLIENT_ID: 공개값(위 [vars] 주석 참조). prod 오리진 worldtyping.leaderpark.net 승인 완료.
+GOOGLE_CLIENT_ID = "615582111042-oq4vmmcnr5i2apap4d01b21a4laup3dj.apps.googleusercontent.com"
 
 [[env.prod.d1_databases]]
 binding = "DB"

@@ -20,7 +20,7 @@ export interface PromptAreaProps {
   juiceLevel?: JuiceLevel;
   /** 별칭 에코 라인에 쓸 실입력 원문 접근자(고빈도 값 — state 미경유). */
   getInputValue?: () => string;
-  /** TimeLimitGauge 슬롯(서바이벌/티어/데일리 모드). */
+  /** TimeLimitGauge 슬롯(서바이벌/티어/데일리 모드) — 활주로(__runway) 위에 오버레이된다. */
   children?: ReactNode;
 }
 
@@ -98,8 +98,14 @@ export function PromptArea({
         testId="prompt-flag"
       />
 
-      <div ref={mountRef} className="wt-prompt-area__glyphs" data-testid="prompt-mount" />
-      {children}
+      {/* WT-DC-10(B안): 프롬프트 칼럼 = 글리프 마운트 + 활주로. 렌더러/testid/게이지 계약은 불변이고,
+          여기 마크업은 순수 표시 크롬이다(고빈도 값 미경유). */}
+      <div className="wt-prompt-area__col">
+        <div ref={mountRef} className="wt-prompt-area__glyphs" data-testid="prompt-mount" />
+        {/* 상시 활주로 대시 라인(wt-dash). 게이지(children)가 있으면 이 안에 절대 위치로 오버레이된다
+            (bindGaugeEl 계약·TimeLimitGauge 마크업 불변). */}
+        <div className="wt-prompt-area__runway">{children}</div>
+      </div>
     </div>
   );
 }

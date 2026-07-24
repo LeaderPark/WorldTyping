@@ -2,13 +2,14 @@
 //       docs/03 §4.2(PromptArea = FlagIcon+PromptRenderer+게이지 슬롯)·§4.5(고빈도 값 규약)·
 //       §7.1(모바일 --vv-height 앵커 하단 고정). WT-UI-03.
 //
-// 원작 METRO TYPING S6의 하단 전폭 보딩패스 스트립 이식. 배경은 현재 출제국의 대륙색(리드
-// 오버라이드 — 티어/데일리 포함 전 모드 실시간)이고, 그 위에 흰 케이싱 바(r28)가 얹힌다:
-//   [← ] [이전국] [ ── 흰 캡슐: FlagIcon + 프롬프트(자모 채색) + 반대언어 보조행 + 게이지 + 콤보 ── ] [다음국] [ →]
+// 원작 METRO TYPING S6의 하단 전폭 보딩패스 스트립 이식. WT-DC-10(B안): 부유 그라디언트 밴드
+// (대륙색 --wt-strip-continent CSS 변수 주입 → globals.css가 90/72% 그라디언트로 채색)에 흰 캡슐이
+// 돌출한다:
+//   [← ] [이전국] [ ── 흰 캡슐: 순번 배지 + FlagIcon + 프롬프트(자모 채색) + 활주로/게이지 + 콤보 ── ] [다음국] [ →]
 // 이전·다음국은 countries/currentIndex에서 도출한다(GameViewProps 확장 없음). 프롬프트 채색은
 // prompt-renderer가 DOM을 직접 갱신하고(핫패스 React 미경유), 스트립 자체는 국가 전환 단위로만
 // 리렌더한다(§4.5 허용 빈도). 확정 스탬프(juice #2)는 여기서 engine 이벤트를 구독해 트리거한다.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, TypingInputController } from '@wt/engine';
 import type { Country, GameMode } from '@wt/shared';
@@ -118,7 +119,7 @@ export function BoardingStrip({
     <div
       className="wt-strip"
       data-testid="boarding-strip"
-      style={{ background: `var(--continent-${current.continent})` }}
+      style={{ '--wt-strip-continent': `var(--continent-${current.continent})` } as CSSProperties}
     >
       <div className="wt-strip__bar">
         <span className="wt-strip__arrow" aria-hidden="true">
@@ -128,6 +129,10 @@ export function BoardingStrip({
         <NeighborSlot country={prev} position={currentIndex} side="prev" lang={lang} label={t('strip.prev')} />
 
         <div className="wt-strip__capsule" data-testid="game-stamp-anchor">
+          {/* WT-DC-10: 현재 출제국 순번 배지(캡슐 좌측 돌출). 순수 표시 — 판정/입력 무관. */}
+          <span className="wt-strip__capsule-num" aria-hidden="true">
+            {currentIndex + 1}
+          </span>
           <PromptArea
             country={current}
             lang={lang}
@@ -179,6 +184,8 @@ function NeighborSlot({
     return <div className={`wt-strip__neighbor wt-strip__neighbor--${side} wt-strip__neighbor--empty`} aria-hidden="true" />;
   }
   const name = lang === 'ko' ? country.nameKo : country.nameEn;
+  // WT-DC-10(G10): 반대 언어 서브라벨(디자인 이웃국 en 라인). 국가명은 countries.json 원천.
+  const sub = lang === 'ko' ? country.nameEn : country.nameKo;
   return (
     <div className={`wt-strip__neighbor wt-strip__neighbor--${side}`} data-testid={`strip-${side}`}>
       <span className="wt-strip__neighbor-caption">{label}</span>
@@ -189,6 +196,11 @@ function NeighborSlot({
         <FlagIcon id={country.id} emoji={country.flagEmoji} size="sm" />
         <span className="wt-strip__neighbor-name">{name}</span>
       </div>
+      {sub && (
+        <span className="wt-strip__neighbor-sub" aria-hidden="true">
+          {sub}
+        </span>
+      )}
     </div>
   );
 }

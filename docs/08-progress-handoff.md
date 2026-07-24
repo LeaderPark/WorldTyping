@@ -1,22 +1,22 @@
 # 08. 진행도 & 핸드오프 (다른 PC에서 이어서 작업하기)
 
-> 최종 갱신: **2026-07-23** / 작성: Fable 5 (리드 아키텍트)
+> 최종 갱신: **2026-07-24** / 작성: Fable 5 (리드 아키텍트)
 > 이 문서는 **작업 진행 상태의 단일 원천**이다. 새 환경(다른 PC, 새 Claude Code 세션)에서 이 저장소를 열면 이 문서 → `docs/00` §11 → `git log` 순으로 읽고 이어서 작업한다. 진행 상태가 바뀌면 이 문서의 스냅샷 절을 함께 갱신한다.
 
 ---
 
-## 1. 상태 스냅샷 (2026-07-23 기준)
+## 1. 상태 스냅샷 (2026-07-24 기준)
 
-**docs/07의 계획 태스크 42개(M0~M6) 전부 구현 완료.** 코드로 할 수 있는 작업은 100% 끝났고, 남은 것은 §6의 수동/원격 항목뿐이다.
+**docs/07의 계획 태스크 42개(M0~M6) + M6 이후 후속 리드 태스크 전부(§5.1 — 라이트 디자인 시스템, 자기호스팅 이전, 디자인 정합 WT-DC, 계정 로그인 WT-AUTH 배치) 구현·검증 완료, `main`=`origin/main`=`98b1cda`가 prod에 라이브.** 남은 것은 §6의 수동/원격 항목과 백로그뿐이다.
 
 | 항목 | 값 |
 |---|---|
-| 브랜치 / 커밋 | `main` / 62개 (마지막: `2270faa` WT-M6-06) |
-| 테스트 | 루트 1,099개 그린 (일반 vitest 795 + workers pool 212 + DO pool 92) |
-| E2E (Playwright) | 25개 그린 — E1~E10 + 치트 6종·섀도우밴 + 멀티 E6/E7 + 공유 캡처 |
+| 브랜치 / 커밋 | `main` / 마지막 `98b1cda` (origin/main 푸시·배포됨) |
+| 라이브 | <https://worldtyping.leaderpark.net> — 자기호스팅 Docker+Tunnel(§8.6), 인증 배치 재배포 2026-07-24(§8.7) |
+| 테스트 (2026-07-24 배포 게이트) | 전체 e2e **36/36** 그린(axe wcag2aa 포함) · web 단위 541 · contrast-check 29/29 · typecheck·lint 그린. (M6 시점 루트 vitest 1,099개 그린 — 이후 태스크마다 개별 회귀 통과) |
 | 커버리지 | `shared`·`engine` 95~100% (게이트 95%), 그 외 60%+ |
-| 성능 | entry 96KB gzip(예산 170KB) / LB p95 7.5ms(로컬) / 멀티 tick p95 268ms(<400ms SLO) / LCP는 D48 체제(규범=Lighthouse CI, 로컬은 정보용) |
-| 리드 결정 | `docs/00` §11 **D1~D56** (이번 빌드에서 D26~D56 31건 추가 — 전부 실측 근거) |
+| 성능 | entry 96KB gzip(예산 170KB, M6 측정) / LB p95 7.5ms(로컬) / 멀티 tick p95 268ms(<400ms SLO) / LCP는 D48 체제(규범=Lighthouse CI, 로컬은 정보용) |
+| 리드 결정 | `docs/00` §11 **D1~D71** (M6 이후 D57~D71 — 전부 실측/리드 확정 근거) |
 
 회귀 확인(전체 그린이어야 정상 상태):
 
@@ -77,13 +77,19 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
 | M6 런칭 준비 | M6-01 `6eda971` · M6-02 `21bc89c` · M6-03 `09e3471` · M6-04 `4e260d9` · M6-05 `324969a` · M6-06 `2270faa` |
 | 리드 결정(docs) | `0af480d`(D26) `f78bca6`(D27·28) `5f3bd2f`(D29) `ff54483`(D30~37) `871c9a3`(D38) `18caeaf`(D39~44) `2da594d`(D45·46) `2e8abae`(D47) `a8bffb6`·`db959cc`(D48) `fde5306`(D49·50) `b26acf2`(D51~53) `d55ddff`(D54·55) `4173c10`(D56) |
 
-### 5.1 M6 이후 후속 리드 태스크 (런칭 폴리시 — D57~)
+### 5.1 M6 이후 후속 리드 태스크 (D57~D71) — 전부 main 머지·라이브 배포 완료
 
-M6 완료 후 리드 지시로 추가된 폴리시/버그픽스 태스크. `docs/00` §11 D57~D70이 이 계열의 결정이며(위 §1 스냅샷의 "D1~D56"은 이 시점 기준 표기라 실제 결정 범위와 다르다 — §11이 항상 진실), 각 태스크는 판정·점수·프로토콜·엔진 이벤트 계약을 건드리지 않는 표시/입력/크롬 계층 변경이다.
+M6 완료 후 리드 지시로 추가된 후속 태스크 계열. `docs/00` §11 **D57~D71**이 이 계열의 결정이다(§11이 항상 진실). 판정·점수·프로토콜·엔진 이벤트 계약은 불변이고, 예외는 §11에 명시된 additive 확장뿐이다(D68 인증 계층·D70 입력 버퍼 소유권 등). 아래 해시는 대표 커밋(태스크별 `feat`+`Merge` 짝이 있는 경우 리드 매핑 기준 하나만 표기) — 전체는 `git log --oneline 2270faa..98b1cda`.
 
-| 태스크 | 내용 | 상태 |
-|---|---|---|
-| WT-DC-09 (D69·D70) | 타이핑 입력 재작업 — (A) IME 잔여 버그: `setCountry` 권위적 클리어 + `flushIme` epoch++ 재배열 + `resolveRaw` 재삽입/Gboard 관문 + `getValue()`(additive) / (B) 프롬프트 ko 자모 채움 행(`.wt-jamo[data-fill]`) + 일치색 `var(--text)`·불일치 `#ef4444`(구 done 적색 폐기, partial→match 통합) | 로컬 브랜치 `feat/wt-dc-09-input-rework` (커밋됨, push 대기). 신규 유닛 8종 + 렌더러 6종 + e2e `e9b-input-rework` 3종 추가, e2/e3 무수정 통과 |
+| 계열 | 태스크(커밋) |
+|---|---|
+| prod 배포 → 자기호스팅 (§8) | Workers prod 최초 배포 `e5b6c23`·`0d70397`(해당 Worker는 이후 삭제 — §8.6) · WT-OPT-01 `c211bf7`(D60·D61) · WT-HOST-01 `a4db199`(+컨테이너 명명 `7dc3215`) · WT-HOST-02 `246151a`(터널 컷오버 LIVE) · 호스트 포트 8787→8790 `dceee2a` |
+| 라이트 디자인 시스템 (WT-UI) | UI-01 `23b2525`(D57·D58·D62) · UI-02 `a83af6f`(D63) · UI-03 `a8fc86e`(D64·D65) · UI-04 `8660c3d` · UI-05 `32ae836` · UI-06 `4db5f86` · UI-07 `93fefee` · UI-08 `05f8a55` · UI-09 `2d97039` · OG 라이트 정합 `01528f7` |
+| 디자인 정합 (WT-DC) | DC-01 `d1f9011` · DC-02 `50948bd` · DC-03 `8b695e8` · DC-04 `8146fc1` · DC-05 `b9468a8` · DC-06 `8c382cc` · DC-07 `2597a67`(D66) · DC-08 `90fd7a1`(D67, idle-spin 후속 `928ad72`) · DC-09 `42f72f6`(D69·D70) · DC-10 `26061a2`+`08f6aa9` · myBest 표기 확정 `2b6730c` · 공유 X/Threads 버튼 제거 `967cebc` |
+| 계정 로그인 (WT-AUTH, D68) | AUTH-01 `6b05bb0` · AUTH-03 `d505837` · AUTH-02 `37032d7` · AUTH-04 `50765f9` · AUTH-07 `c7b1b98` · AUTH-05 `024666b` · AUTH-06 `f120a78` · 기어→테마 토글 `b6e549a` · AUTH-08(e2e 이행) `64983b1`+`875f4de` · a11y 대비 회귀 3종 후속 `98b1cda` |
+| 리드 결정 (docs) | `ffc5ba5`+`3922c5c`(D59~D65) · `191cd0f`(D68) · D66·D67·D69·D70은 해당 태스크 커밋에 동봉 · D71(멀티 라이브 검증 정책 — §8.7) |
+
+a11y 후속 3종(`98b1cda`)은 표시 계층 CSS/className만 변경(판정·점수·프로토콜·엔진 불변): ① `.wt-footer__copyright` opacity 0.8 제거(3.62:1 미달 → `--text-muted` 5.54:1) ② `text-red-600`→`red-700` 라이트(PrivacyPage×3·LoginModal×2, `dark:red-400` 유지) ③ `.wt-strip__secondary`(WT-DC-10 보조행)를 `--continent-*-text` 토큰으로 repoint(골드/시안 2.83:1 미달 → D62 대륙·테마별 튜닝 토큰, BoardingStrip이 `--wt-strip-continent-text` 주입).
 
 ---
 
@@ -97,8 +103,9 @@ M6 완료 후 리드 지시로 추가된 폴리시/버그픽스 태스크. `docs
 4. D1 복구 리허설 1회 (`tooling/ops/runbook.md`)
 5. 링크 미리보기 3종(X/Threads/카카오) 검증 스크린샷
 6. **실기기 IME 스모크 시트** — iOS Safari, Android Gboard/삼성키보드 (`tooling/ops/ime-qa-sheet.md`, 릴리스 게이트)
-7. GA4 ON/OFF 결정(Q3), privacy 페이지 운영 주체 {PLACEHOLDER} 확정, 소프트 런치 채널(Q6)
+7. GA4 ON/OFF 결정(Q3), 소프트 런치 채널(Q6). (~~privacy 운영 주체 {PLACEHOLDER}~~ → **LeaderPark·dkdleldjqkr976@gmail.com 확정** — D68-⑨)
 8. Lighthouse CI·size-limit·치트 스위트가 원격 CI에서 실제로 도는지 첫 PR로 확인
+9. **멀티 실-DO 2-클라 라이브 레이스 = 리드 결정으로 미실행(00 §11-D71 — 현재 커버리지 수용).** 멀티 로그인 필수(D68-①) + prod에 `/auth/dev` 우회 없음(D68-⑩) + Google OAuth 헤드리스 자동화 불가라 자동화 불가능 — 원할 경우 **수동 2계정 테스트**로만 검증 가능(§8.7)
 
 ### 6.2 코드 백로그 (v1 필수 아님 — §11 결정으로 이연된 것)
 
@@ -112,7 +119,7 @@ M6 완료 후 리드 지시로 추가된 폴리시/버그픽스 태스크. `docs
 
 ## 7. 이어서 작업할 때의 규칙 (요약)
 
-1. 항상 `docs/00` §11(D1~**D56**)을 먼저 읽는다 — 하위 문서와 충돌하면 §11이 이긴다.
+1. 항상 `docs/00` §11(D1~**D71**)을 먼저 읽는다 — 하위 문서와 충돌하면 §11이 이긴다.
 2. 새 작업은 §3의 파이프라인(구현→독립 검증→커밋)을 유지한다. 문서 충돌 발견 시 코드에서 임의 해석 금지 — §11에 D행 추가 후 진행.
 3. 커밋 메시지에 작업 ID 포함(진행 추적의 원천이 git log다). 마이그레이션 append-only, 시크릿 커밋 금지, 산출물(`generated/`, `public/data/`) 손편집 금지.
 4. 이 문서(§1 스냅샷, §5 매핑, §6 잔여)를 상태 변화 시 함께 갱신한다.
@@ -123,9 +130,9 @@ M6 완료 후 리드 지시로 추가된 폴리시/버그픽스 태스크. `docs
 
 **라이브 URL: <https://worldtyping.leaderpark.net>**
 
-> ⚠️ **최신 상태(2026-07-23): §8.6 자기호스팅으로 이전 완료.** 아래 §8.1~8.5는 **최초 Cloudflare
-> Workers 배포 이력**이며, **그 Worker(`typetrip-prod`)는 삭제됨**(KV 무료 한도 소진 → 자기호스팅
-> 전환). 현재 prod는 서버 Docker(wrangler dev/miniflare) + Cloudflare Tunnel로 서빙된다 — §8.6이 현재 진실.
+> ⚠️ **최신 상태(2026-07-24): §8.6 자기호스팅 스택 + §8.7 인증 배치 재배포가 현재 진실.** 아래 §8.1~8.5는
+> **최초 Cloudflare Workers 배포 이력**이며, **그 Worker(`typetrip-prod`)는 삭제됨**(KV 무료 한도 소진 →
+> 자기호스팅 전환). 현재 prod는 서버 Docker(wrangler dev/miniflare) + Cloudflare Tunnel로 `98b1cda`를 서빙한다.
 
 ### 8.1 무엇이 어떻게 배포됐나
 
@@ -206,3 +213,14 @@ env `CLOUDFLARE_API_TOKEN`(Zone)** 로 나눠 사용(OAuth는 DNS 403, env는 Wo
 ⑤ §11 D57~D65 정식 행 반영 완료(docs/00 §11 표) — 자기호스팅·lb최적화·geo·대비·카메라·국기·TAB.
 
 **라이브 스모크(터널 경유, 전부 통과)**: 세션(geo=KR)·config·daily(no=1)·lb·멀티(방 생성→WS `welcome`).
+
+---
+
+## 8.7 인증 배치 라이브 배포 (2026-07-24 — 현재 라이브 코드)
+
+**배포 커밋: `98b1cda`(= `origin/main`)** — WT-AUTH-01~08 + WT-DC-09/10 + a11y 후속(§5.1)을 §8.6 자기호스팅 스택에 재배포. 스택 구성은 §8.6 그대로(변경 없음).
+
+- **구동**: Docker Compose `worldtyping` 앱 컨테이너(호스트 **8790**→컨테이너 8787) + Cloudflare Tunnel. `tooling/selfhost/entrypoint.sh`가 기동 시 **`0005_auth_identities` 마이그레이션을 적용**한 뒤 wrangler dev(miniflare) 서빙 — 기존 D1 데이터 볼륨(`worldtyping_wt-data`) 보존, 컨테이너 healthy.
+- **배포 게이트(전부 그린)**: 전체 e2e **36/36**(axe wcag2aa 스캔 포함) · web 단위 테스트 541 · contrast-check 29/29 · typecheck·lint.
+- **라이브 스모크(통과)**: 홈 배경 지구본(앰비언트 자동 데모, D68-⑦) · Google 로그인 GIS 버튼 렌더(승인된 JavaScript 오리진 정상) · Footer(개인정보/약관/지원, D68-⑨) · 멀티 로비 재디자인 + 로그인 게이트 렌더(D68-①⑧). 멀티 백엔드: `POST /api/v1/rooms` 무토큰 → **401 `INVALID_TOKEN`**, `GET /api/v1/rooms/public` → **200 `{rooms:[], counts:{public,private}}`**.
+- **미실행(리드 결정 — 00 §11-D71)**: **멀티 실-DO 2-클라 라이브 레이스는 실행하지 않았다.** 사유: 멀티 로그인 필수(D68-①) + prod 컨테이너에 `/auth/dev` 우회 없음(`ENVIRONMENT=prod` — D68-⑩) + Google OAuth 헤드리스 자동화 불가. v1은 **현재 커버리지로 수용**: e2e mock DO(E6/E7) + DO 유닛(vitest-pool-workers, CI) + 위 라이브 백엔드 스모크. 실-DO 라이브 레이스 검증은 **수동 2계정 테스트**로만 가능(§6.1-9).

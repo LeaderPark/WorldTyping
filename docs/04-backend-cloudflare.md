@@ -83,26 +83,37 @@ interface ApiError {
 
 ### 2.2 엔드포인트 목록
 
+구현 원천 `workers/api/src/index.ts` 라우트 마운트 + `routes/*.ts` (2026-07-24 라이브 배포 기준). 경로는 전부 `/api/v1` 프리픽스 하위(공유/WS 경로 `/ws/room/:code`, `/r/:shareId`, `/og/:file`, `/multi/:code`만 프리픽스 밖). 인증 열의 **계정** = `requireAccountAuth`(00 §11-D68) — 무토큰/무효 토큰은 401 `INVALID_TOKEN`, **유효한 게스트 세션은 401 `LOGIN_REQUIRED`**(클라 "로그인 필요" UI 분기용 구분 코드).
+
 | # | Method/Path | 인증 | 용도 |
 |---|---|---|---|
-| 1 | `POST /session` | 없음 | 익명 세션 토큰 발급/갱신 |
-| 2 | `GET /config` | 없음 | 원격 설정 + 데이터 버전 |
-| 3 | `GET /daily` | 없음 | 오늘의 데일리 챌린지 메타 |
-| 4 | `POST /runs/start` | 세션 | 싱글 판 시작 — 서명된 runToken(nonce) 발급 |
-| 5 | `POST /runs/submit` | 세션 | 싱글 점수 제출 → 서버 재계산·검증 |
-| 6 | `GET /leaderboard` | 없음 | 리더보드 조회(KV 캐시) |
-| 7 | `GET /leaderboard/me` | 세션 | 내 순위/기록 |
-| 8 | `POST /nickname/check` | 세션 | 닉네임 가용성/정책 검사 |
-| 9 | `PUT /nickname` | 세션 | 닉네임 확정(예약) |
-| 10 | `POST /rooms` | 세션 | 비공개 방 생성 → 방 코드 |
-| 11 | `POST /rooms/:code/join` | 세션 | 방 참가 티켓 발급 |
-| 12 | `GET /rooms/public` | 없음 | 공개 방 목록(LobbyDO 프록시, 3s 캐시) |
-| 13 | `WS /ws/room/:code?ticket=...` | 티켓 | MatchRoomDO 웹소켓 |
-| 14 | `WS /ws/quickmatch?ticket=...` | 티켓 | LobbyDO 퀵매치 대기열 |
-| 15 | `GET /api/v1/data/countries` | 없음 | (핫스왑 활성 시에만) KV 데이터 서빙 |
-| 16 | `DELETE /me` | 세션 | 내 데이터 삭제(§10) |
-| 17 | `POST /auth/google` | 없음 | Google GIS ID-token 검증 → 계정 세션 토큰(wt1, `acct:1`) 발급. RL `auth` 10/60s/IP (00 §11-D68) |
-| 18 | `POST /auth/dev` | 없음 | 테스트 심 — `ENVIRONMENT==='dev'`에서만 활성, 그 외 404 (00 §11-D68-⑩) |
+| 1 | `POST /session` | 없음 (RL `session`) | 익명(게스트) 세션 토큰 발급/갱신 |
+| 2 | `GET /session/me` | 세션 | 내 세션/프로필(geo 포함 — 00 §11-D44) |
+| 3 | `POST /auth/google` | 없음 (RL `auth`) | Google GIS ID-token 검증 → 계정 세션 토큰(wt1, `acct:1`) 발급 (00 §11-D68) |
+| 4 | `POST /auth/dev` | 없음 | 테스트 심 — `ENVIRONMENT==='dev'`에서만 활성, 그 외 404 (00 §11-D68-⑩) |
+| 5 | `GET /config` | 없음 | 원격 설정 + 데이터 버전 |
+| 6 | `GET /data/countries` | 없음 | (핫스왑 활성 시에만) KV 데이터 서빙 |
+| 7 | `POST /runs/start` | 세션 (RL `runs/start`) | 싱글 판 시작 — 서명된 runToken(nonce) 발급 |
+| 8 | `POST /runs/submit` | 세션 (RL `runs/submit`) | 점수 제출 → 서버 재계산·검증. 랭킹 등재는 계정 세션 전용 — 게스트 제출은 `practice`/'guest' 강등, `guestToken` 브리지는 §6.2-① (00 §11-D68-①④) |
+| 9 | `GET /lb` | 없음 (RL `leaderboard`) | 리더보드 조회(KV 캐시 + keyset — 00 §11-D9·D55) |
+| 10 | `GET /lb/me` | 세션 (RL `leaderboard`) | 내 순위/기록 |
+| 11 | `GET /daily/today` | 없음 | 오늘의 데일리 챌린지 메타(서버 확정 세트) |
+| 12 | `GET /daily/me` | 세션 | 내 데일리 등재 여부(연습 라벨 판정용 — 06 §2.3) |
+| 13 | `POST /nickname/check` | 세션 (RL `nickname`) | 닉네임 가용성/정책 검사 |
+| 14 | `PUT /nickname` | 세션 (RL `nickname`) | 닉네임 확정(예약) |
+| 15 | `POST /report` | 세션 | 신고(00 §11-D43) |
+| 16 | `POST /match/quick` | **계정** | 퀵매치 enqueue — Matchmaker DO 위임 → `{roomCode, wsUrl, ticket}` (00 §11-D8) |
+| 17 | `DELETE /match/quick` | **계정** | 퀵매치 대기 취소(티켓 제출) |
+| 18 | `POST /rooms` | **계정** (RL `rooms(create)`) | 방 생성(공개/비공개, `title` 1~24자 moderation 필터 — 00 §11-D68-⑧) → 방 코드+티켓 |
+| 19 | `POST /rooms/:code/join` | **계정** | 방 참가 티켓 발급 |
+| 20 | `GET /rooms/public` | 없음 | 공개 방 목록 + `counts:{public,private}` — KV `publicroom:*` 집계, 3초 논리 캐시 (00 §11-D8·D68-⑧) |
+| 21 | `WS /ws/room/:code?ticket=...` | 티켓 | MatchRoom DO 웹소켓 (00 §11-D8 — 퀵매치 전용 WS 경로 없음) |
+| 22 | `GET /users/:id/passport` | 없음 | 여권(프로필) 조회 |
+| 23 | `PUT /users/me/passport-cover` | 세션 | 여권 커버 선택(00 §11-D52-⑥) |
+| 24 | `GET /users/me/export` | 세션 | 내 데이터 열람/내려받기(06 §6.3) |
+| 25 | `DELETE /users/me` | 세션 | 내 데이터 삭제(06 §6.3, §10.4) |
+| 26 | `POST /t` | 선택(optionalAuth, RL `t`) | 클라 배칭 텔레메트리(client_error 등) |
+| 27 | `GET /health` | 없음 | 헬스체크 |
 
 ### 2.3 스키마 상세 (TypeScript)
 
@@ -210,19 +221,34 @@ interface NicknameCheckRes {
 }
 // PUT /nickname: body 동일. 성공 시 SessionRes.nickname 갱신. 변경은 7일당 1회(레이트리밋 아님, 정책 — nicknames.changed_at 검사)
 
-// ---------- 10/11. 방 ----------
+// ---------- 16~20. 멀티 REST (구현 원천 routes/multi.ts — 전부 계정 인증, 00 §11-D8·D68) ----------
 interface RoomCreateReq {
   lang: 'ko' | 'en';
-  maxPlayers: number;         // 2..8
-  isPublic: boolean;
+  mode?: 'race-mixed';        // 명시 시 race-mixed만 허용(D23 — continent/tier는 예약)
+  maxPlayers?: number;        // 2..8, 기본 8
+  isPublic?: boolean;         // 기본 false
+  title?: string;             // 1~24자, 로비 카드 표시(D68-⑧). moderation 필터 위반 → 400 INVALID_TITLE
 }
-interface RoomCreateRes {
-  roomCode: string;           // "KX7-3QP" — 표시용 하이픈 포함, 내부 키는 "KX73QP"
+// 방 생성/참가/퀵매치 응답은 공통 WsGrant: 클라는 `${wsUrl}?ticket=${ticket}`로 접속한다.
+interface WsGrant {
+  roomCode: string;           // 내부 키 "KX73QP" (표시용 하이픈은 클라 처리)
+  wsUrl: string;              // "/ws/room/KX73QP" — 오리진 상대 경로(오리진 하드코딩 금지, §7)
   ticket: string;             // WS 접속 티켓(§5.3): 60초 유효, 1회용
-  wsUrl: string;              // "wss://worldtyping.gg/ws/room/KX73QP"
+  mode: 'race-mixed';
+  lang: 'ko' | 'en';
+  title: string | null;       // create=요청 제목, join=방의 저장 제목(D68-⑧)
 }
-interface RoomJoinRes { ticket: string; wsUrl: string; }
+// POST /rooms 응답 = WsGrant & { maxPlayers, isPublic }. POST /rooms/:code/join 응답 = WsGrant.
 // 에러: ROOM_NOT_FOUND(404), ROOM_FULL(409), ROOM_IN_PROGRESS(409), LANG_MISMATCH(409)
+
+// GET /rooms/public — 비공개 방은 상세 비노출·카운트만(D68-⑧)
+interface PublicListRes {
+  rooms: Array<{              // 공개 방 카드(최대 100개)
+    code: string; lang: string; players: number; maxPlayers: number;
+    title: string | null; phase: string; hostCover: string | null;
+  }>;
+  counts: { public: number; private: number };
+}
 ```
 
 ### 2.4 Hono 앱 골격
@@ -340,6 +366,8 @@ export class MatchRoomDO extends DurableObject<Env> {
 ```
 
 ### 3.2 LobbyDO — 퀵매치 풀 + 공개 방 레지스트리
+
+> **폐기(00 §11-D8) — 설계 이력으로만 남긴다.** LobbyDO는 구현되지 않았다. 퀵매치는 REST `POST /match/quick` → **Matchmaker DO**(`workers/api/src/do/Matchmaker.ts`) 위임, 공개 방 목록은 **KV `publicroom:*` 집계**(`GET /rooms/public`, 비공개는 counts만 — D68-⑧), WS는 `/ws/room/:code` 단일 경로다. canonical은 §2.2 표와 docs/05 §2.3·§2.4.
 
 **샤딩**: `idFromName("lobby:" + lang)` — v1은 **ko/en 2개 싱글턴**. 병목 분석: LobbyDO가 처리하는 것은 ① 퀵매치 WS의 join/leave(유저당 수 회), ② 15초 매칭 타이머 alarm, ③ 공개 방 목록 갱신(방 DO가 상태 변화 시 push). 단일 DO의 실용 처리량 ~500 req/s인데, 동시 접속 1만 명이 전원 1분에 1회 퀵매치를 눌러도 ~170 req/s — **v1 규모에서 싱글턴으로 충분**. 초과 성장 시 확장 경로를 지금 코드에 박아둔다: 샤드 키를 `lobby:{lang}:{shard}`로 하고 `shard = hash(pid) % N`, N은 KV `config:lobbyShards`로 배포(기본 1). 샤드 간 풀 파편화는 "같은 샤드 내 매칭"만 하므로 정합성 문제 없음(매칭 품질만 미세 저하).
 
@@ -559,11 +587,13 @@ flagged는 본인 화면에는 정상 표시(어뷰저에게 탐지 사실을 �
 // KV는 결과적 일관성 → 경계 오차 허용. 정밀 한도는 쓰기 엔드포인트의 D1/DO 검증이 담당.
 const LIMITS = {
   'session':      { per: 'ip',  window: 60, max: 10 },
+  'auth':         { per: 'ip',  window: 60, max: 10 },   // POST /auth/google (00 §11-D68)
   'runs/start':   { per: 'pid', window: 60, max: 10 },   // 판당 최소 20s 가정
   'runs/submit':  { per: 'pid', window: 60, max: 10 },
   'nickname':     { per: 'pid', window: 3600, max: 5 },
   'rooms(create)':{ per: 'pid', window: 60, max: 5 },
   'leaderboard':  { per: 'ip',  window: 60, max: 60 },
+  't':            { per: 'ip',  window: 60, max: 60 },   // POST /t 텔레메트리 배칭
 } as const;
 // 초과 → 429 + retryAfterSec. IP는 request.headers.get('CF-Connecting-IP')의 SHA-256 해시만 키에 사용(원문 비저장).
 ```
@@ -827,14 +857,16 @@ ORDER BY rank LIMIT 1000;   -- 스냅샷 상위 1000, KV엔 상위 100만
 
 ### 10.4 개인정보 (PIPA / GDPR)
 
+> canonical은 **docs/06 §6**(처리 항목 인벤토리 §6.2·권리 구현 §6.3·국외 이전 §6.4·방침 아웃라인 §6.5). 이 표는 백엔드 관점 요약이다. 계정 로그인 하이브리드는 00 §11-D68.
+
 | 항목 | 정책 |
 |---|---|
-| 수집 데이터 | 익명 deviceId의 **일방향 파생 ID**, 닉네임(자발 입력), 국가 단위 지역 코드(`cf.country`), 게임플레이 통계. **이메일·이름·IP 원문·정밀 위치·쿠키 기반 트래킹 없음.** |
-| 법적 성격 | deviceId 파생 ID는 가명정보. 로그인 없는 v1은 PIPA상 수집 최소화 원칙 충족이 용이. 그럼에도 `worldtyping.gg/privacy`에 개인정보처리방침 게시(레퍼런스 metrotyping.kr/privacy와 동일 관행): 수집 항목·목적·보존기간·삭제 방법·문의처(en/ko). |
-| GDPR | (a) 접근/삭제권: `DELETE /me` — players 행 익명화(`nickname=NULL, flags=0`) + scores/match_participants의 player_id를 `deleted_{random}`으로 치환(리더보드 스냅샷은 다음 사이클에서 자연 소거), 닉네임 예약 해제. 클라 설정의 "데이터 초기화" 버튼이 이 API 호출 + localStorage 삭제. (b) 법적 근거: 정당한 이익(게임 제공·부정 방지). (c) 국외 이전 고지: Cloudflare 글로벌 네트워크 사용 명시. |
-| 데이터 보존 | scores: verified 상위 기록은 무기한(리더보드 자산), `flagged/practice`는 90일 후 cron 삭제. matches/match_participants: 12개월. Workers Logs: 플랫폼 기본(3~7일). AE: 90일(플랫폼 정책). 레이트리밋 KV: TTL 자동 소멸(≤1h). |
-| 아동 | 회원가입·채팅(대기실 채팅은 세션 휘발, 미저장… 단 v1은 채팅 로그를 아예 D1에 쓰지 않는다) 없음 → 연령 확인 의무 최소화. 그래도 채팅 blocklist 필터는 송신 시점에 적용. |
-| 쿠키 | 미사용(localStorage만, 필수 기능 목적) → 쿠키 배너 불요. 이 사실을 privacy 페이지에 명시. |
+| 수집 데이터 | **비로그인**: 익명 deviceId의 **일방향 파생 ID**(pid/device_hash — 원문 비저장, §5.1), 닉네임(자발 입력), 국가 단위 지역 코드(**`CF-IPCountry` 헤더 우선, `cf.country` 폴백** — 00 §11-D61), 게임플레이 통계. **Google 로그인 선택 시**(00 §11-D68): `sub` 파생 계정 ID + 이메일(`email_verified`인 경우만) + 프로필 이름(초기 닉네임 정제용). IP 원문·정밀 위치·쿠키 기반 트래킹 없음. |
+| 법적 성격 | 파생 ID는 가명정보. 싱글·데일리 플레이는 비로그인 100%라 수집 최소화 원칙 충족이 용이하고, 계정 정보는 랭킹 등재·멀티 참가를 선택한 유저에 한정된다(D68-①). 개인정보처리방침은 `/privacy` 게시 — 운영 주체 **LeaderPark(개인 개발자)**, 문의 **dkdleldjqkr976@gmail.com**(00 §11-D68-⑨). |
+| GDPR | (a) 열람/이동: `GET /api/v1/users/me/export`, 삭제: `DELETE /api/v1/users/me` — users/runs/lb_best 모델(00 §11-D9) 기준 처리 상세는 06 §6.3. 진입 UI는 `/privacy` 하단(D68-⑥) + localStorage 삭제. (b) 법적 근거·항목별 매핑: 06 §6.2 표. (c) 국외 이전 고지: Cloudflare + Google LLC(로그인) — 06 §6.4·§6.5. |
+| 데이터 보존 | 06 §6.2 표가 원천: 마지막 활동 후 2년, `runs.detail_json`(입력 리듬 통계)은 90일 후 NULL(Cron), 신고/제재 기록은 제재 종료 후 1년, AE 90일, 레이트리밋 KV TTL 자동 소멸. (구 scores/matches 보존 규칙은 D9로 폐기된 스키마 기준 — 무효) |
+| 아동 | 연령을 묻지 않는다(06 §6.4) — 실명·연락처 미수집 구조라 법정대리인 동의 대상 수집 행위 없음. 대기실 채팅은 D1 미저장, blocklist 필터는 송신 시점 적용. |
+| 쿠키 | 미사용(localStorage만, 필수 기능 목적) → 쿠키 배너 불요. GA4는 동의 배너 수락 시에만 로드(Q3 — 런칭 시 OFF). 이 사실을 privacy 페이지에 명시. |
 
 ---
 

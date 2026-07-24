@@ -212,18 +212,19 @@ flowchart LR
 ### 2.1 세트 결정 (전원 동일)
 
 - 시드: `seed = SHA-256("wt-daily:" + YYYY-MM-DD + ":" + DAILY_SALT)` — 날짜는 **KST 기준**, `DAILY_SALT`는 Worker secret(사전 계산 유출 방지: salt 없이는 내일 세트를 미리 알 수 없다).
-- 출제: 10개국 = T1×3 + T2×3 + T3×2 + T4×1 + T5×1 (GDD §9.1). 각 티어 풀(`un195` 한정, 02 §12)을 시드 기반 Fisher-Yates(xoshiro128** — 04 문서의 멀티 시드 셔플과 동일 구현 공유)로 셔플해 앞에서 개수만큼 취하고, 최종 10개를 다시 시드 셔플하여 순서 확정.
-- 세트는 서버가 `GET /api/daily/today`에서 내려준다(클라 계산 금지 — salt가 서버에만 있으므로 자연 강제). 응답은 KST 자정까지 `Cache-Control: public, max-age=60` + KV 캐시.
+- 출제: 10개국 = T1×3 + T2×3 + T3×2 + T4×1 + T5×1 (GDD §9.1). 각 티어 풀(`un195` 한정, 02 §12)을 시드 기반 Fisher-Yates(**mulberry32** — 00 §11-D13, `shared/protocol/seeding.ts`의 멀티 시드 셔플과 동일 구현 공유)로 셔플해 앞에서 개수만큼 취하고, 최종 10개를 다시 시드 셔플하여 순서 확정.
+- 세트는 서버가 `GET /api/v1/daily/today`에서 내려준다(클라 계산 금지 — salt가 서버에만 있으므로 자연 강제). 응답은 KST 자정까지 `Cache-Control: public, max-age=60` + KV 캐시.
 
 ### 2.2 보드
 
 - `modeKey = daily:2026-07-21`, board_key 예: `daily:2026-07-21|ko|desktop|all`. §1의 인프라를 그대로 사용, 별도 테이블 없음.
 - 언어와 무관하게 국가 세트는 동일(시드가 언어 비의존), 보드는 lang으로 분리(타수 체계).
+- 보드 등재는 **계정(acct) 세션 전용**(00 §11-D68-①) — 게스트(비로그인) 제출은 데일리 포함 전 모드에서 `verdict='practice'`/`reason='guest'`로 runs 원장에만 기록되고 어느 보드에도 반영되지 않는다(플레이 자체는 비로그인 100% 유지).
 
 ### 2.3 1일 1회 등재 규칙
 
-- 유저의 **첫 정식 제출만** lb_best에 등재. 서버 강제: daily 보드 UPSERT는 `ON CONFLICT DO NOTHING`으로 대체(§1.3 쿼리의 daily 분기).
-- 이미 등재된 유저의 재도전 제출은 `verdict='practice'`로 runs에만 기록(클라는 시작 전에 `GET /api/daily/me`로 등재 여부를 받아 "연습 모드" 라벨 표시).
+- 유저의 **첫 정식 제출**(계정 세션의 `verified` 제출 — §2.2, 00 §11-D68-①)만 lb_best에 등재. 서버 강제: daily 보드 UPSERT는 `ON CONFLICT DO NOTHING`으로 대체(§1.3 쿼리의 daily 분기).
+- 이미 등재된 유저의 재도전 제출은 `verdict='practice'`로 runs에만 기록(클라는 시작 전에 `GET /api/v1/daily/me`로 등재 여부를 받아 "연습 모드" 라벨 표시).
 - 스트릭 갱신: 첫 정식 제출 수리 시 `users.streak_updated`가 어제(KST)면 `streak_daily += 1`, 아니면 1로 리셋. 업적 `daily_7/30/100` 판정은 이 시점.
 - 공유 텍스트(GDD §9.1의 Wordle식 이모지 그리드)는 결과 응답의 `shareText` 필드로 서버가 생성해 내려준다(클라 조작 여지 제거 목적이 아니라 포맷 단일화 목적 — 어차피 텍스트 공유는 신뢰 대상 아님).
 
@@ -440,7 +441,7 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 ### 6.1 설계 원칙: "수집하지 않는 것이 최선의 컴플라이언스"
 
 - 계정·이메일은 **비로그인 이용 시 미수집**. Google 로그인 선택 시 `sub`(계정 식별자)·이메일(`email_verified`인 경우만)·프로필 이름을 수집한다(00 §11-D68). 전화·실명·생년월일은 일절 수집 안 함. 원 IP는 저장하지 않고 `CF-IPCountry`(국가 코드)만 저장. 쿠키는 사용하지 않으며(신원은 localStorage 토큰) GA4는 **동의 배너 수락 시에만 로드**(EEA/UK/KR 공통 적용 — 지역 분기 없이 단일 정책으로 단순화).
-- 이 구성에서 처리하는 개인정보(개인 식별 가능 정보)는 사실상 `deviceId(랜덤)`, `nickname(자유입력)`, `게임 기록` 3종이다. 닉네임에 실명 기입 가능성이 있으므로 개인정보로 취급해 전체 체계를 갖춘다.
+- 이 구성에서 처리하는 개인정보(개인 식별 가능 정보)는 비로그인 기준 `deviceId(랜덤)`, `nickname(자유입력)`, `게임 기록` 3종이고, Google 로그인 선택 시 계정 식별 정보(`sub`·검증된 이메일·프로필 이름 — §6.2 표)가 더해진다. 닉네임에 실명 기입 가능성이 있으므로 개인정보로 취급해 전체 체계를 갖춘다.
 
 ### 6.2 처리 항목 인벤토리
 
@@ -457,10 +458,10 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 
 ### 6.3 이용자 권리 구현
 
-- **열람/이동권**: `/privacy` 하단 "내 데이터 내려받기"(SettingsOverlay 제거에 따른 UI 이전 — 00 §11-D68-⑥) → `GET /api/users/me/export` — users/runs/unlocks를 JSON 파일로 즉시 응답(수동 처리 없음).
-- **삭제권(잊힐 권리)**: `/privacy` 하단 "데이터 초기화 및 삭제" → `DELETE /api/users/me` → 트랜잭션으로 runs.detail_json 삭제, nickname → `탈퇴한 여행자`, nickname_norm → `deleted:{userId}`, lb_best 전 행 삭제, unlocks 삭제, status='deleted', deviceId 매핑 해제. KV 캐시는 다음 Cron 사이클에 자연 반영(≤10분). AE는 해시라 개별 삭제 불가·불요(가명처리 고지). 30일 내 처리 의무 대비 **즉시 처리**로 설계.
+- **열람/이동권**: `/privacy` 하단 "내 데이터 내려받기"(SettingsOverlay 제거에 따른 UI 이전 — 00 §11-D68-⑥) → `GET /api/v1/users/me/export` — users/runs/unlocks를 JSON 파일로 즉시 응답(수동 처리 없음).
+- **삭제권(잊힐 권리)**: `/privacy` 하단 "데이터 초기화 및 삭제" → `DELETE /api/v1/users/me` → 트랜잭션으로 runs.detail_json 삭제, nickname → `탈퇴한 여행자`, nickname_norm → `deleted:{userId}`, lb_best 전 행 삭제, unlocks 삭제, status='deleted', deviceId 매핑 해제. KV 캐시는 다음 Cron 사이클에 자연 반영(≤10분). AE는 해시라 개별 삭제 불가·불요(가명처리 고지). 30일 내 처리 의무 대비 **즉시 처리**로 설계.
 - **정정권**: 닉네임 변경 기능이 곧 정정 수단.
-- 문의 채널: `privacy@` 메일(크레딧/방침 페이지 명기), 접수-처리 기록은 `admin_audit`에.
+- 문의 채널: `dkdleldjqkr976@gmail.com`(운영 주체 LeaderPark — 00 §11-D68-⑨, 크레딧/방침 페이지 명기), 접수-처리 기록은 `admin_audit`에.
 
 ### 6.4 국외 이전·저장소 고지 (PIPA 필수)
 

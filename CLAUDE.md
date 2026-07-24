@@ -20,7 +20,7 @@ METRO TYPING(서울 지하철역 타이핑 게임)의 재미 구조를 계승해
 | `docs/07-implementation-prompts.md` | 마일스톤별 구현 태스크 프롬프트 + 모델 라우팅 |
 | `docs/08-progress-handoff.md` | **진행 상태 단일 원천 — 새 세션/새 PC는 이 문서부터 읽을 것.** 완료 태스크↔커밋 매핑, 셋업 절차, 잔여 작업 |
 
-> **진행 상태(2026-07-23)**: docs/07의 42개 태스크(M0~M6) **전부 구현 완료**. 남은 것은 원격/수동 항목(`tooling/ops/launch-checklist.md`)과 백로그뿐 — 상세는 `docs/08`. §11 결정은 D56까지 확정.
+> **진행 상태(2026-07-24)**: docs/07의 42개 태스크(M0~M6) + 후속 리드 태스크(라이트 디자인·자기호스팅·디자인 정합·계정 로그인 WT-AUTH 배치) **전부 구현·검증 완료, `https://worldtyping.leaderpark.net`에 라이브**(자기호스팅 Docker+Tunnel — docs/08 §8.6·§8.7). 남은 것은 수동 항목(`tooling/ops/launch-checklist.md`)과 백로그뿐 — 상세는 `docs/08`. §11 결정은 D71까지 확정.
 
 ## 모델 사용 정책 (사용자 명시 요구 — 반드시 준수)
 

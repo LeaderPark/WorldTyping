@@ -290,6 +290,8 @@ export function modeKeyFor(mode: GameMode, trackId: string): string {
       return `daily:${trackId}`;
     case 'race':
       return 'multi';
+    case 'chase':
+      return 'chase'; // [WT-CH] chase 리더보드 modeKey (lb:chase:*, docs/09 §9.3)
   }
 }
 

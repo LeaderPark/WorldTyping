@@ -50,6 +50,9 @@ export function createModeRules(mode: GameMode, lang: 'ko' | 'en'): ModeRules {
       return dailyRules(lang);
     case 'race':
       return raceRules();
+    // [WT-CH 조정 스텁] chase는 ChaseSessionEngine 소관 — createModeRules 경로 미사용. WT-CH-04가 정제.
+    case 'chase':
+      throw new Error('createModeRules: chase는 ChaseSessionEngine 소관이다 (WT-CH-04).');
   }
 }
 

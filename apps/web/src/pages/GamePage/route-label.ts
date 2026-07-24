@@ -20,6 +20,8 @@ export function describeRouteLabel(mode: GameMode, trackId: string, count: numbe
       return t('home.daily.title');
     case 'race':
       return t('menu.multi');
+    case 'chase':
+      return t('chase.mode.title'); // [WT-CH 조정 스텁] chase 라벨 — WT-CH-06(i18n)/CH-08 정제
   }
 }
 
@@ -34,6 +36,7 @@ export function ruleTypeKey(mode: GameMode): string {
       return 'boarding.ruleType.worldtour';
     case 'daily':
     case 'race':
-      return 'boarding.ruleType.daily';
+    case 'chase':
+      return 'boarding.ruleType.daily'; // [WT-CH 조정 스텁] chase는 자체 브리핑 — 이 라인 미사용, WT-CH-08 정제
   }
 }

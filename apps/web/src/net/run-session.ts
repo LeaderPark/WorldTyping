@@ -67,6 +67,7 @@ export function useRunStart(opts: {
 
   useEffect(() => {
     if (mode === 'race') return; // 멀티는 useMultiplayer 소관 — 이 훅 대상 아님
+    if (mode === 'chase') return; // [WT-CH] chase는 ChaseSessionEngine + /chase/start 소관 — 이 훅 대상 아님 (WT-CH-04/09)
     let cancelled = false;
     setState(initialRunStartState());
 

@@ -87,6 +87,9 @@ export function useCountries(): UseCountriesResult {
         }
         case 'race':
           throw new Error('useCountries: race는 멀티 전용이다 — useMultiplayer를 사용하라(M4).');
+        // [WT-CH 조정 스텁] chase는 심 동적 선택지라 고정 노선이 없다. WT-CH-04/06가 정제.
+        case 'chase':
+          throw new Error('useCountries: chase는 고정 노선이 없다 — ChaseSessionEngine 동적 선택지 (WT-CH-04).');
       }
     },
     [dataset],

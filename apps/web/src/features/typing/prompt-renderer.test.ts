@@ -224,11 +224,38 @@ describe('오버플로 — 슬롯 초과 입력은 tail로(error색, 최대 4유
     expect(cursorSlotIndex()).toBe(-1); // 커서는 슬롯이 아니라 tail
   });
 
-  it('tail은 최대 4유닛만 표시(초과분 잘림)', () => {
+  it('tail은 최대 4유닛만 표시 — 앞이 아니라 최신 4유닛(슬라이딩 윈도우, §11-D83)', () => {
     r.mount(el, GHANA, 'ko');
-    r.update(detailFor('가나다라마바사', GHANA, 'ko'), '가나다라마바사');
+    // 가나(2슬롯) done + 초과 다라마바사아 6유닛 → tail = 마지막 4유닛(마바사아), 앞 다라는 드롭.
+    r.update(detailFor('가나다라마바사아', GHANA, 'ko'), '가나다라마바사아');
     const tail = el.querySelector<HTMLElement>('.wt-prompt__tail')!;
-    expect(tail.textContent).toBe('다라마바'); // 다라마바사 → 앞 4유닛
+    expect(tail.textContent).toBe('마바사아'); // 다라마바사아 → 마지막 4유닛
+  });
+
+  it('슬라이딩 회복 — 오버플로 구간에서 타이핑/백스페이스가 항상 tail을 갱신(입력 동결 없음)', () => {
+    r.mount(el, GHANA, 'ko');
+    const tail = () => el.querySelector<HTMLElement>('.wt-prompt__tail')!.textContent;
+
+    // 오버플로 진입: 가나 + 다라마바(6유닛) → tail = 다라마바.
+    r.update(detailFor('가나다라마바', GHANA, 'ko'), '가나다라마바');
+    expect(tail()).toBe('다라마바');
+
+    // 계속 타이핑: 매 유닛마다 tail이 최신 4유닛으로 전진(화면이 멈추지 않는다).
+    r.update(detailFor('가나다라마바사', GHANA, 'ko'), '가나다라마바사');
+    expect(tail()).toBe('라마바사'); // 앞 4 고정이었다면 '다라마바' 그대로였을 것
+    r.update(detailFor('가나다라마바사아', GHANA, 'ko'), '가나다라마바사아');
+    expect(tail()).toBe('마바사아');
+
+    // 백스페이스: tail이 되돌아온다(삭제도 시각 반영 — 동결 아님).
+    r.update(detailFor('가나다라마바사', GHANA, 'ko'), '가나다라마바사');
+    expect(tail()).toBe('라마바사');
+    r.update(detailFor('가나다라마바', GHANA, 'ko'), '가나다라마바');
+    expect(tail()).toBe('다라마바');
+    // 커서는 오버플로 내내 tail에 유지(현행 계약 불변).
+    expect(cursorSlotIndex()).toBe(-1);
+    expect(
+      el.querySelector<HTMLElement>('.wt-prompt__tail')!.classList.contains('is-cursor'),
+    ).toBe(true);
   });
 });
 

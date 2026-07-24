@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Country, CountryId } from '@wt/shared';
 import type { GlobeMapHandle } from '../../features/map/globe/GlobeMap';
 import {
+  HOME_GLOBE_HOP_DURATION_MS,
   HOME_GLOBE_MAX_HOP_DELAY_MS,
   HOME_GLOBE_MIN_HOP_DELAY_MS,
   HOME_GLOBE_RESET_EVERY_HOPS,
@@ -112,7 +113,9 @@ describe('startHomeGlobeDemo — 홉 시퀀스', () => {
     vi.advanceTimersToNextTimer(); // 1st: JP
     expect(handle.moveVehicle).toHaveBeenLastCalledWith('JP', 'JP', { durationMs: 0 });
     vi.advanceTimersToNextTimer(); // 2nd: JP→KR(재시도로 KR 선택)
-    expect(handle.moveVehicle).toHaveBeenLastCalledWith('JP', 'KR');
+    expect(handle.moveVehicle).toHaveBeenLastCalledWith('JP', 'KR', {
+      durationMs: HOME_GLOBE_HOP_DURATION_MS,
+    });
   });
 
   it('~16홉마다 reset() 후 카운터가 재시작된다', () => {
@@ -164,6 +167,10 @@ describe('startHomeGlobeDemo — pause/resume(document.hidden 대응)·stop', ()
   it('최소/최대 홉 간격이 10~22초로 산출된다', () => {
     expect(HOME_GLOBE_MIN_HOP_DELAY_MS).toBe(10_000);
     expect(HOME_GLOBE_MAX_HOP_DELAY_MS).toBe(22_000);
+  });
+
+  it('홈 데모 순항 시간은 2.6초다(Tweak E §11-D73)', () => {
+    expect(HOME_GLOBE_HOP_DURATION_MS).toBe(2600);
   });
 });
 

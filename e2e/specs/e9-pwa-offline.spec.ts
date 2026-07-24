@@ -33,6 +33,7 @@ import { expect, test } from '@playwright/test';
 import { gotoBoarding } from '../helpers/game';
 import { reserveSessionSlot } from '../helpers/session-budget';
 import { resetNewPidAbuseCounter, seedSharedDeviceId } from '../helpers/identity';
+import { loginAs } from '../helpers/auth';
 
 /** Cache Storage 경합 방지 — CacheFirst의 cache.put()은 event.waitUntil로 응답 반환 뒤에도
  *  계속 진행될 수 있어, "리로드 성공"만으로는 백그라운드 기록 완료를 보장하지 못한다. */
@@ -54,6 +55,13 @@ test.describe('E9 — PWA 오프라인', () => {
 
     await resetNewPidAbuseCounter();
     await seedSharedDeviceId(page);
+    // [WT-AUTH 이행] 랭킹 게이팅(§11-D68-①)으로 비로그인 제출은 useRunSubmit이 idle로 남겨(제출 보류)
+    // ResultView가 result-login-cta를 그린다 — 오프라인 큐 적재("온라인 연결 시 자동 제출됩니다")·
+    // 온라인 복귀 후 실제 submit 왕복이 전부 로그인 이후에만 일어난다. 첫 네비게이션(온라인) 이전에
+    // 계정 세션을 주입해(helpers/auth.ts, /auth/dev) 로그인 상태로 부팅하면, 오프라인 출발 판은
+    // runToken 없이 queueOffline→'queued' 라벨을 그리고, 온라인 복귀 시 flush가 계정 신원으로
+    // /runs/start·/runs/submit을 왕복한다(오프라인 큐/flush 자체는 WT-AUTH 이전과 동일 기전).
+    await loginAs(page, 'auth-e9');
     await gotoBoarding(page, 'continent', 'south-america'); // 세션 슬롯 1.
 
     // §8.4 vite-plugin-pwa(registerType:'prompt') — 최초 등록·활성화 자체는 즉시 진행된다.

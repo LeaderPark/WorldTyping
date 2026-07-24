@@ -7,6 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { typeHangul } from '../helpers/ime';
 import { awaitPrompt } from '../helpers/game';
 import { reserveSessionSlot } from '../helpers/session-budget';
+import { loginAs } from '../helpers/auth';
 
 // docs/02 routes.ts ROUTE_SOUTH_AMERICA(12개국, 시작점 CO) — countries.json의 nameKo(§11-D22 canonical).
 const SOUTH_AMERICA_KO = [
@@ -32,6 +33,14 @@ async function landingToSouthAmerica(page: Page): Promise<void> {
 test.describe('E1 — 첫 방문 여정', () => {
   test('랜딩→언어 선택→남미선 12개국 IME 완주→결과→R 리트라이 재개', async ({ page, browserName }) => {
     test.skip(browserName !== 'chromium', 'CDP IME 재현은 Chromium 전용(§10.2)');
+
+    // [WT-AUTH 이행] 랭킹 게이팅(§11-D68-①)으로 비로그인 제출은 practice/'guest'로 강등돼 결과
+    // 화면이 result-login-cta만 그린다(순위/등재 없음). E1은 "완주→결과 등급·점수→랭킹 등재→
+    // 내 기록 확인"까지 검증하므로, 첫 네비게이션 이전에 계정 세션을 주입해 로그인 상태로 부팅한다
+    // (helpers/auth.ts — /auth/dev 발급 + localStorage 주입, 컨텍스트 전체에 적용돼 아래 rank 새 탭도
+    // 로그인 상태). 이렇게 하면 제출이 계정 신원으로 valid 등재되어 결과 순위와 리더보드 내 행이
+    // WT-AUTH 이전과 동일하게 관측된다.
+    await loginAs(page, 'auth-e1');
 
     await landingToSouthAmerica(page);
 

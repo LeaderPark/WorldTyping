@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { COUNTRIES } from '@wt/data';
 import { computeScore, requiredKeystrokes, type ScoreCountry, type RunStats } from '@wt/shared';
-import { reserveSessionSlot } from './session-budget';
+import { createDevAccount } from './auth';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WORKERS_API_DIR = path.resolve(HERE, '../../workers/api');
@@ -43,17 +43,25 @@ export interface ForgedSession {
   playerId: string;
 }
 
-/** 매 시나리오 독립 계정(신규 deviceId) — 섀도우밴 등 계정 상태 오염이 시나리오 간 번지지 않게 한다. */
+/**
+ * 매 시나리오 독립 **계정** 세션(고유 sub) — 치트 검증용.
+ *
+ * [WT-AUTH 이행] 랭킹 게이팅(§11-D68-①, workers/api/src/routes/runs.ts)이 도입돼 **게스트(비계정)
+ * 제출은 rejected가 아니면 전부 verdict='practice'/reason='guest'로 강등**된다. 이 스위트는
+ * valid/flagged/rejected + 섀도우밴 누적을 관측해야 하므로(강등되면 전부 practice로 뭉개진다)
+ * 게스트 세션(POST /session)이 아니라 계정 세션(POST /auth/dev)으로 시작해야 한다. 계정 신원은
+ * "google:"+sub에서 결정적으로 파생되므로, 시나리오마다 고유 sub를 쓰면 계정이 격리돼(같은 sub =
+ * 같은 user_id) 섀도우밴 등 상태 오염이 시나리오 간 번지지 않는다(기존 "매 시나리오 신규 deviceId"
+ * 격리 의도를 그대로 승계). ForgedSession.playerId는 이제 계정 user_id다 — queryUserStatus/
+ * queryRunRow가 user_id로 조회하므로 그대로 정합하다.
+ *
+ * /auth/dev는 레이트리밋·신규 pid 어뷰즈 카운터 대상이 아니라(routes/auth.ts) 세션 슬롯 예약이
+ * 불필요하다(helpers/auth.ts 상단 주석) — 오히려 이 전환으로 스위트의 POST /session 총량이 8회
+ * 줄어 세션 예산에 여유가 생긴다.
+ */
 export async function bootstrapSession(request: APIRequestContext): Promise<ForgedSession> {
-  // WT-M3-08 후속: 스위트 전체의 세션 부트스트랩 총량이 서버 레이트리밋(session: 10회/60초/IP)을
-  // 넘지 않도록 자기 페이싱한다(session-budget.ts 주석 참조).
-  await reserveSessionSlot();
-  const res = await request.post('/api/v1/session', { data: { deviceId: randomUUID() } });
-  if (!res.ok()) {
-    throw new Error(`bootstrapSession 실패: ${res.status()} ${await res.text()}`);
-  }
-  const body = (await res.json()) as { token: string; playerId: string };
-  return { token: body.token, playerId: body.playerId };
+  const acct = await createDevAccount(request, `cheat-${randomUUID()}`);
+  return { token: acct.token, playerId: acct.playerId };
 }
 
 export interface StartedRun {

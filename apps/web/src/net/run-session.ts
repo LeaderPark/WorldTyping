@@ -178,7 +178,6 @@ export interface UseRunSubmitOpts {
   platform: 'desktop' | 'mobile';
   runToken: string | null;
   runTokenIssuedAt: number | null;
-  nickname: string;
 }
 
 export interface UseRunSubmitResult extends RunSubmitState {
@@ -231,7 +230,8 @@ export function useRunSubmit(opts: UseRunSubmitOpts): UseRunSubmitResult {
     const body = buildResultBody(opts.result, submission.perCountry, opts.finalLives);
     const inputDigest = JSON.parse(submission.inputDigest) as InputDigestSubmit;
     const clientScore = opts.result.score.finalScore;
-    const nickname = opts.nickname || undefined;
+    // [§11-D88] 제출 body의 nickname은 폐지됐다 — 표시명은 서버 users.nickname(계정=Google 이름)이
+    // 단일 원천이고(lb.ts JOIN), 클라가 싣던 값은 detail_json 감사용이었을 뿐이다(서버 optional 유지).
     // 이 함수는 아래 effect의 게이트(!isLoggedIn → 조기 return)를 통과해야만 호출되므로 도달
     // 시점엔 항상 계정 세션이다 — guestToken 브리지 값을 항상 실어 보낸다(위 함수 주석 참조).
     const guestToken = getSessionToken() ?? undefined;
@@ -260,7 +260,6 @@ export function useRunSubmit(opts: UseRunSubmitOpts): UseRunSubmitResult {
         result: body,
         clientScore,
         inputDigest,
-        nickname,
       }).catch((err: unknown) => {
         console.warn('[run-session] enqueuePending 실패:', err);
       });
@@ -282,7 +281,7 @@ export function useRunSubmit(opts: UseRunSubmitOpts): UseRunSubmitResult {
     }
 
     setState((s) => ({ ...s, status: 'submitting' }));
-    submitRun({ runToken: opts.runToken, result: body, clientScore, inputDigest, nickname, guestToken })
+    submitRun({ runToken: opts.runToken, result: body, clientScore, inputDigest, guestToken })
       .then((res) => {
         if (unmountedRef.current) return;
         setState({

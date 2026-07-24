@@ -33,6 +33,20 @@ export interface WsManagerOptions {
   createSocket?: (url: string) => WebSocketLike;
 }
 
+/** [§11-D89] 재연결 직전에 호출되는 신선 URL 공급자. WS 티켓은 1회용(DO usedTickets)+60s TTL이라
+ *  동일 URL 재사용은 최초 절단 이후 401/404로 DOA다 — 재연결마다 이 콜백으로 신규 티켓을 붙인 URL을
+ *  받는다. ReconnectAbortError를 던지면 즉시 중단(failed), 그 외 예외는 그 시도 1회 실패로 계상해
+ *  백오프를 계속한다. */
+export type ReconnectUrlProvider = () => Promise<string>;
+
+/** [§11-D89] 프로바이더가 "재시도 무의미"(방 소멸·진행 중·만원·인증 소실)를 알리는 중단 신호. */
+export class ReconnectAbortError extends Error {
+  constructor(readonly code: string) {
+    super(`reconnect aborted: ${code}`);
+    this.name = 'ReconnectAbortError';
+  }
+}
+
 /** 재연결 백오프: 0.5s→1s→2s→4s→8s(상한), 최대 5회(§7.2, WT-M4-03). */
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_MAX_MS = 8_000;
@@ -55,6 +69,11 @@ export class WsManager {
   private manualClose = false;
   private readonly sendQueue: ClientMessage[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** [§11-D89] 재연결 URL 공급자(없으면 기존 동작 — 동일 URL 재사용). */
+  private reissueUrl: ReconnectUrlProvider | null = null;
+  /** [§11-D89] 세대 가드 — connect/close마다 ++. 비동기 재발급이 완료될 때 epoch가 바뀌었으면
+   *  (다른 connect()/close() 경합) 그 결과를 조용히 폐기한다. */
+  private epoch = 0;
 
   private readonly messageListeners = new Set<(m: ServerMessage) => void>();
   private readonly stateListeners = new Set<(s: ConnState) => void>();
@@ -74,10 +93,14 @@ export class WsManager {
     return this.state;
   }
 
-  connect(url: string): void {
+  /** [§11-D89] reissueUrl을 주면 재연결 시도마다 그 콜백으로 신선 URL(신규 티켓)을 받아 접속한다.
+   *  생략하면 기존 동작(동일 URL 재사용) — 1-인자 호출 호환. */
+  connect(url: string, reissueUrl?: ReconnectUrlProvider): void {
     this.url = url;
+    this.reissueUrl = reissueUrl ?? null;
     this.manualClose = false;
     this.attempt = 0;
+    this.epoch++;
     this.registerPagehide();
     this.open();
   }
@@ -100,6 +123,7 @@ export class WsManager {
   /** 정상 종료(코드 1000 기본) — 재연결하지 않는다. */
   close(code: number = CLOSE_NORMAL, reason?: string): void {
     this.manualClose = true;
+    this.epoch++; // 진행 중인 비동기 재발급을 무효화(§11-D89).
     this.clearReconnectTimer();
     this.unregisterPagehide();
     const s = this.socket;
@@ -168,7 +192,13 @@ export class WsManager {
       this.setState(code >= 4000 && !this.manualClose ? 'failed' : 'idle');
       return;
     }
-    // 비정상 전송 절단(1006 등) → 지수 백오프 재연결.
+    // 비정상 전송 절단(1006 등) → 지수 백오프 재연결(§11-D89: reissueUrl로 신규 티켓 재발급).
+    this.scheduleReconnect();
+  }
+
+  /** [§11-D89] 백오프 후 재연결 1회를 예약한다. 상한(5회) 초과 시 failed. 백오프 상수·최대 횟수는
+   *  기존 그대로(§7.2 — D89는 신규 티켓 재발급/터미널 분류만 추가). */
+  private scheduleReconnect(): void {
     if (this.attempt >= MAX_RECONNECT_ATTEMPTS) {
       this.setState('failed');
       return;
@@ -179,8 +209,32 @@ export class WsManager {
     this.clearReconnectTimer();
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      this.open();
+      void this.reopen();
     }, delay);
+  }
+
+  /** [§11-D89] 실제 재접속. reissueUrl이 있으면 신선 URL(신규 티켓)을 받아 붙는다 — 비동기 재발급
+   *  완료 시점에 epoch 불일치/수동 종료면 조용히 폐기(경합 방어), ReconnectAbortError면 즉시 failed,
+   *  그 외 예외는 시도 1회 소모 후 백오프 지속. 프로바이더가 없으면 기존 동작(동일 URL 재사용). */
+  private async reopen(): Promise<void> {
+    if (!this.reissueUrl) {
+      this.open();
+      return;
+    }
+    const myEpoch = this.epoch;
+    try {
+      const url = await this.reissueUrl();
+      if (myEpoch !== this.epoch || this.manualClose) return; // close()/재connect() 경합 — 폐기.
+      this.url = url;
+      this.open();
+    } catch (err) {
+      if (myEpoch !== this.epoch || this.manualClose) return;
+      if (err instanceof ReconnectAbortError) {
+        this.setState('failed');
+        return;
+      }
+      this.scheduleReconnect(); // 일시 실패(REST 네트워크/429/503) — 시도 소모 후 계속.
+    }
   }
 
   private flushQueue(): void {

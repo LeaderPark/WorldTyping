@@ -63,9 +63,10 @@ describe('settings store', () => {
 
   it('persists state under the wt:settings key', async () => {
     const { useSettingsStore } = await import('./settings');
-    useSettingsStore.getState().setNickname('Traveler');
+    // [§11-D88] nickname 필드는 폐지 — 다른 저빈도 설정으로 persist 동작을 검증한다.
+    useSettingsStore.getState().setGhostMode(true);
     const raw = localStorage.getItem('wt:settings');
     expect(raw).not.toBeNull();
-    expect(JSON.parse(raw as string).state.nickname).toBe('Traveler');
+    expect(JSON.parse(raw as string).state.ghostMode).toBe(true);
   });
 });

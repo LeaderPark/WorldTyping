@@ -58,7 +58,9 @@ export interface SettingsState {
   keySound: KeySound;
   volume: VolumeSettings;
   fontScale: FontScale;
-  nickname: string;
+  // [§11-D88] nickname 필드는 폐지됐다 — 표시/멀티 신원 닉네임은 계정(Google) 이름으로 일원화
+  // (stores/auth). persist 'wt:settings'에 남은 기존 nickname 키는 상태 병합돼도 미참조라 무해
+  // (마이그레이션 불필요).
   guestId: string;
   platform: Platform;
   /** 고스트 모드 토글(§9.3, WT-M5-04) — "아무 노선 완주 1회" 언락 후에만 BoardingPass가 노출.
@@ -72,7 +74,6 @@ export interface SettingsState {
   setKeySound(v: KeySound): void;
   setVolume(v: Partial<VolumeSettings>): void;
   setFontScale(v: FontScale): void;
-  setNickname(v: string): void;
   setGhostMode(v: boolean): void;
 }
 
@@ -88,7 +89,6 @@ export const useSettingsStore = create<SettingsState>()(
       keySound: 'off',
       volume: { master: 0.8, sfx: 0.8, bgm: 0.5 },
       fontScale: 1,
-      nickname: '',
       guestId: readOrCreateDeviceId(),
       platform: detectPlatform(),
       ghostMode: false,
@@ -106,7 +106,6 @@ export const useSettingsStore = create<SettingsState>()(
       setKeySound: (v) => set({ keySound: v }),
       setVolume: (v) => set({ volume: { ...get().volume, ...v } }),
       setFontScale: (v) => set({ fontScale: v }),
-      setNickname: (v) => set({ nickname: v }),
       setGhostMode: (v) => set({ ghostMode: v }),
     }),
     { name: 'wt:settings' },

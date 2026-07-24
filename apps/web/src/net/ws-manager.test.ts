@@ -2,7 +2,7 @@
 // spec: docs/05 §4.1(프레임·seq)·§7.2(백오프)·§13-F7, docs/03 §6.1, WT-M4-03 완료조건(모의 WS).
 // jsdom: pagehide(window 이벤트)와 fake timer 백오프 검증에 필요. WebSocket은 목을 주입한다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WsManager, backoffDelayMs, type WebSocketLike } from './ws-manager';
+import { ReconnectAbortError, WsManager, backoffDelayMs, type WebSocketLike } from './ws-manager';
 import type { ServerMessage } from '@wt/shared';
 
 class MockWebSocket implements WebSocketLike {
@@ -171,5 +171,90 @@ describe('WsManager pagehide', () => {
     window.dispatchEvent(new Event('pagehide'));
     expect(sockets[0]!.closed).toEqual({ code: 1000, reason: undefined });
     expect(ws.getState()).toBe('idle');
+  });
+});
+
+describe('WsManager 재연결 URL 재발급(§11-D89)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('프로바이더가 있으면 1006 절단 후 신선 URL(신규 티켓)로 새 소켓을 연다', async () => {
+    const { ws, sockets } = makeManager();
+    const provider = vi.fn(async () => 'ws://x/ws/room/AAA?ticket=fresh');
+    ws.connect('ws://x/ws/room/AAA?ticket=stale', provider);
+    sockets[0]!.fireOpen();
+    sockets[0]!.fireClose(1006);
+    expect(ws.getState()).toBe('reconnecting');
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(provider).toHaveBeenCalledTimes(1);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1]!.url).toBe('ws://x/ws/room/AAA?ticket=fresh'); // 죽은 티켓 재사용 아님
+  });
+
+  it('프로바이더가 ReconnectAbortError를 던지면 추가 소켓 없이 즉시 failed(터미널 중단)', async () => {
+    const { ws, sockets } = makeManager();
+    const provider = vi.fn(async () => {
+      throw new ReconnectAbortError('ROOM_NOT_FOUND');
+    });
+    ws.connect('ws://x/ws/room/AAA', provider);
+    sockets[0]!.fireOpen();
+    sockets[0]!.fireClose(1006);
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sockets).toHaveLength(1);
+    expect(ws.getState()).toBe('failed');
+  });
+
+  it('프로바이더 일반 예외는 시도 1회를 소모하고 백오프를 지속해 5회 소진 후 failed', async () => {
+    const { ws, sockets } = makeManager();
+    const provider = vi.fn(async () => {
+      throw new Error('503 transient');
+    });
+    ws.connect('ws://x/ws/room/AAA', provider);
+    sockets[0]!.fireOpen();
+    sockets[0]!.fireClose(1006);
+
+    for (const d of [500, 1000, 2000, 4000, 8000]) {
+      await vi.advanceTimersByTimeAsync(d);
+    }
+    expect(provider).toHaveBeenCalledTimes(5); // 재발급 5회 모두 실패
+    expect(sockets).toHaveLength(1); // open에 도달 못 함
+    expect(ws.getState()).toBe('failed');
+  });
+
+  it('재발급 대기 중 close()면 epoch 가드로 새 소켓을 만들지 않는다', async () => {
+    const { ws, sockets } = makeManager();
+    let release: (url: string) => void = () => {};
+    const provider = vi.fn(
+      () =>
+        new Promise<string>((res) => {
+          release = res;
+        }),
+    );
+    ws.connect('ws://x/ws/room/AAA', provider);
+    sockets[0]!.fireOpen();
+    sockets[0]!.fireClose(1006);
+
+    await vi.advanceTimersByTimeAsync(500); // reopen 시작 → provider await 중
+    expect(provider).toHaveBeenCalledTimes(1);
+
+    ws.close(1000); // epoch++ + manualClose — 진행 중 재발급 무효화
+    release('ws://x/ws/room/AAA?ticket=late');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sockets).toHaveLength(1); // 폐기 — 새 소켓 미생성
+    expect(ws.getState()).toBe('idle');
+  });
+
+  it('프로바이더가 없으면(1-인자 connect) 동일 URL로 재연결한다(기존 동작 보존)', () => {
+    const { ws, sockets } = makeManager();
+    ws.connect('ws://x/ws/room/AAA');
+    sockets[0]!.fireOpen();
+    sockets[0]!.fireClose(1006);
+    vi.advanceTimersByTime(500);
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1]!.url).toBe('ws://x/ws/room/AAA');
   });
 });

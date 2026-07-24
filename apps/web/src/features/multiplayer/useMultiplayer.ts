@@ -10,11 +10,16 @@
 // 스토어에 싣지 않는다(§4.5) — RaceClient가 명령형으로 소비한다. 레이스 엔진/입력 컨트롤러는
 // GameView(WT-M4-04)가 소유하므로 attachRace()로 나중에 배선한다.
 import { useCallback, useEffect, useRef } from 'react';
-import { apiClient, ensureSession, getAuthToken, getSessionToken } from '../../net/api-client';
+import { apiClient, ApiError, ensureSession, getAuthToken, getSessionToken } from '../../net/api-client';
 import { getBootData } from '../../app/bootLoader';
 import { useSettingsStore } from '../../stores/settings';
 import { useMultiplayerStore, type RoomState } from '../../stores/multiplayer';
-import { WsManager, type ClientMessageDraft } from '../../net/ws-manager';
+import {
+  ReconnectAbortError,
+  WsManager,
+  type ClientMessageDraft,
+  type ReconnectUrlProvider,
+} from '../../net/ws-manager';
 import { Timesync } from './timesync';
 import { RaceClient, type RaceClientDeps, type RaceStore } from './race-client';
 import type { ServerMessage, S2C_RoomState } from '@wt/shared';
@@ -88,6 +93,34 @@ export interface AttachRaceBindings {
 
 const DATA_VERSION_CLOSE = 4426;
 
+/** [§11-D89] 재발급 REST(POST /rooms/:code/join) 응답이 "재시도 무의미"(방 소멸/진행 중/만원/인증
+ *  소실)임을 알리는 터미널 코드 집합. 이 코드면 잔여 재연결 시도 없이 즉시 failed(사유별 기존
+ *  i18n 키 표기 — 신규 키 0). WS 업그레이드 4xx는 브라우저에 1006으로만 보이므로 판별기는 REST의
+ *  ApiError.code다. */
+const TERMINAL_REJOIN: ReadonlySet<string> = new Set([
+  'ROOM_NOT_FOUND',
+  'ROOM_IN_PROGRESS',
+  'ROOM_FULL',
+  'LOGIN_REQUIRED',
+  'INVALID_TOKEN',
+]);
+
+/** [§11-D89] 재발급 에러를 터미널(재시도 무의미) vs 일시(백오프 지속)로 분류하는 순수 판별기. */
+export function isTerminalRejoinError(err: unknown): err is ApiError {
+  return err instanceof ApiError && TERMINAL_REJOIN.has(err.code);
+}
+
+/** [§11-D89] AUTH_FAILED 무-resume hello 재시도 조건(순수). WAITING 절단=즉시 퇴장(서버 F10)이라
+ *  재연결 hello{resume}는 'resume rejected'로 거부된다 → 이미 신원(playerId)을 받았고 아직 이번
+ *  연결에서 재시도하지 않았을 때만 1회 무-resume 재수립을 허용한다. */
+export function shouldRetryHelloNoResume(
+  code: string,
+  alreadyRetried: boolean,
+  hasPlayerId: boolean,
+): boolean {
+  return code === 'AUTH_FAILED' && !alreadyRetried && hasPlayerId;
+}
+
 export function useMultiplayer() {
   const wsRef = useRef<WsManager | null>(null);
   const timesyncRef = useRef<Timesync | null>(null);
@@ -95,6 +128,10 @@ export function useMultiplayer() {
   const playerIdRef = useRef<string | null>(null);
   const resumeKeyRef = useRef<string | null>(null);
   const grantRef = useRef<WsGrant | null>(null);
+  // [§11-D89] join 신원 보존 — onDesync의 identity 없는 connectWithGrant 재호출에서도 유지한다.
+  const identityRef = useRef<PlayerIdentity | null>(null);
+  // [§11-D89] 이번 연결 세대에서 무-resume hello 재시도를 이미 했는지(매 'open'마다 false로 리셋).
+  const helloRetriedRef = useRef(false);
 
   const store = useMultiplayerStore;
 
@@ -162,6 +199,26 @@ export function useMultiplayer() {
         store.getState().setRaceResult(m);
         break;
       case 'error':
+        // [§11-D89] WAITING 절단=즉시 퇴장(서버 F10)이라 재연결 hello{resume}는 'resume rejected'로
+        // AUTH_FAILED된다. 신원 재수립: resume 자격을 버리고 무-resume hello + join을 같은 소켓에서
+        // 1회 조용히(lastError 미설정) 재시도한다. 재시도 후에도 AUTH_FAILED면(세션 토큰 무효) 아래
+        // 기존 표출 경로로 폴스루. mock 서버는 resume이 항상 성립(F12)이라 이 분기는 미발화(E7 불변).
+        if (shouldRetryHelloNoResume(m.code, helloRetriedRef.current, playerIdRef.current !== null)) {
+          helloRetriedRef.current = true;
+          playerIdRef.current = null;
+          resumeKeyRef.current = null;
+          wsRef.current?.send(
+            buildHello({
+              dataVersion: safeDataVersion(),
+              sessionToken: getAuthToken() ?? getSessionToken(),
+              guestId: useSettingsStore.getState().guestId,
+            }),
+          );
+          if (identityRef.current) {
+            wsRef.current?.send({ v: 1, type: 'join', ...identityRef.current });
+          }
+          break;
+        }
         // DATA_VERSION은 close(4426)가 뒤따르므로 onClose에서 리로드한다. 그 외는 상위 UI(M4-04)가
         // room-state/토스트로 표시한다.
         store.getState().setLastError({ code: m.code, message: m.message });
@@ -176,6 +233,8 @@ export function useMultiplayer() {
   const connectWithGrant = useCallback(
     (grant: WsGrant, identity?: PlayerIdentity): void => {
       grantRef.current = grant;
+      // [§11-D89] join 신원 보존 — onDesync는 identity 없이 재호출하므로 직전 신원을 유지한다.
+      identityRef.current = identity ?? identityRef.current;
       store.getState().setRoom({
         code: grant.roomCode,
         hostId: '',
@@ -202,6 +261,8 @@ export function useMultiplayer() {
       ws.onStateChange((s) => {
         store.getState().setConnection(s);
         if (s === 'open') {
+          // [§11-D89] 새 연결 세대 시작 — 무-resume hello 재시도 가드를 리셋한다.
+          helloRetriedRef.current = false;
           const boot = safeDataVersion();
           ws.send(
             buildHello({
@@ -218,13 +279,14 @@ export function useMultiplayer() {
           );
           // hello 직후 즉시 join(같은 소켓 위 순차 전송이라 서버가 순서대로 처리 — 파일 상단
           // PlayerIdentity 주석). 재접속 시에도 안전(MatchRoom.onJoin이 기존 레코드를 갱신·
-          // connState를 connected로 되돌려 grace 이탈자를 복귀시킨다).
-          if (identity) {
+          // connState를 connected로 되돌려 grace 이탈자를 복귀시킨다). identityRef로 통일해
+          // onDesync의 identity 없는 재연결에서도 join 신원을 유지한다(§11-D89).
+          if (identityRef.current) {
             ws.send({
               v: 1,
               type: 'join',
-              nickname: identity.nickname,
-              passportCover: identity.passportCover,
+              nickname: identityRef.current.nickname,
+              passportCover: identityRef.current.passportCover,
             });
           }
           timesync.start();
@@ -238,7 +300,31 @@ export function useMultiplayer() {
         }
       });
 
-      ws.connect(toWsUrl(grant.wsUrl, grant.ticket, wsOrigin));
+      // [§11-D89] WS 티켓은 1회용(60s TTL)이라 재연결마다 신규 티켓이 필요하다. 최초 연결은 직전
+      // REST가 발급한 grant 티켓을 그대로 쓰고, 재연결은 reissueUrl 프로바이더로 신선 URL을 받는다.
+      const staticUrl = toWsUrl(grant.wsUrl, grant.ticket, wsOrigin);
+      const wsBaseSet = Boolean(import.meta.env.VITE_WS_BASE);
+      const reissueUrl: ReconnectUrlProvider = wsBaseSet
+        ? // E2E mock(VITE_WS_BASE)은 티켓 무검증·재연결 무제한 수용 → 정적 URL 재사용(E7 계약 보존).
+          () => Promise.resolve(staticUrl)
+        : async () => {
+            try {
+              // POST /rooms/:code/join은 멤버 미등록·grant만 발급이라 재발급 엔드포인트로 안전하다
+              // (서버 무변경, §11-D89-②). WAITING/CREATED면 200+신규 티켓, 그 외 페이즈/방 소멸은 4xx.
+              const g = await apiClient.post<WsGrant>(`/rooms/${grant.roomCode}/join`, {});
+              grantRef.current = { ...grantRef.current!, ...g }; // 최신 grant 갱신(onDesync 경로 공유).
+              return toWsUrl(g.wsUrl, g.ticket, wsOrigin);
+            } catch (err) {
+              if (isTerminalRejoinError(err)) {
+                // RoomPage 실패 화면 사유 표기용(기존 i18n 키) + 잔여 시도 없이 즉시 중단.
+                store.getState().setLastError({ code: err.code, message: err.message });
+                throw new ReconnectAbortError(err.code);
+              }
+              throw err; // 일시 실패 — ws-manager가 시도 1회 소모 후 백오프 지속.
+            }
+          };
+
+      ws.connect(staticUrl, reissueUrl);
     },
     [wsOrigin, routeMessage, store],
   );
@@ -318,6 +404,7 @@ export function useMultiplayer() {
     }
     playerIdRef.current = null;
     resumeKeyRef.current = null;
+    identityRef.current = null; // [§11-D89] 다음 연결이 낡은 신원을 재사용하지 않게.
     store.getState().reset();
   }, [store]);
 

@@ -760,7 +760,7 @@ export class WsManager {
   private sendQueue: ClientMsg[] = [];      // open 전 송신 버퍼 (최대 32, 초과 시 오래된 것 폐기)
   private heartbeatTimer?: number;
 
-  connect(url: string /* wss://.../room/:code?token=... */): void;
+  connect(url: string /* wss://.../room/:code?token=... */, reissueUrl?: () => Promise<string>): void; // §11-D89: reissueUrl은 재연결마다 신규 티켓 URL 공급(생략=동일 URL 재사용). ReconnectAbortError면 즉시 failed
   send(msg: ClientMsg): void;               // open이면 즉시, 아니면 큐잉
   close(code?: number): void;
   onMessage(f: (m: ServerMsg) => void): () => void;

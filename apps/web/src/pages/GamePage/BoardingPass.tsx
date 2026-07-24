@@ -16,6 +16,8 @@ export interface BoardingPassProps {
   trackId: string;
   countries: readonly Country[];
   lang: 'ko' | 'en';
+  /** [§11-D88] 계정(Google) 닉네임 — 비로그인 게스트는 빈 문자열이며, 아래 displayName이 GUEST_
+   *  표시 전용 폴백으로 대체한다(싱글 탑승권 승객명, 서버 전송 없음 — 콘텐츠 필터 무관). */
   nickname: string;
   guestId: string;
   /** 세계일주 장시간 모드 경고(§7.3) 노출 여부 판정용. */

@@ -29,7 +29,7 @@
 // [WT-M5-04] 공유 이미지(ShareCard/capture.ts)·데일리 공유 텍스트(DailyShareText)·자기 최고
 // 기록 고스트(features/typing/ghost.ts) 배선 추가. shareId(서버 발급 공유 랜딩)는 M6-02
 // 소관이라 ShareCard는 항상 홈 URL 폴백을 쓴다(세션 조정 §3-2).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
@@ -37,8 +37,6 @@ import type { Continent, Country, DifficultyTier, GameMode } from '@wt/shared';
 import { useHotkeys } from '../../lib/hotkeys';
 import { useAuthStore } from '../../stores/auth';
 import { useMetaStore } from '../../stores/meta';
-import { useSettingsStore } from '../../stores/settings';
-import { checkNickname, putNickname } from '../../net/api-client';
 import { useRunSubmit } from '../../net/run-session';
 import { ResultCard } from '../../features/result/ResultCard';
 import { ShareCard } from '../../features/result/ShareCard';
@@ -64,7 +62,6 @@ export interface ResultViewProps {
   /** runs/start가 발급한 토큰. null이면 오프라인 출발 — 큐에 적재된다(net/run-session.ts). */
   runToken: string | null;
   runTokenIssuedAt: number | null;
-  nickname: string;
   retry(): void;
 }
 
@@ -79,7 +76,6 @@ export function ResultView({
   finalLives,
   runToken,
   runTokenIssuedAt,
-  nickname,
   retry,
 }: ResultViewProps) {
   const { t } = useTranslation();
@@ -99,7 +95,6 @@ export function ResultView({
     platform,
     runToken,
     runTokenIssuedAt,
-    nickname,
   });
 
   // R 리트라이(GDD §2.2 "결과 화면에서 R 키 … 2초 내 재개"). 대소문자 키 이벤트 값 모두 대응.
@@ -216,7 +211,6 @@ export function ResultView({
       <SubmissionStatus submission={submission} />
       <UnlockToast newUnlocks={submission.newUnlocks} />
       {mode === 'daily' && <DailyShareText shareText={submission.shareText} />}
-      {!nickname && <NicknameGate />}
 
       <div className="wt-result-view__actions">
         <button type="button" data-testid="result-retry" className="wt-btn wt-btn--primary" onClick={retry}>
@@ -403,57 +397,5 @@ function DailyShareText({ shareText }: { shareText: string | null }) {
   );
 }
 
-/** 닉네임 미설정(기본 GUEST_xxxx) 유저에게 결과 화면에서 닉네임 설정을 유도(구현 세부 지시 3). */
-function NicknameGate() {
-  const { t } = useTranslation();
-  const setNickname = useSettingsStore((s) => s.setNickname);
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = useCallback(() => {
-    setBusy(true);
-    setError(null);
-    void (async () => {
-      try {
-        const checked = await checkNickname(value);
-        if (!checked.ok) {
-          setError(t('result.nickname.error'));
-          return;
-        }
-        const res = await putNickname(value);
-        setNickname(res.nickname);
-      } catch {
-        setError(t('result.nickname.error'));
-      } finally {
-        setBusy(false);
-      }
-    })();
-  }, [value, setNickname, t]);
-
-  return (
-    <div className="wt-result-view__nickname" data-testid="result-nickname-gate">
-      <p>{t('result.nickname.prompt')}</p>
-      <input
-        data-testid="result-nickname-input"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={t('result.nickname.placeholder')}
-      />
-      <button
-        type="button"
-        data-testid="result-nickname-submit"
-        className="wt-btn"
-        disabled={busy || value.length < 2}
-        onClick={submit}
-      >
-        {t('result.nickname.submit')}
-      </button>
-      {error && (
-        <p role="alert" data-testid="result-nickname-error">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
+// [§11-D88] 수동 닉네임 입력(NicknameGate)은 제거됐다 — 표시/랭킹 닉네임은 계정(Google) 이름으로
+// 일원화되고(랭킹은 D68-①상 로그인 전용), 게스트 표시명은 익명 기본값(GUEST_xxxx/여행자)을 쓴다.

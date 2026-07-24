@@ -168,7 +168,9 @@ export function RankPage() {
   }, [loadMore, entries.length]);
 
   const myRowInPage = myPlayerId ? entries.find((e) => e.userId === myPlayerId) : undefined;
-  const nickname = useSettingsStore((s) => s.nickname) || `GUEST_${guestId.slice(0, 4).toUpperCase()}`;
+  // [§11-D88] 고정 "내 순위" 행 표시명 = 계정(Google) 닉네임. 이 행은 me?.onBoard(로그인 계정)일
+  // 때만 렌더되므로(아래 조건) 실질 항상 계정 닉이며, GUEST_ 폴백은 표시 전용 방어다(서버 전송 없음).
+  const nickname = useAuthStore((s) => s.nickname) ?? `GUEST_${guestId.slice(0, 4).toUpperCase()}`;
 
   return (
     <main className="wt-rank-page wt-page" data-testid="rank-page">

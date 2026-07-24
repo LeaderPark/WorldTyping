@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// spec: docs/00 §11-D68-⑨(/terms — 표준 초안 9항, LeaderPark 명의, 법률 자문 아님 고지),
-//       §11-D72(단일 언어 렌더 — ko/en 병기 폐기), WT-AUTH-06 → WT-LGL-01. 본문은 settings.lang
-//       단일 언어만 렌더하므로 언어별 단언은 스토어 전환 후 각각 수행한다.
+// spec: docs/00 §11-D68-⑨(/terms — 표준 초안 9항, 법률 자문 아님 고지), §11-D76(운영 주체 실명
+//       박진우 — LeaderPark 표기 폐기), §11-D72(단일 언어 렌더 — ko/en 병기 폐기), WT-AUTH-06 →
+//       WT-LGL-01 → WT-LGL-02. 본문은 settings.lang 단일 언어만 렌더하므로 언어별 단언은 스토어
+//       전환 후 각각 수행한다.
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -61,11 +62,12 @@ describe('TermsPage', () => {
     }
   });
 
-  it('names the operator (LeaderPark) and fixed contact email, and references /credits for licenses', () => {
+  it('names the operator (박진우) and fixed contact email, and references /credits for licenses', () => {
     for (const lang of ['ko', 'en'] as const) {
       renderPage(lang);
       const body = screen.getByTestId(`terms-body-${lang}`).textContent ?? '';
-      expect(body).toContain('LeaderPark');
+      expect(body).toContain('박진우');
+      expect(body).not.toContain('LeaderPark');
       expect(body).toContain('dkdleldjqkr976@gmail.com');
       expect(body).toContain('/credits');
       expect(body).toContain('/privacy');

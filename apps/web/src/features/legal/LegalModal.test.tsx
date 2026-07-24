@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
-// spec: docs/00 §11-D72(footer 제자리 딤 스크림 모달 + 단일 언어), 설계 §2 결정 1·4·5. LegalModal의
-// a11y 계약(role/aria-modal/aria-label·초기 포커스·닫기 3경로), doc별 구성(terms=본문만 /
-// privacy=크레딧+데이터 셀프서비스), 언어 전환 반영, 라우트 전환 시 자동 닫힘을 검증한다.
+// spec: docs/00 §11-D72(footer 제자리 딤 스크림 모달 + 단일 언어), §11-D76(내 데이터 셀프서비스 UI
+// 제거). LegalModal의 a11y 계약(role/aria-modal/aria-label·초기 포커스·닫기 3경로), doc별 구성
+// (terms=본문만 / privacy=크레딧), 언어 전환 반영, 라우트 전환 시 자동 닫힘을 검증한다.
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
@@ -82,14 +82,14 @@ describe('LegalModal (§11-D72)', () => {
     expect(screen.queryByTestId('privacy-my-data')).not.toBeInTheDocument();
   });
 
-  it('privacy는 본문 + 크레딧 고지 + 데이터 열람/삭제 셀프서비스를 포함(§11-D68-⑥ 의무 UI)', () => {
+  it('privacy는 본문 + 크레딧 고지(내 데이터 섹션 부재 — §11-D76)', () => {
     renderModal('privacy');
     expect(screen.getByTestId('privacy-body-ko')).toBeInTheDocument();
     expect(screen.getByTestId('privacy-credits')).toBeInTheDocument();
     expect(screen.getByTestId('privacy-credits-link')).toHaveAttribute('href', '/credits');
-    expect(screen.getByTestId('privacy-my-data')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-data-export')).toBeInTheDocument();
-    expect(screen.getByTestId('settings-data-reset')).toBeInTheDocument();
+    expect(screen.queryByTestId('privacy-my-data')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-data-export')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-data-reset')).not.toBeInTheDocument();
   });
 
   it('settings.lang 전환이 본문 언어에 반영된다(활성 언어 1개만 DOM 존재)', async () => {

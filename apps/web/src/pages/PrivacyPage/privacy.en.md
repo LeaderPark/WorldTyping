@@ -12,7 +12,7 @@ actually collected and processed.
 ## 1. Overview and Data Controller
 
 - Service name: TypeTrip
-- Operator: LeaderPark (independent developer)
+- Operator: 박진우
 - Contact: dkdleldjqkr976@gmail.com
 - Effective date: 2026-07-24 (v1.0)
 
@@ -81,19 +81,24 @@ loaded after the consent banner is accepted, and consent can be withdrawn at any
 
 ## 7. Your Rights and How to Exercise Them
 
-Regardless of whether you are signed in, you can exercise the following instantly as self-service
-from the "My Data" section at the bottom of this page.
+You may exercise your rights of **access (and portability), rectification, erasure, and
+restriction of processing** over your personal data at any time. To exercise a right, send a
+request by email to the contact below.
 
-- **Access / portability**: "Download my data" at the bottom of this page → downloads
-  everything held about you as a JSON file immediately (no manual processing wait).
-- **Deletion ("right to be forgotten")**: "Reset and delete my data" at the bottom of this page
-  (two-step confirmation) → your nickname is anonymized, leaderboard entries are removed, and
-  both the device mapping and any Google account identifier mapping are released, all
-  immediately. The leaderboard cache, however, is only refreshed on its next cycle, so it may
-  take **up to 10 minutes** to fully disappear from view. Disconnecting or revoking the Service's
-  access to your Google account itself is done separately from your Google account settings.
-- **Rectification**: the nickname-change feature serves as the means of correction.
-- Other inquiries: contact dkdleldjqkr976@gmail.com and we will respond after review.
+- **How to request**: email dkdleldjqkr976@gmail.com stating which right you wish to exercise
+  (access / rectification / erasure / restriction) together with information we can use to
+  locate your data (such as the nickname you use in the Service). We may ask for a minimal
+  amount of additional information to verify that the request comes from you (or an authorized
+  agent).
+- **Processing time**: access requests are answered within 10 days; other requests are handled
+  without undue delay and no later than 30 days, after which we reply with the result.
+- **What erasure ("right to be forgotten") does**: your nickname is anonymized, leaderboard
+  entries are removed, and both the device mapping and any Google account identifier mapping
+  are released. The leaderboard cache is only refreshed on its next cycle, so it may take up to
+  10 minutes to fully disappear from view. Disconnecting or revoking the Service's access to
+  your Google account itself is done separately from your Google account settings.
+- **Rectification**: you can correct your nickname directly with the in-service nickname-change
+  feature; for anything else, use the email above.
 
 ## 8. Children's Personal Information
 
@@ -113,7 +118,7 @@ recommended for users aged 14 and older.
 
 ## 10. Data Protection Officer and Contact
 
-- Name / title: LeaderPark (Operator)
+- Name / title: 박진우 (Operator)
 - Email: dkdleldjqkr976@gmail.com
 
 ## 11. Notification Obligations

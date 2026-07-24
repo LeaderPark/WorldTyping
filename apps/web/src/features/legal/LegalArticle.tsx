@@ -6,12 +6,12 @@
 // 언어로 리렌더된다(스토어 구독 = 동기 리렌더). 구 "ko+en 병기 + <hr> + privacy.lang.* 헤딩"은
 // 여기서 폐기(그 키는 ko/en.json 양쪽에서 삭제). lang은 저빈도 설정값이라 §4.5 고빈도 금지와 무관.
 //
-// privacy는 본문 + 크레딧 최소 고지 + 데이터 열람/삭제 셀프서비스(§11-D68-⑥ 의무 UI)를 함께
-// 렌더한다 — 페이지·모달 100% 동일 구성이라 footer 모달 경로에서도 삭제권 UI에 접근 가능하다.
+// privacy는 본문 + 크레딧 최소 고지(§11-D76: 데이터 권리는 이메일 채널로 개정 — 내 데이터 셀프서비스
+// UI 제거)를 함께 렌더한다 — 페이지·모달 100% 동일 구성이다.
 import { MarkdownLiteBody } from '../../components/MarkdownLiteBody';
 import { useSettingsStore } from '../../stores/settings';
 import { LEGAL_DOCS, type LegalDocId } from './legal-docs';
-import { MyDataSection, PrivacyCreditsSection } from './PrivacySections';
+import { PrivacyCreditsSection } from './PrivacySections';
 
 export function LegalArticle({ doc }: { doc: LegalDocId }) {
   const lang = useSettingsStore((s) => s.lang);
@@ -25,8 +25,6 @@ export function LegalArticle({ doc }: { doc: LegalDocId }) {
         <>
           <hr className="my-8 border-border" />
           <PrivacyCreditsSection />
-          <hr className="my-8 border-border" />
-          <MyDataSection />
         </>
       )}
     </>

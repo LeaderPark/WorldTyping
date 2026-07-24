@@ -129,13 +129,13 @@ test.describe('E10 — 접근성(wcag2a/wcag2aa, 전 페이지)', () => {
     await assertNoViolations(page, 'S7 결과');
   });
 
-  test('S13 개인정보처리방침 (직접 URL — 데이터 열람/삭제 섹션 포함, 단일 세션)', async ({ page }) => {
-    // [WT-AUTH-03] 구 S12 설정 오버레이의 데이터 열람/삭제(settings-data-*)가 /privacy 하단으로
-    // 이전됐다 — 이 스캔이 그 섹션(MyDataSection)까지 함께 커버한다.
+  test('S13 개인정보처리방침 (직접 URL, 단일 세션)', async ({ page }) => {
+    // [§11-D76] 데이터 열람/삭제 셀프서비스 섹션(MyDataSection)은 제거됐다 — 권리 행사는 방침
+    // §7의 이메일 채널. 라우트 렌더 + 전체 페이지 axe 스캔은 유지한다.
     await reserveSessionSlot();
     await page.goto('/privacy');
-    await expect(page.getByTestId('privacy-my-data')).toBeVisible();
-    await assertNoViolations(page, 'S13 개인정보처리방침(+데이터 섹션)');
+    await expect(page.locator('[data-testid^="privacy-body-"]')).toBeVisible();
+    await assertNoViolations(page, 'S13 개인정보처리방침');
   });
 
   test('S-legal 이용약관(/terms) 직접 URL + Footer 법적 모달(열린 상태 axe) — §11-D72', async ({

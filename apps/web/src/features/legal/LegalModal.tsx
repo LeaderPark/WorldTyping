@@ -8,7 +8,7 @@
 // 링크 등) pathname effect가 자동으로 닫는다.
 //
 // [알려진 제약, 설계 §2 결정 4] /privacy 페이지 위에서 이 모달로 privacy를 열면 privacy-body-*·
-// settings-data-* testid가 DOM에 2벌 존재한다(배경 쪽은 inert). 현행/신규 테스트 어느 것도 이 조합을
+// privacy-credits testid가 DOM에 2벌 존재한다(배경 쪽은 inert). 현행/신규 테스트 어느 것도 이 조합을
 // 만들지 않는다 — 새 테스트에서 이 조합(직접 /privacy 진입 + footer로 privacy 모달 재오픈)은 피할 것.
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

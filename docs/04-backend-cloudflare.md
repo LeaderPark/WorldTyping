@@ -862,8 +862,8 @@ ORDER BY rank LIMIT 1000;   -- 스냅샷 상위 1000, KV엔 상위 100만
 | 항목 | 정책 |
 |---|---|
 | 수집 데이터 | **비로그인**: 익명 deviceId의 **일방향 파생 ID**(pid/device_hash — 원문 비저장, §5.1), 닉네임(자발 입력), 국가 단위 지역 코드(**`CF-IPCountry` 헤더 우선, `cf.country` 폴백** — 00 §11-D61), 게임플레이 통계. **Google 로그인 선택 시**(00 §11-D68): `sub` 파생 계정 ID + 이메일(`email_verified`인 경우만) + 프로필 이름(초기 닉네임 정제용). IP 원문·정밀 위치·쿠키 기반 트래킹 없음. |
-| 법적 성격 | 파생 ID는 가명정보. 싱글·데일리 플레이는 비로그인 100%라 수집 최소화 원칙 충족이 용이하고, 계정 정보는 랭킹 등재·멀티 참가를 선택한 유저에 한정된다(D68-①). 개인정보처리방침은 `/privacy` 게시 — 운영 주체 **LeaderPark(개인 개발자)**, 문의 **dkdleldjqkr976@gmail.com**(00 §11-D68-⑨). |
-| GDPR | (a) 열람/이동: `GET /api/v1/users/me/export`, 삭제: `DELETE /api/v1/users/me` — users/runs/lb_best 모델(00 §11-D9) 기준 처리 상세는 06 §6.3. 진입 UI는 `/privacy` 하단(D68-⑥) + localStorage 삭제. (b) 법적 근거·항목별 매핑: 06 §6.2 표. (c) 국외 이전 고지: Cloudflare + Google LLC(로그인) — 06 §6.4·§6.5. |
+| 법적 성격 | 파생 ID는 가명정보. 싱글·데일리 플레이는 비로그인 100%라 수집 최소화 원칙 충족이 용이하고, 계정 정보는 랭킹 등재·멀티 참가를 선택한 유저에 한정된다(D68-①). 개인정보처리방침은 `/privacy` 게시 — 운영 주체 **박진우**(00 §11-D76), 문의 **dkdleldjqkr976@gmail.com**. |
+| GDPR | (a) 열람/이동: `GET /api/v1/users/me/export`, 삭제: `DELETE /api/v1/users/me` — users/runs/lb_best 모델(00 §11-D9) 기준 처리 상세는 06 §6.3. 행사는 이메일 접수(dkdleldjqkr976@gmail.com — 00 §11-D76), 운영자가 존치 API로 이행(처리 상세 06 §6.3). (b) 법적 근거·항목별 매핑: 06 §6.2 표. (c) 국외 이전 고지: Cloudflare + Google LLC(로그인) — 06 §6.4·§6.5. |
 | 데이터 보존 | 06 §6.2 표가 원천: 마지막 활동 후 2년, `runs.detail_json`(입력 리듬 통계)은 90일 후 NULL(Cron), 신고/제재 기록은 제재 종료 후 1년, AE 90일, 레이트리밋 KV TTL 자동 소멸. (구 scores/matches 보존 규칙은 D9로 폐기된 스키마 기준 — 무효) |
 | 아동 | 연령을 묻지 않는다(06 §6.4) — 실명·연락처 미수집 구조라 법정대리인 동의 대상 수집 행위 없음. 대기실 채팅은 D1 미저장, blocklist 필터는 송신 시점 적용. |
 | 쿠키 | 미사용(localStorage만, 필수 기능 목적) → 쿠키 배너 불요. GA4는 동의 배너 수락 시에만 로드(Q3 — 런칭 시 OFF). 이 사실을 privacy 페이지에 명시. |

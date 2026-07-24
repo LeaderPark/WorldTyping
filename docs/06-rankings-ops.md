@@ -456,12 +456,12 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 | GA4 식별자 | 마케팅 분석 | Art.6(1)(a) **동의** | GA4 설정 2개월 | |
 | 신고/제재 기록 | 부정 이용 방지 | Art.6(1)(f) | 제재 종료 후 1년 | D1 |
 
-### 6.3 이용자 권리 구현
+### 6.3 이용자 권리 구현 (00 §11-D76 — 이메일 접수 채널)
 
-- **열람/이동권**: `/privacy` 하단 "내 데이터 내려받기"(SettingsOverlay 제거에 따른 UI 이전 — 00 §11-D68-⑥) → `GET /api/v1/users/me/export` — users/runs/unlocks를 JSON 파일로 즉시 응답(수동 처리 없음).
-- **삭제권(잊힐 권리)**: `/privacy` 하단 "데이터 초기화 및 삭제" → `DELETE /api/v1/users/me` → 트랜잭션으로 runs.detail_json 삭제, nickname → `탈퇴한 여행자`, nickname_norm → `deleted:{userId}`, lb_best 전 행 삭제, unlocks 삭제, status='deleted', deviceId 매핑 해제. KV 캐시는 다음 Cron 사이클에 자연 반영(≤10분). AE는 해시라 개별 삭제 불가·불요(가명처리 고지). 30일 내 처리 의무 대비 **즉시 처리**로 설계.
-- **정정권**: 닉네임 변경 기능이 곧 정정 수단.
-- 문의 채널: `dkdleldjqkr976@gmail.com`(운영 주체 LeaderPark — 00 §11-D68-⑨, 크레딧/방침 페이지 명기), 접수-처리 기록은 `admin_audit`에.
+- **접수 채널**: 열람(이동)·정정·삭제·처리정지 요청은 `dkdleldjqkr976@gmail.com` 이메일로 접수한다(인앱 셀프서비스 UI는 D76으로 제거 — 방침 §7·support FAQ에 채널 명기). 본인 확인 후 열람은 10일 이내, 그 외는 지체 없이(늦어도 30일 이내) 처리·회신. 접수-처리 기록은 `admin_audit`에.
+- **이행 수단(존치 API)**: 열람/이동 = `GET /api/v1/users/me/export`(users/runs/unlocks JSON), 삭제 = `DELETE /api/v1/users/me`(트랜잭션: runs.detail_json 삭제, nickname → `탈퇴한 여행자`, nickname_norm → `deleted:{userId}`, lb_best 전 행·unlocks 삭제, status='deleted', deviceId 매핑 해제 — KV 캐시는 다음 Cron 사이클 자연 반영 ≤10분, AE는 해시 가명처리라 개별 삭제 불가·불요). 운영자가 요청 건별로 실행한다.
+- **정정권**: 닉네임 변경 기능(ResultView) + 이메일 접수.
+- 운영 주체 **박진우**(00 §11-D76), 문의 `dkdleldjqkr976@gmail.com`.
 
 ### 6.4 국외 이전·저장소 고지 (PIPA 필수)
 
@@ -471,13 +471,13 @@ Worker가 `env.ANALYTICS.writeDataPoint()`로 기록. AE 제약(blobs ≤ 20, do
 ### 6.5 개인정보처리방침 페이지 아웃라인 (`/privacy`, ko/en 병기 — metrotyping.kr/privacy와 동일하게 정적 단일 페이지)
 
 ```
-1. 개요 및 처리자 정보 (서비스명, 운영 주체: LeaderPark(개인 개발자), 문의: dkdleldjqkr976@gmail.com — 00 §11-D68-⑨)
+1. 개요 및 처리자 정보 (서비스명, 운영 주체: 박진우, 문의: dkdleldjqkr976@gmail.com — 00 §11-D76)
 2. 수집하는 항목과 방법 (§6.2 표를 평문화 — "비로그인 이용 시 계정/이메일/실명을 수집하지 않습니다" 선명하게 + Google 로그인 선택 시 sub/이메일(검증 시)/프로필 이름 수집 명시)
 3. 처리 목적
 4. 보유 및 이용 기간 (항목별)
 5. 처리 위탁 및 국외 이전 (Cloudflare / Google LLC(로그인) / Google(GA4, 동의 시))
 6. 쿠키 및 유사 기술 (쿠키 미사용, localStorage 사용 내역, GA4 동의 관리 방법)
-7. 이용자의 권리와 행사 방법 (인앱 셀프서비스 경로 명시)
+7. 이용자의 권리와 행사 방법 (이메일 접수 채널·처리 기한 명시 — 00 §11-D76)
 8. 아동의 개인정보
 9. 안전성 확보 조치 (전송 암호화, 접근 통제, 가명처리)
 10. 개인정보 보호책임자 및 문의처

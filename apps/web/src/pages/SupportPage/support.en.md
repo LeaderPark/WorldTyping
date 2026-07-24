@@ -21,12 +21,10 @@ never added to the leaderboard.
 
 ### How do I view or delete my data?
 
-You can do this instantly as self-service, whether or not you're signed in, from the "My Data"
-section at the bottom of the Privacy Policy (/privacy) page.
-
-- Download my data — instantly downloads everything held about you as a JSON file
-- Reset and delete my data — after a two-step confirmation, anonymizes your nickname and
-  immediately deletes your leaderboard records and account mapping
+Send a request to dkdleldjqkr976@gmail.com. Access (download), rectification, erasure, and
+restriction requests are all handled by email: after verification, access requests are answered
+within 10 days and other requests without undue delay (no later than 30 days). See Section 7 of
+the Privacy Policy (/privacy) for details.
 
 ### How do I report inappropriate content or a user?
 

@@ -1,5 +1,6 @@
-// spec: docs/00 §11-D68-⑨(/terms 신설 — 표준 초안, 운영주체 LeaderPark, "법률 자문 아님" 고지),
-//       §11-D72(footer 제자리 모달 + 단일 언어 — 페이지·모달 동일 콘텐츠), WT-AUTH-06 → WT-LGL-01
+// spec: docs/00 §11-D68-⑨(/terms 신설 — 표준 초안, "법률 자문 아님" 고지), §11-D76(운영 주체
+//       실명 박진우), §11-D72(footer 제자리 모달 + 단일 언어 — 페이지·모달 동일 콘텐츠),
+//       WT-AUTH-06 → WT-LGL-01 → WT-LGL-02
 //
 // [WT-LGL-01, §11-D72] 백링크+h1 크롬만 남기고 본문을 모달과 공유하는 features/legal/LegalArticle로
 // 위임한다(중복 0). 본문은 이제 ko/en 병기가 아니라 settings.lang 단일 언어만 렌더한다(§11-D72 —

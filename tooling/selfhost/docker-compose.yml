@@ -62,7 +62,7 @@ services:
   # -------------------------------------------------------------------------
   cloudflared:
     container_name: worldtyping-cloudflared
-    image: cloudflare/cloudflared:2025.8.1
+    image: cloudflare/cloudflared:2026.7.3
     # [WT-HOST-02] Remotely-managed(token) 터널 — `cloudflared tunnel login`/cert.pem 불요.
     # 터널 생성·ingress·DNS(worldtyping.leaderpark.net→<tunnel>.cfargotunnel.com)는 Cloudflare API로
     # 설정 완료. cloudflared는 TUNNEL_TOKEN(.env, gitignore)만으로 구동하고 ingress(app:8787 프록시 +
@@ -70,6 +70,8 @@ services:
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?CLOUDFLARE_TUNNEL_TOKEN must be set in tooling/selfhost/.env}
+      # WS 업그레이드가 QUIC 트랜스포트에서 502로 거부되는 문제 회피 — http2 전송으로 강제(WT-FIX-Z1).
+      TUNNEL_TRANSPORT_PROTOCOL: http2
     restart: unless-stopped
     depends_on:
       app:

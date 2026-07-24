@@ -44,3 +44,6 @@ export type {
   ChaseVerifyResult,
 } from './simulate';
 export { simulateChase, advanceChase, verifyMoveLog } from './simulate';
+
+export type { ChaseCountryLookup, ChaseTypingStats, ChaseScoreResult } from './score';
+export { computeChaseScore, gradeChase } from './score';

@@ -47,6 +47,10 @@ export {
 } from './scoring/time-limit';
 export {
   computeScore,
+  baseScoreTerm,
+  computeCpm,
+  computeAccuracy,
+  computeComboFactor,
   type RunResult,
   type ScoreConfig,
   type ScoreCountry,
@@ -148,6 +152,9 @@ export type {
   CarriedGold,
   RngSnapshot,
   ChaseVerifyResult,
+  ChaseCountryLookup,
+  ChaseTypingStats,
+  ChaseScoreResult,
 } from './chase';
 export {
   DEFAULT_CHASE_CONSTANTS,
@@ -164,6 +171,8 @@ export {
   simulateChase,
   advanceChase,
   verifyMoveLog,
+  computeChaseScore,
+  gradeChase,
 } from './chase';
 
 // auth (WT-M1-04): wt1 HMAC 토큰 서명/검증 + pid/device_hash 파생. Workers·테스트 공용(WebCrypto).

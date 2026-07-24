@@ -13,6 +13,12 @@
 // perCountry.length(실제로 끝까지 진행해 기록이 남은 국가 수) === countries.length(런에
 // 배정된 전체 국가 수)로 구조적으로 판정한다: 조기 게임오버는 perCountry가 끝까지 채워지지
 // 않는 형태로 나타나므로 이 비교로 "완주" 여부가 정확히 갈린다.
+//
+// WT-CH-03(docs/09 §3.6·docs/00 §11-D92) 재사용 노트: BaseScore 항 (60+8×L_i)×w_i · CPM ·
+// ACC · ComboFactor는 chase(골드 러너) 모드의 TypingScore/AccFactor/ComboFactor 항으로도
+// 그대로 재사용된다. 아래 baseScoreTerm/computeCpm/computeAccuracy/computeComboFactor는 그
+// 재사용을 위해 무동작 보존(no-op-preserving) 추출한 헬퍼다 — computeScore의 동작·골든
+// 벡터 결과는 이 추출 전후로 완전히 동일하다(추출 자체가 "공식 수정"이 아님).
 
 import type { DifficultyTier } from '../types/country';
 import type { RunStats } from '../types/game';
@@ -55,6 +61,32 @@ const COMBO_STEP = 0.01;
 const COMBO_CAP = 40;
 
 /**
+ * BaseScore의 국가 1개 항: (60 + 8×L_i) × w_i, w_i = 1 + 0.15×(tier_i−1) (§6.2). computeScore의
+ * perCountry 루프가 이 함수로 위임한다(단일 원천) — chase(WT-CH-03)의 TypingScore 항도 이
+ * 함수를 그대로 재사용해 BaseScore 공식을 복제하지 않는다.
+ */
+export function baseScoreTerm(country: ScoreCountry, lang: 'ko' | 'en'): number {
+  const L = requiredKeystrokes(country, lang);
+  const w = 1 + TIER_WEIGHT_STEP * (country.difficultyTier - 1);
+  return (BASE_FLAT + BASE_PER_CHAR * L) * w;
+}
+
+/** CPM = floor(correctKeystrokes × 60000 / elapsedMs), elapsedMs<=0이면 0(0-division 가드, §6.2). */
+export function computeCpm(correctKeystrokes: number, elapsedMs: number): number {
+  return elapsedMs > 0 ? Math.floor((correctKeystrokes * 60000) / elapsedMs) : 0;
+}
+
+/** ACC = correctKeystrokes/totalKeystrokes, totalKeystrokes<=0이면 0(0-division 가드, §6.2). */
+export function computeAccuracy(correctKeystrokes: number, totalKeystrokes: number): number {
+  return totalKeystrokes > 0 ? correctKeystrokes / totalKeystrokes : 0;
+}
+
+/** ComboFactor = 1 + 0.01 × min(maxCombo, 40) (§6.2). */
+export function computeComboFactor(maxCombo: number): number {
+  return 1 + COMBO_STEP * Math.min(maxCombo, COMBO_CAP);
+}
+
+/**
  * FinalScore/PI/등급을 한 판(RunStats) 기준으로 계산한다. 클라(표시)·서버(재계산 검증)가
  * 동일 코드를 import한다 — 매칭 로직과 마찬가지로 이 파일 밖 재구현 금지.
  *
@@ -78,9 +110,8 @@ export function computeScore(
   const completed = stats.perCountry.length === countries.length;
 
   // 정수 타수 기반으로 먼저 합산, 나눗셈은 마지막에 한 번만(부동소수 누적 오차 방지).
-  const cpm =
-    stats.elapsedMs > 0 ? Math.floor((stats.correctKeystrokes * 60000) / stats.elapsedMs) : 0;
-  const acc = stats.totalKeystrokes > 0 ? stats.correctKeystrokes / stats.totalKeystrokes : 0;
+  const cpm = computeCpm(stats.correctKeystrokes, stats.elapsedMs);
+  const acc = computeAccuracy(stats.correctKeystrokes, stats.totalKeystrokes);
   const pi = computePI(cpm, acc);
   const gradeCfg: GradeConfig = { ...DEFAULT_GRADE_CONFIG, ...cfg.grade };
   const grade = computeGrade(pi, completed, gradeCfg);
@@ -89,14 +120,11 @@ export function computeScore(
   for (let i = 0; i < stats.perCountry.length; i++) {
     const per = stats.perCountry[i]!;
     if (per.skipped) continue; // 스킵 국가는 BaseScore 미포함(정타 없이 통과했으므로)
-    const country = countries[i]!;
-    const L = requiredKeystrokes(country, lang);
-    const w = 1 + TIER_WEIGHT_STEP * (country.difficultyTier - 1);
-    baseScore += (BASE_FLAT + BASE_PER_CHAR * L) * w;
+    baseScore += baseScoreTerm(countries[i]!, lang);
   }
 
   const accFactor = acc * acc;
-  const comboFactor = 1 + COMBO_STEP * Math.min(stats.maxCombo, COMBO_CAP);
+  const comboFactor = computeComboFactor(stats.maxCombo);
 
   let timeBonus = 0;
   if (completed) {

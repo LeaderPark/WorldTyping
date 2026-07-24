@@ -17,7 +17,7 @@
   --bg: #f4f5ef;
   --surface: #ffffff;
   --surface-sunken: #eceee6;
-  --surface-console: #14201a; /* 테마 무관 "항상 다크" 카드(.wt-console) 전용 — 라이트/다크 동일값 */
+  --surface-console: #14201a; /* 테마 무관 "항상 다크" — 인게임 칩(.wt-strip__transfer/.wt-cp-banner__pill)·멀티 포토피니시(.wt-race-result__photo) 전용. .wt-console은 §11-D79로 라이트 카드화(더 이상 이 토큰을 참조하지 않음) */
   --text: #171b19;
   /* [독립 검증 FAIL 수정, D62] 원 지시 리터럴(#6f766f)은 --bg(#f4f5ef) 위에서 실측 4.26:1로
      본문 텍스트 AA(4.5:1) 미달 — pnpm e2e(e10-a11y.spec.ts, axe color-contrast)가 실제로
@@ -110,7 +110,7 @@
   --bg: #0f172a; /* 구 기본(AppShell bg-slate-900)과 동일 */
   --surface: #1e293b; /* 구 다크 모달/카드 배경(dark:bg-slate-800)과 동일 */
   --surface-sunken: #0b1220;
-  --surface-console: #14201a; /* 라이트와 동일 — .wt-console은 테마 무관 "항상 다크" 카드 */
+  --surface-console: #14201a; /* 라이트와 동일 — 인게임 칩·멀티 포토피니시 전용(테마 무관 "항상 다크"). .wt-console은 §11-D79로 라이트 카드화 */
   --text: #f8fafc;
   --text-muted: #94a3b8;
   --border: #334155; /* 구 dark:border-slate-700과 동일 */

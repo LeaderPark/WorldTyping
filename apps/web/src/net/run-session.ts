@@ -13,7 +13,7 @@
 // 그린다 — 로그인 성공(스토어 전이) 또는 이미 로그인 상태인 마운트는 즉시 제출을 시도한다.
 import { useEffect, useRef, useState } from 'react';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
-import type { Continent, CountryId, DifficultyTier, GameMode } from '@wt/shared';
+import { RUN_TOKEN_TTL_MS, type Continent, type CountryId, type DifficultyTier, type GameMode } from '@wt/shared';
 import {
   ensureSession,
   getSessionToken,
@@ -142,6 +142,10 @@ function initialRunSubmitState(): RunSubmitState {
  *  §3.2 스키마 참조라 클라·서버 판정 패리티 대상이 아니다). */
 const INITIAL_LIVES: Partial<Record<GameMode, number>> = { tier: 3, worldtour: 3, daily: 1 };
 
+/** 만료 임박 판정 안전 여유(pending-queue.ts의 동일 상수와 같은 값·같은 목적 — 그쪽은 패키지
+ *  경계상 export되지 않은 지역 상수라 값만 그대로 복제한다). */
+const TOKEN_SAFETY_MARGIN_MS = 60_000;
+
 function buildResultBody(
   result: EngineRunResult,
   perCountry: RunResultSubmit['perCountry'],
@@ -198,6 +202,10 @@ export interface UseRunSubmitResult extends RunSubmitState {
  *
  * runToken이 없으면(오프라인 출발 — 대륙/세계일주만 도달, 티어/데일리는 애초에 시작 차단) 큐에
  * 적재한다. submitRun 자체가 실패(네트워크)해도 큐에 적재해 온라인 복귀 시 flush를 노린다.
+ *
+ * [에스컬레이션 기본 처리] 로그인 CTA는 사용자가 로그인을 마칠 때까지 기다리므로 runToken 발급과
+ * 실제 제출 사이에 §3.1 TTL(30분)을 넘길 수 있다 — 이 경우 만료된 토큰을 그대로 제출 시도하지
+ * 않고 "만료 시 로컬 저장" 기본 처리로 큐에 적재한다(아래 submitNow의 tokenStale 분기).
  */
 export function useRunSubmit(opts: UseRunSubmitOpts): UseRunSubmitResult {
   const [state, setState] = useState<RunSubmitState>(initialRunSubmitState);
@@ -258,8 +266,18 @@ export function useRunSubmit(opts: UseRunSubmitOpts): UseRunSubmitResult {
       });
     };
 
-    if (!opts.runToken) {
-      queueOffline();
+    // [WT-AUTH-04 에스컬레이션] 로그인 CTA는 사용자 행동(로그인 완료)을 기다리므로, runToken 발급
+    // (게임 종료 시점)과 실제 제출 시도 사이에 §3.1 TTL(30분)을 넘길 수 있다 — 이미 만료된 토큰을
+    // 그대로 submitRun에 태우면 서버가 rejected로 되돌려 "기록이 검토 중입니다"라는 오해의 소지가
+    // 있는 라벨이 뜬다. 만료(또는 임박)로 판단되면 애초에 시도하지 않고 큐에 적재해 "온라인 연결
+    // 시 자동 제출됩니다" 라벨로 안내한다 — flush 시점에 pending-queue.ts가 이 값이 stale임을 다시
+    // 확인하고 새 토큰으로 재시작하므로 결과적으로 로컬 저장 후 자동 재시도가 보장된다(기본 처리).
+    const tokenStale =
+      opts.runTokenIssuedAt !== null &&
+      Date.now() - opts.runTokenIssuedAt >= RUN_TOKEN_TTL_MS - TOKEN_SAFETY_MARGIN_MS;
+
+    if (!opts.runToken || tokenStale) {
+      queueOffline(opts.runToken ?? undefined, opts.runTokenIssuedAt ?? undefined);
       return;
     }
 

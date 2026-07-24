@@ -278,6 +278,22 @@ describe('ResultView', () => {
         await waitFor(() => expect(submitRunMock).toHaveBeenCalledOnce());
         expect(screen.queryByTestId('result-login-cta')).not.toBeInTheDocument();
       });
+
+      // [에스컬레이션 기본 처리] CTA를 거쳐 로그인을 마치기까지 runToken의 30분 TTL을 넘기면,
+      // 만료된 토큰으로 제출을 "시도"하지 않고 큐에 적재해 "온라인 연결 시 자동 제출됩니다"로
+      // 안내한다(만료 시 로컬 저장 — 지시문 기본 처리).
+      it('로그인 전이 시점에 runToken이 이미 만료됐으면 제출을 시도하지 않고 큐에 적재한다', async () => {
+        useSettingsStore.getState().setLang('ko');
+        const { engine } = mkEngine(false);
+        const longAgo = Date.now() - 31 * 60 * 1000; // RUN_TOKEN_TTL_MS(30분) 초과
+        renderResult(engine, baseResult(), { runToken: 'tok', runTokenIssuedAt: longAgo });
+
+        act(() => useAuthStore.getState().login(loginSession()));
+
+        await waitFor(() => expect(enqueuePendingMock).toHaveBeenCalledOnce());
+        expect(screen.getByTestId('result-verdict-label').textContent).toBe('온라인 연결 시 자동 제출됩니다');
+        expect(submitRunMock).not.toHaveBeenCalled();
+      });
     });
 
     it('runToken 없음(오프라인 출발) + 로그인 상태 → 큐에 적재하고 "온라인 연결 시 자동 제출" 라벨', () => {

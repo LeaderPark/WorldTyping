@@ -14,10 +14,7 @@ export function SupportPage() {
 
   return (
     <div className="wt-page" data-testid="support-page">
-      <PageHeader
-        back={{ to: '/', labelKey: 'nav.back.home', testId: 'support-back' }}
-        title={t('legal.support.title')}
-      />
+      <PageHeader title={t('legal.support.title')} />
       <LegalArticle doc="support" />
     </div>
   );

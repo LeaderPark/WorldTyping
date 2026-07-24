@@ -15,10 +15,7 @@ export function TermsPage() {
 
   return (
     <div className="wt-page" data-testid="terms-page">
-      <PageHeader
-        back={{ to: '/', labelKey: 'nav.back.home', testId: 'terms-back' }}
-        title={t('legal.terms.title')}
-      />
+      <PageHeader title={t('legal.terms.title')} />
       <LegalArticle doc="terms" />
     </div>
   );

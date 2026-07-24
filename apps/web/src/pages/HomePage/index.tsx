@@ -11,9 +11,10 @@
 // 다이얼로그 표면만 .wt-card로 라이트 재도장한다 — 문구는 손대지 않았다(index.html의 정적
 // 크리티컬 셸이 이 문구를 그대로 복제하고 있어, 카피를 바꾸면 그 파일도 동기해야 한다).
 //
-// [WT-M3-06] 데일리 뱃지 실데이터(alreadyPlayed·dailyNo)와 티커(전체 1위)를 서버에서 채운다.
-// 조회 실패(오프라인 등)는 화면을 깨뜨리지 않고 조용히 placeholder/미표시로 폴백한다 — 이
-// 페이지는 "3클릭·15초" 여정의 첫 화면이라 네트워크 대기로 렌더를 막지 않는다(§11.1).
+// [WT-M3-06 / D75] 티커(전체 1위)를 서버에서 채운다(헤더 데일리 뱃지는 D75로 제거 — 데일리
+// 실데이터 조회 alreadyPlayed·dailyNo도 함께 폐지). 조회 실패(오프라인 등)는 화면을 깨뜨리지
+// 않고 조용히 미표시로 폴백한다 — 이 페이지는 "3클릭·15초" 여정의 첫 화면이라 네트워크 대기로
+// 렌더를 막지 않는다(§11.1).
 //
 // [WT-AUTH-07, docs/00 §11-D67-⑦·D68-⑦] 홈 배경을 HeroMap(축소된 실루엣 지도)+
 // RouteMotifBackdrop(정적 장식 아크)에서 HomeGlobe(GlobeMap 자동 데모 — idle spin + 8±3s 랜덤
@@ -28,7 +29,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
-import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
+import { fetchLbPage, type LbEntry } from '../../net/api-client';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { Mascot } from '../../components/Mascot';
 import { BrandMark } from '../../components/BrandMark';
@@ -52,19 +53,10 @@ function todayDailyKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** 2026-01-01 KST를 D#1로 삼는 임시 placeholder 카운터. 서버 권위 데일리 회차 번호(M3, /daily)가
- *  나오기 전까지의 표시용 근사치일 뿐 랭킹/판정에는 전혀 쓰이지 않는다. */
-function placeholderDailyNumber(): number {
-  const epoch = Date.UTC(2026, 0, 1);
-  const days = Math.floor((Date.now() - epoch) / 86_400_000) + 1;
-  return Math.max(1, days);
-}
-
 export function HomePage() {
   const { t } = useTranslation();
   const lang = useSettingsStore((s) => s.lang);
   const setLang = useSettingsStore((s) => s.setLang);
-  const guestId = useSettingsStore((s) => s.guestId);
   const hasAnyStamp = useMetaStore((s) => Object.keys(s.stamps).length > 0);
 
   // [WT-DC-02] 사운드 토글(②) — 저빈도 사용자 설정 변경이라 §4.5 핫패스 규약(고빈도 값 금지)과
@@ -80,10 +72,8 @@ export function HomePage() {
     setVolume({ master: isSoundMuted ? lastMasterRef.current || DEFAULT_MASTER_VOLUME : 0 });
   };
 
-  // 데일리 뱃지 실데이터(alreadyPlayed·dailyNo)와 티커(전체 1위) — 조회 실패는 조용히 무시하고
-  // placeholder/미표시로 남는다(파일 상단 주석 — 첫 화면 렌더를 네트워크로 막지 않는다).
-  const [dailyNo, setDailyNo] = useState<number | null>(null);
-  const [alreadyPlayed, setAlreadyPlayed] = useState(false);
+  // 티커(전체 1위) — 조회 실패는 조용히 무시하고 미표시로 남는다(파일 상단 주석 — 첫 화면
+  // 렌더를 네트워크로 막지 않는다).
   const [top1, setTop1] = useState<LbEntry | null>(null);
 
   // §8.3 "홈 렌더 완료 후 … 수동 prefetch로 game 청크 예열(첫 판 진입 지연 0 목표)". router.tsx의
@@ -107,19 +97,6 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchDailyToday()
-      .then((res) => {
-        if (!cancelled) setDailyNo(res.dailyNo);
-      })
-      .catch(() => {});
-    // fetchDailyMe는 인증 필요(requireAuth) — bootLoader의 세션 부트스트랩이 아직 안 끝났을 수
-    // 있어(부팅은 non-blocking) 여기서 먼저 확정 짓는다(이미 성공했다면 즉시 resolve).
-    void ensureSession(guestId)
-      .then(() => fetchDailyMe())
-      .then((res) => {
-        if (!cancelled) setAlreadyPlayed(res.alreadyPlayed);
-      })
-      .catch(() => {});
     fetchLbPage('worldtour|ko|desktop|all')
       .then((res) => {
         if (!cancelled) setTop1(res.entries[0] ?? null);
@@ -128,7 +105,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-    // guestId는 세션 수명 동안 불변 — 마운트 시 1회만 실행.
+    // 마운트 시 1회만 실행.
   }, []);
 
   return (
@@ -141,18 +118,10 @@ export function HomePage() {
 
       <div className="wt-home__content">
         <header className="wt-home__header">
-          {/* [D74] 좌상단 브랜드(홈은 자기 링크 소음 방지로 비링크 span). 데일리 뱃지는 우측 액션
-              1번째로 이동 — 요소 속성/testid/링크 계약은 그대로다(HomePage.test 무수정 통과). */}
+          {/* [D74] 좌상단 브랜드(홈은 자기 링크 소음 방지로 비링크 span). [D75] 헤더 데일리 뱃지는
+              제거 — 데일리 진입은 아래 메뉴 카드(home-card-daily)가 유지한다. */}
           <BrandMark linkToHome={false} />
           <div className="wt-home__header-actions">
-            <Link
-              to={`/play/daily/${todayDailyKey()}`}
-              data-testid="home-daily-badge"
-              className={`wt-home__daily-badge${alreadyPlayed ? ' wt-home__daily-badge--played' : ''}`}
-              data-played={alreadyPlayed}
-            >
-              {t('home.daily.badge', { n: dailyNo ?? placeholderDailyNumber() })}
-            </Link>
             <button
               type="button"
               data-testid="home-lang-toggle"

@@ -88,9 +88,4 @@ describe('TermsPage', () => {
     renderPage('en');
     expect(screen.getByTestId('terms-body-en').textContent).toContain('Republic of Korea');
   });
-
-  it('links back home', () => {
-    renderPage();
-    expect(screen.getByTestId('terms-back')).toHaveAttribute('href', '/');
-  });
 });

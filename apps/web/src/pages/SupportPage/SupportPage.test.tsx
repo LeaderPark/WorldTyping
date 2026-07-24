@@ -79,9 +79,4 @@ describe('SupportPage', () => {
     renderPage('en');
     expect((screen.getByTestId('support-body-en').textContent ?? '').toLowerCase()).toContain('legal advice');
   });
-
-  it('links back home', () => {
-    renderPage();
-    expect(screen.getByTestId('support-back')).toHaveAttribute('href', '/');
-  });
 });

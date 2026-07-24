@@ -20,10 +20,7 @@ export function PrivacyPage() {
 
   return (
     <div className="wt-page">
-      <PageHeader
-        back={{ to: '/', labelKey: 'nav.back.home', testId: 'privacy-back' }}
-        title={t('settings.privacy')}
-      />
+      <PageHeader title={t('settings.privacy')} />
       <LegalArticle doc="privacy" />
     </div>
   );

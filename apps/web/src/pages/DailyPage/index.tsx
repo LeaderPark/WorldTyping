@@ -25,8 +25,8 @@ export function DailyPage() {
 
   return (
     <main className="wt-daily-page wt-page" data-testid="daily-page">
-      {/* [D74] 크롬 통일 — 뒤로가기만(히어로 h1 유지, PageHeader title 없음). */}
-      <PageHeader back={{ to: '/', labelKey: 'nav.back.home', testId: 'daily-back' }} />
+      {/* [D75] 크롬 통일 — 홈 1행 bar만(히어로 h1 유지, PageHeader title 없음, 뒤로가기 폐지). */}
+      <PageHeader />
       <div className="wt-daily-page__hero wt-card">
         <p className="wt-kicker">{t('daily.hero.kicker')}</p>
         <h1 className="wt-daily-page__title" tabIndex={-1}>

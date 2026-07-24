@@ -72,7 +72,6 @@ describe('HomePage (S1)', () => {
     expect(screen.getByTestId('home-card-daily').getAttribute('href')).toMatch(/^\/play\/daily\//);
     expect(screen.getByTestId('home-nav-rank')).toHaveAttribute('href', '/rank');
     expect(screen.getByTestId('home-nav-passport')).toHaveAttribute('href', '/passport');
-    expect(screen.getByTestId('home-daily-badge').getAttribute('href')).toMatch(/^\/play\/daily\//);
   });
 
   it('완주 기록이 하나도 없으면 싱글플레이 행이 펄스된다(§11.1 1단계)', () => {
@@ -91,14 +90,6 @@ describe('HomePage (S1)', () => {
     const toggle = screen.getByTestId('home-lang-toggle');
     toggle.click();
     expect(useSettingsStore.getState().lang).toBe('en');
-  });
-
-  it('데일리 뱃지가 실 dailyNo·alreadyPlayed를 반영한다(WT-M3-06)', async () => {
-    fetchDailyMeMock.mockResolvedValue({ dateKst: '2026-07-21', alreadyPlayed: true, streakDaily: 3 });
-    renderHome();
-
-    await waitFor(() => expect(screen.getByTestId('home-daily-badge').textContent).toContain('42'));
-    expect(screen.getByTestId('home-daily-badge')).toHaveAttribute('data-played', 'true');
   });
 
   it('서버 전체 1위가 있으면 home-ticker-top1을 렌더한다', async () => {

@@ -259,8 +259,8 @@ export function LobbyPage() {
     // 한다 — 헤더 카드는 고정, footer는 뷰포트 하단 유지. [D74] 폭은 공유 .wt-page로.
     <main className="wt-lobby min-h-0 flex-1 wt-page" data-testid="lobby-page">
       {/* [D74] 로비 상단 크롬을 공용 PageHeader로 통일 — 구 <TopBar back /> 배선 해제(TopBar 파일
-          존치). 뒤로가기는 navigate(-1) 대신 홈(/)으로 결정화(직접 진입 시에도 결정적). */}
-      <PageHeader back={{ to: '/', labelKey: 'nav.back.home', testId: 'lobby-back' }} />
+          존치). [D75] 뒤로가기 링크 폐지 — 홈 이동은 좌상단 BrandMark로(자체 콘텐츠 h1 보유). */}
+      <PageHeader />
       {/* 안내 배너 — 비로그인/로그인 분기(§11-D68 로비 재구성). */}
         <p
           className="wt-lobby__banner"

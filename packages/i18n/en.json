@@ -370,6 +370,7 @@
   "auth.logout": "Log out",
   "auth.cancel": "Cancel",
   "auth.error": "Sign-in failed. Please try again in a moment.",
+  "auth.storageError": "We can't keep you signed in because browser storage is unavailable. Check for private-browsing mode or free up storage space.",
   "auth.devLogin": "Dev login",
   "auth.modal.title": "Sign in",
   "auth.reason.general": "Log in to unlock more features.",

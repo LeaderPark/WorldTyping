@@ -18,19 +18,24 @@ import { ResultView } from './ResultView';
 const submitRunMock = vi.fn();
 const checkNicknameMock = vi.fn();
 const putNicknameMock = vi.fn();
-// [WT-AUTH-04] ResultView(및 그 안에서 쓰이는 net/run-session.ts)가 이제 stores/auth를 구독한다 —
-// 그 스토어는 net/api-client의 getAuthToken/setAuthToken/onLoginRequired를 모듈 로드 시 바로
-// 호출하므로, 이 전체 모듈 목(vi.mock)에도 그 자리표시자가 반드시 있어야 한다(빠지면 undefined
-// 호출로 즉시 throw). getSessionToken은 guestToken 브리지 테스트용 고정값을 반환한다.
+// [WT-AUTH-04 → §11-D86] ResultView(및 그 안에서 쓰이는 net/run-session.ts)가 stores/auth를 구독한다 —
+// 그 스토어는 net/api-client의 getAuthToken/setAuthToken/onLoginRequired/onAccountTokenRejected를 모듈
+// 로드 시 바로 호출하므로, 이 전체 모듈 목(vi.mock)에도 그 자리표시자가 반드시 있어야 한다(빠지면
+// undefined 호출로 즉시 throw). §11-D86 이후 로그인 판정이 계정 토큰 실존에 종속되고(getAuthToken!==null)
+// login()이 setAuthToken의 boolean 성공을 선행 조건으로 요구하므로, 이 스텁도 실 모듈 계약을 그대로
+// 미러한다: setAuthToken은 성공(true), getAuthToken은 로그인 세션의 계정 토큰을 돌려준다(로그아웃 시엔
+// selectIsLoggedIn이 playerId===null로 이미 단락돼 이 값은 무관). getSessionToken은 guestToken 브리지
+// 테스트용 고정값. (판정 강화 자체는 stores/auth.test.ts·net/api-client.test.ts가 실 모듈로 검증한다.)
 const getSessionTokenMock = vi.fn<() => string | null>(() => 'wt1.guest-session-token');
 vi.mock('../../net/api-client', () => ({
   submitRun: (...args: unknown[]) => submitRunMock(...args),
   checkNickname: (...args: unknown[]) => checkNicknameMock(...args),
   putNickname: (...args: unknown[]) => putNicknameMock(...args),
   getSessionToken: () => getSessionTokenMock(),
-  getAuthToken: () => null,
-  setAuthToken: () => {},
+  getAuthToken: () => 'wt1.acct',
+  setAuthToken: () => true,
   onLoginRequired: () => () => {},
+  onAccountTokenRejected: () => () => {},
 }));
 
 function loginSession(over: Partial<AccountSession> = {}): AccountSession {

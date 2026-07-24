@@ -370,6 +370,7 @@
   "auth.logout": "로그아웃",
   "auth.cancel": "취소",
   "auth.error": "로그인에 실패했어요. 잠시 후 다시 시도해 주세요.",
+  "auth.storageError": "브라우저 저장소를 사용할 수 없어 로그인 상태를 유지할 수 없어요. 사생활 보호 모드이거나 저장 공간이 가득 찼는지 확인해 주세요.",
   "auth.devLogin": "개발용 로그인",
   "auth.modal.title": "로그인",
   "auth.reason.general": "로그인하고 더 많은 기능을 즐겨보세요.",

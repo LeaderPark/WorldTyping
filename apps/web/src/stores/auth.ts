@@ -15,7 +15,15 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { getAuthToken, onLoginRequired, setAuthToken } from '../net/api-client';
+import {
+  ApiError,
+  AUTH_TOKEN_STORAGE_KEY,
+  fetchSessionMe,
+  getAuthToken,
+  onAccountTokenRejected,
+  onLoginRequired,
+  setAuthToken,
+} from '../net/api-client';
 
 /** Google credential(ID-token JWT)에서 디코드한 표시용 프로필(avatar/이름/이메일). */
 export interface GoogleProfile {
@@ -55,9 +63,22 @@ export interface AuthState {
   closeLogin(): void;
 }
 
-/** 컴포넌트 셀렉터: 유효한 로그인 상태인가(playerId 존재 + 미만료). */
+/** [§11-D86 F4] 토큰 영속 실패로 로그인 성립을 거부할 때 login()이 던진다(LoginModal이 이름으로 판별). */
+export class AuthPersistError extends Error {
+  constructor() {
+    super('account token persist failed (browser storage unavailable)');
+    this.name = 'AuthPersistError';
+  }
+}
+
+/** 컴포넌트 셀렉터: 유효한 로그인 상태인가 — 표시 프로필(playerId 존재 + 미만료)에 더해 **사용 가능한
+ *  계정 토큰(wt:authtoken) 실존**을 요구한다(§11-D86: 프로필-토큰 split-brain을 판정 정의에서 봉인).
+ *  토큰 만료 검사는 동일 서버 응답에서 함께 세팅된 expiresAt이 대리한다(클라는 HMAC 검증 불가 — 실검증은
+ *  verifyAccountSession/서버 401). getAuthToken()은 동기 localStorage 1회 읽기로 저빈도 렌더 경로에서
+ *  무해하며(기존에도 Date.now()로 비순수), 반응성은 스토어 전이(storage/focus 리스너·rehydrate·logout)가
+ *  담당하고 이 검사는 렌더 시점 최종 방어선이다. */
 export const selectIsLoggedIn = (s: AuthState): boolean =>
-  s.playerId !== null && s.expiresAt !== null && s.expiresAt > Date.now();
+  s.playerId !== null && s.expiresAt !== null && s.expiresAt > Date.now() && getAuthToken() !== null;
 
 const LOGGED_OUT = {
   playerId: null,
@@ -74,7 +95,14 @@ export const useAuthStore = create<AuthState>()(
       loginReason: null,
 
       login: (session) => {
-        setAuthToken(session.token);
+        // [§11-D86 F4] 토큰 영속(read-back 검증) 성공이 로그인 성립의 선행 조건. 실패하면 프로필을
+        // 세우지 않고 AuthPersistError를 던진다 — "프로필만 서고 토큰 없음"을 로그인 시점에 원천
+        // 차단(LoginModal .catch가 auth.storageError 안내). 토큰-먼저 순서 덕에 성공 시 셀렉터가 즉시
+        // true — LobbyPage 보류 액션 재개(isLoggedIn effect)와의 순서 계약도 그대로다.
+        if (!setAuthToken(session.token)) {
+          setAuthToken(null); // 부분 쓰기 방어적 원복(best-effort).
+          throw new AuthPersistError();
+        }
         set({
           playerId: session.playerId,
           nickname: session.nickname,
@@ -106,6 +134,9 @@ export const useAuthStore = create<AuthState>()(
         if (!state) return;
         const expired = state.expiresAt !== null && state.expiresAt <= Date.now();
         if (expired || getAuthToken() === null) state.logout();
+        // [§11-D86] 역방향 고아 토큰: 프로필 없이 토큰만 남은 부팅(프로필 persist 실패 등)은 토큰을
+        // 소거해 "UI 비로그인인데 계정 토큰 전송" 불일치도 봉인한다(게스트는 토큰 자체가 없어 무관).
+        else if (state.playerId === null) setAuthToken(null);
       },
     },
   ),
@@ -117,3 +148,56 @@ export const useAuthStore = create<AuthState>()(
 onLoginRequired(() => {
   if (useAuthStore.getState().loginReason === null) useAuthStore.getState().openLogin('general');
 });
+
+// 서버가 계정 토큰을 거부(401 INVALID_TOKEN + 계정 토큰 첨부 요청)하면 즉시 로그아웃 정합화(§11-D86
+// F2b) — 죽은 토큰으로 "로그인처럼 보이는" 창을 실패 요청 1회 이내로 좁힌다. logout()이 토큰도 소거.
+onAccountTokenRejected(() => {
+  const s = useAuthStore.getState();
+  if (s.playerId !== null || getAuthToken() !== null) s.logout();
+});
+
+// ── 크로스탭/재포커스 정합화(§11-D86 F1) ──
+// 다른 탭의 로그아웃/로그인·스토리지 축출을 새로고침 없이 이 탭 스토어에 반영한다. 'storage'는 타 탭
+// 변경에서만 발화하고(자기 변경 무발화), 같은 값 재기록은 이벤트를 만들지 않으므로(oldValue===newValue)
+// logout()의 persist 재기록이 전파 루프를 만들지 않는다.
+function reconcileAuthWithStorage(): void {
+  const s = useAuthStore.getState();
+  const token = getAuthToken();
+  const profileAlive = s.playerId !== null;
+  if (profileAlive && (token === null || (s.expiresAt !== null && s.expiresAt <= Date.now()))) {
+    s.logout(); // 토큰 소실/만료 → 이 탭도 즉시 로그아웃.
+  } else if (!profileAlive && token !== null) {
+    void useAuthStore.persist.rehydrate(); // 타 탭 로그인 전파(onRehydrateStorage가 재검증).
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === null || e.key === AUTH_TOKEN_STORAGE_KEY || e.key === 'wt:auth')
+      reconcileAuthWithStorage(); // e.key===null = clear() 전체 소거.
+  });
+  window.addEventListener('focus', reconcileAuthWithStorage); // 이벤트 유실(축출 등) 회수.
+}
+
+// ── 멀티 진입 1회 계정 토큰 서버 검증(§11-D86 F2a, 서버 무변경) ──
+// 기존 GET /session/me(requireAuth)를 재사용한다 — bearerToken()이 계정>게스트 우선이라 계정 토큰 존재
+// 시 이 호출이 그 토큰을 싣고, 200이면 서명·만료·유저 존재가 서버에서 실검증된 것이다. 401(무효 토큰)일
+// 때만 로그아웃 강등 — 오프라인/5xx/기타 실패는 판정 불가로 보고 강등하지 않는다(가용성 우선). 진입당
+// 1회 제한: 60s 메모(로비→방 연쇄 진입 중복 억제). 게스트(토큰 없음)는 no-op — 추가 콜 0.
+const VERIFY_MEMO_MS = 60_000;
+let verifyLastAt = 0;
+export async function verifyAccountSession(): Promise<void> {
+  if (getAuthToken() === null) return;
+  const now = Date.now();
+  if (now - verifyLastAt < VERIFY_MEMO_MS) return;
+  verifyLastAt = now;
+  try {
+    await fetchSessionMe();
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) useAuthStore.getState().logout();
+  }
+}
+
+/** 테스트 전용: 60s 메모 리셋. */
+export function __resetAccountVerifyForTests(): void {
+  verifyLastAt = 0;
+}

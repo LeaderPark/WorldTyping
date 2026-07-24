@@ -17,7 +17,9 @@ const SESSION_TOKEN_KEY = 'wt:sessiontoken';
 // [WT-AUTH-03] 계정(Google 로그인) 세션 토큰. 게스트 세션 토큰('wt:sessiontoken')과 별개의 원시
 // 키로 둔다 — 로그인해도 게스트 세션은 그대로 살아 있어야 하고(싱글/데일리 비로그인 플레이 유지,
 // §11-D68-①), Authorization은 "계정 > 게스트" 우선순위로 계정 토큰이 있으면 그것을 먼저 쓴다.
-const AUTH_TOKEN_KEY = 'wt:authtoken';
+// [§11-D86] 리터럴 중복 방지용 export(값 불변) — stores/auth의 크로스탭 storage 리스너가 이 키
+// 문자열을 공유해야 한다. SESSION_TOKEN_KEY는 비공개 유지.
+export const AUTH_TOKEN_STORAGE_KEY = 'wt:authtoken';
 
 export interface ApiErrorBody {
   error: {
@@ -71,20 +73,26 @@ function setSessionToken(token: string | null): void {
 
 /** [WT-AUTH-03] 계정 세션 토큰 원문(원시 키 'wt:authtoken'). 없으면 null(게스트). */
 export function getAuthToken(): string | null {
-  return safeLocalStorage()?.getItem(AUTH_TOKEN_KEY) ?? null;
+  return safeLocalStorage()?.getItem(AUTH_TOKEN_STORAGE_KEY) ?? null;
 }
 
-/** [WT-AUTH-03] 계정 세션 토큰 저장/삭제. 스토어(stores/auth)의 login/logout만 이 함수를 호출한다. */
-export function setAuthToken(token: string | null): void {
+/** [WT-AUTH-03 → §11-D86 F4] 계정 세션 토큰 저장/삭제. 스토어(stores/auth)의 login/logout만 이 함수를
+ *  호출한다. 저장(token!==null)은 setItem 후 read-back 검증까지 성공해야 true — 실패(사생활 모드 접근
+ *  차단, 쿼터 초과, 조용한 무시)를 명확한 신호로 승격해 login()이 로그인 성립을 거부할 수 있게 한다.
+ *  삭제(null)는 best-effort true(로그아웃을 저장소 오류가 막으면 안 된다). */
+export function setAuthToken(token: string | null): boolean {
   const store = safeLocalStorage();
-  if (!store) return;
-  if (token) store.setItem(AUTH_TOKEN_KEY, token);
-  else store.removeItem(AUTH_TOKEN_KEY);
-}
-
-/** Authorization에 실을 토큰 — 계정 > 게스트 우선순위(§11-D68-①: 로그인 시 계정 신원으로 등재). */
-function bearerToken(): string | null {
-  return getAuthToken() ?? getSessionToken();
+  if (!store) return token === null;
+  try {
+    if (token !== null) {
+      store.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+      return store.getItem(AUTH_TOKEN_STORAGE_KEY) === token; // read-back 검증
+    }
+    store.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    return true;
+  } catch {
+    return token === null; // setItem throw = 저장 실패 / removeItem throw = 삭제는 성공 취급
+  }
 }
 
 // ── LOGIN_REQUIRED 전역 시그널(§11-D68-①: 멀티 4종은 401 LOGIN_REQUIRED) ──
@@ -113,10 +121,39 @@ function emitLoginRequired(): void {
   }
 }
 
+// ── 계정 토큰 거부 시그널(§11-D86 F2) ──
+// 401 INVALID_TOKEN이 "이 클라가 계정 토큰을 첨부한 요청"에서 돌아온 경우에만 발화한다(onLoginRequired와
+// 동일 패턴, net은 스토어 미참조 유지). 게스트 토큰의 INVALID_TOKEN(만료 등)은 ensureSession 재부트스트랩
+// 영역이므로 발화하지 않고, 호출측이 Authorization을 직접 지정한 요청도 제외한다.
+type AccountTokenRejectedHandler = () => void;
+const accountTokenRejectedHandlers = new Set<AccountTokenRejectedHandler>();
+
+/** 계정 토큰 거부 시그널 구독. 반환 함수로 해제. */
+export function onAccountTokenRejected(handler: AccountTokenRejectedHandler): () => void {
+  accountTokenRejectedHandlers.add(handler);
+  return () => {
+    accountTokenRejectedHandlers.delete(handler);
+  };
+}
+
+function emitAccountTokenRejected(): void {
+  for (const handler of accountTokenRejectedHandlers) {
+    try {
+      handler();
+    } catch (err) {
+      console.warn('[auth] onAccountTokenRejected handler threw:', err);
+    }
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = path.startsWith('/api/') ? path : `${API_BASE}${path}`;
-  const token = bearerToken();
+  // 계정 > 게스트 우선순위(§11-D68-①). 첨부 토큰의 출처를 기억해 401 분기(§11-D86 F2b)에서 계정 토큰
+  // 거부만 골라낸다 — 게스트 토큰 401이나 호출측이 직접 지정한 Authorization은 제외한다.
+  const accountToken = getAuthToken();
+  const token = accountToken ?? getSessionToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(init?.headers as Record<string, string> | undefined) };
+  const usingAccountToken = accountToken !== null && !headers.Authorization;
   if (token && !headers.Authorization) headers.Authorization = `Bearer ${token}`;
 
   const res = await fetch(url, { ...init, headers });
@@ -130,6 +167,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     if (isApiErrorBody(body)) {
       if (res.status === 401 && body.error.code === 'LOGIN_REQUIRED') emitLoginRequired();
+      if (res.status === 401 && body.error.code === 'INVALID_TOKEN' && usingAccountToken)
+        emitAccountTokenRejected();
       throw new ApiError(res.status, body.error.code, body.error.message, body.error.retryAfterSec);
     }
     throw new ApiError(res.status, 'UNKNOWN', res.statusText || `HTTP ${res.status}`);

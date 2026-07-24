@@ -28,6 +28,8 @@ export function LoginModal() {
   const buttonHostRef = useRef<HTMLDivElement | null>(null);
   const [gisPhase, setGisPhase] = useState<GisPhase>('idle');
   const [submitting, setSubmitting] = useState(false);
+  // [§11-D86 F4] 로그인 실패 원인 구분 — 저장소 영속 실패(AuthPersistError)면 저장소 안내 문구로.
+  const [errorKind, setErrorKind] = useState<'generic' | 'storage'>('generic');
 
   useHotkeys(open ? { Escape: closeLogin } : {});
   useModalA11y(dialogRef, open);
@@ -37,6 +39,7 @@ export function LoginModal() {
     if (!open) {
       setGisPhase('idle');
       setSubmitting(false);
+      setErrorKind('generic'); // 재오픈 시 저장소 안내가 남지 않게 리셋.
       return;
     }
     if (!clientId) return;
@@ -54,9 +57,10 @@ export function LoginModal() {
               .then(() => {
                 if (!cancelled) closeLogin();
               })
-              .catch(() => {
+              .catch((err: unknown) => {
                 if (!cancelled) {
                   setSubmitting(false);
+                  setErrorKind(err instanceof Error && err.name === 'AuthPersistError' ? 'storage' : 'generic');
                   setGisPhase('error');
                 }
               });
@@ -93,8 +97,9 @@ export function LoginModal() {
     setSubmitting(true);
     loginDev()
       .then(() => closeLogin())
-      .catch(() => {
+      .catch((err: unknown) => {
         setSubmitting(false);
+        setErrorKind(err instanceof Error && err.name === 'AuthPersistError' ? 'storage' : 'generic');
         setGisPhase('error');
       });
   };
@@ -122,7 +127,7 @@ export function LoginModal() {
               {gisPhase === 'loading' && <p className="text-sm text-text-muted">{t('auth.modal.title')}…</p>}
               {gisPhase === 'error' && (
                 <p role="alert" data-testid="login-error" className="text-sm text-red-700 dark:text-red-400">
-                  {t('auth.error')}
+                  {t(errorKind === 'storage' ? 'auth.storageError' : 'auth.error')}
                 </p>
               )}
             </>

@@ -26,7 +26,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiClient, ensureSession, ApiError } from '../../../net/api-client';
 import { useSettingsStore } from '../../../stores/settings';
-import { selectIsLoggedIn, useAuthStore } from '../../../stores/auth';
+import { selectIsLoggedIn, useAuthStore, verifyAccountSession } from '../../../stores/auth';
 import { multiErrorKey } from '../../../features/multiplayer/error-keys';
 import type { WsGrant } from '../../../features/multiplayer/useMultiplayer';
 import { Mascot } from '../../../components/Mascot';
@@ -90,6 +90,13 @@ export function LobbyPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [publicRooms, setPublicRooms] = useState<PublicRoomCard[]>([]);
   const [counts, setCounts] = useState<{ public: number; private: number }>({ public: 0, private: 0 });
+
+  // [§11-D86 F2] 멀티 진입 시 계정 토큰 1회 서버 검증 — 무효면 스토어가 로그아웃으로 강등되고
+  // 배너/게이트/AuthChip이 같은 렌더 패스에서 guest로 정합화된다(사용자가 실패하는 클릭을 하기 전에).
+  // 게스트(토큰 없음)는 no-op, e2eBypass와 무관하게 호출해도 무해하다(60s 메모로 방 진입과 중복 제거).
+  useEffect(() => {
+    void verifyAccountSession();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

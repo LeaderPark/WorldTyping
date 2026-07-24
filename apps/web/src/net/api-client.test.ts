@@ -15,6 +15,7 @@ import {
   getAuthToken,
   getSessionToken,
   modeKeyFor,
+  onAccountTokenRejected,
   onLoginRequired,
   putNickname,
   setAuthToken,
@@ -284,6 +285,89 @@ describe('계정 토큰 우선순위 & LOGIN_REQUIRED 시그널', () => {
 
     await expect(apiClient.get('/config')).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
     expect(handler).not.toHaveBeenCalled();
+    off();
+  });
+});
+
+// ───────────────────────── setAuthToken 원자화 + 계정 토큰 거부 시그널(§11-D86) ─────────────────────────
+describe('setAuthToken 원자화(§11-D86 F4)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    __resetSessionForTests();
+  });
+
+  it('저장 성공 시 true를 반환하고, null 삭제도 true다', () => {
+    expect(setAuthToken('acct-tok')).toBe(true);
+    expect(getAuthToken()).toBe('acct-tok');
+    expect(setAuthToken(null)).toBe(true);
+    expect(getAuthToken()).toBeNull();
+  });
+
+  it('setItem이 throw하면 false(쿼터/사생활 모드 등 저장 실패를 신호로 승격)', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
+    expect(setAuthToken('acct-tok')).toBe(false);
+    spy.mockRestore();
+  });
+
+  it('setItem은 성공해도 read-back이 불일치하면 false(조용한 무시)', () => {
+    const spy = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+    expect(setAuthToken('acct-tok')).toBe(false);
+    spy.mockRestore();
+  });
+});
+
+describe('onAccountTokenRejected 시그널(§11-D86 F2b)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetSessionForTests();
+  });
+
+  it('계정 토큰을 첨부한 요청의 401 INVALID_TOKEN에서만 발화하고 해제할 수 있다', async () => {
+    setAuthToken('acct-tok');
+    const handler = vi.fn();
+    const off = onAccountTokenRejected(handler);
+    // 매 호출마다 새 Response(바디 1회 소비).
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ error: { code: 'INVALID_TOKEN', message: 'bad' } }, { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiClient.get('/config')).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    off();
+    await expect(apiClient.get('/config')).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    expect(handler).toHaveBeenCalledTimes(1); // 해제 후 미발화
+  });
+
+  it('계정 토큰이 없고 게스트 토큰만 있을 때의 401 INVALID_TOKEN에서는 발화하지 않는다', async () => {
+    __resetSessionForTests();
+    localStorage.setItem('wt:sessiontoken', 'guest-tok'); // 계정 토큰 부재 = ensureSession 재부트스트랩 영역
+    const handler = vi.fn();
+    const off = onAccountTokenRejected(handler);
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ error: { code: 'INVALID_TOKEN', message: 'bad' } }, { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiClient.get('/config')).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    expect(handler).not.toHaveBeenCalled();
+    off();
+  });
+
+  it('401 LOGIN_REQUIRED에서는 onAccountTokenRejected가 발화하지 않는다(onLoginRequired 전용 시그널)', async () => {
+    setAuthToken('acct-tok');
+    const acctHandler = vi.fn();
+    const off = onAccountTokenRejected(acctHandler);
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ error: { code: 'LOGIN_REQUIRED', message: 'nope' } }, { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiClient.post('/rooms')).rejects.toMatchObject({ code: 'LOGIN_REQUIRED' });
+    expect(acctHandler).not.toHaveBeenCalled();
     off();
   });
 });

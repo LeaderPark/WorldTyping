@@ -15,7 +15,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../../../stores/settings';
-import { selectIsLoggedIn, useAuthStore } from '../../../stores/auth';
+import { selectIsLoggedIn, useAuthStore, verifyAccountSession } from '../../../stores/auth';
 import { useMultiplayerStore } from '../../../stores/multiplayer';
 import { useMultiplayer, type WsGrant } from '../../../features/multiplayer/useMultiplayer';
 import { multiErrorKey } from '../../../features/multiplayer/error-keys';
@@ -57,6 +57,13 @@ export function RoomPage() {
   // [WT-AUTH-05] 비로그인 딥링크에서 로그인 모달을 실제로 띄운 뒤에만 취소 복귀가 동작하도록 하는 가드.
   const gateRequestedRef = useRef(false);
   const wsBase = import.meta.env.VITE_WS_BASE as string | undefined;
+
+  // [§11-D86 F2] 멀티 진입(딥링크 포함) 시 계정 토큰 1회 서버 검증 — 무효면 로그아웃으로 강등되고
+  // 위 게이트가 같은 렌더에서 로그인 모달을 띄운다. 게스트는 no-op, 로비 검증과 60s 메모로 중복 제거.
+  useEffect(() => {
+    void verifyAccountSession();
+  }, []);
+
   useEffect(() => {
     if (!roomCode || startedRef.current) return;
 

@@ -29,11 +29,13 @@ interface PerCountry {
   inputUsed: string;
 }
 
+// WT-AUTH-02(§11-D68-①): shareId는 valid 제출에서 얻는데, 랭킹 valid는 이제 계정 세션 전용이다
+// (게스트는 practice 강등). dev 심(/auth/dev, §11-D68-⑩·레이트리밋 없음)으로 계정 세션을 발급한다.
 async function bootstrap(): Promise<string> {
-  const res = await SELF.fetch(`${BASE}/session`, {
+  const res = await SELF.fetch(`${BASE}/auth/dev`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ deviceId: crypto.randomUUID() }),
+    body: JSON.stringify({ sub: "og-acct-" + crypto.randomUUID() }),
   });
   return ((await res.json()) as { token: string }).token;
 }

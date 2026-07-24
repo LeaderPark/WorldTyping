@@ -306,11 +306,14 @@ interface MeRes {
   onBoard: boolean;
 }
 
+// WT-AUTH-02(§11-D68-①): 랭킹 등재(verdict='valid' → lb_best)는 계정(Google) 세션 전용이 됐다.
+// 게스트 세션 제출은 practice로 강등돼 보드에 도달하지 않으므로, 리더보드 등재를 검증하는 이
+// 스위트는 dev 심(/auth/dev, §11-D68-⑩·레이트리밋 없음)으로 계정 세션을 부트스트랩한다.
 async function bootstrap(): Promise<{ token: string; pid: string }> {
-  const res = await SELF.fetch(`${BASE}/session`, {
+  const res = await SELF.fetch(`${BASE}/auth/dev`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ deviceId: crypto.randomUUID() }),
+    body: JSON.stringify({ sub: "lb-acct-" + crypto.randomUUID() }),
   });
   const body = (await res.json()) as { token: string; playerId: string };
   return { token: body.token, pid: body.playerId };

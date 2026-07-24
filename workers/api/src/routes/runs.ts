@@ -14,6 +14,7 @@ import {
   verifyToken,
   signRunToken,
   RunTokenPayloadSchema,
+  SessionPayloadSchema,
   RUN_TOKEN_TTL_MS,
   type RunTokenPayload,
 } from "@wt/shared";
@@ -112,6 +113,10 @@ const RunSubmitReqSchema = z
       })
       .strict(),
     nickname: z.string().min(1).max(64).optional(),
+    // D68-④ 게스트→계정 브리지 토큰(옵션). 계정 세션이 게스트 시절 시작한 판을 결과 화면에서
+    //   등재하려 할 때, 게스트 신원 보유를 증명하는 게스트 세션 토큰(wt1)을 함께 보낸다. 서명이
+    //   유효하고 pid가 runToken.pid와 일치할 때만 소유권을 인정한다(§11-D68-④).
+    guestToken: z.string().min(1).max(4096).optional(),
   })
   .strict();
 
@@ -199,6 +204,8 @@ runs.post("/runs/start", requireAuth, rateLimit("runs/start"), async (c) => {
 
 runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   const pid = c.get("pid");
+  // 계정(Google 로그인) 세션인지 — 랭킹 게이팅(§11-D68-①)의 단일 신호. requireAuth가 항상 세팅한다.
+  const isAcct = c.get("acct");
   const db = c.env.DB;
   if (!db) throw new ApiHttpError(503, "SERVICE_UNAVAILABLE", "DB binding not configured");
 
@@ -214,6 +221,24 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   if (!verified.ok) return c.json(submitRes("rejected", ZERO));
   const token: RunTokenPayload = verified.payload;
 
+  // D68-④ 게스트→계정 브리지. verifyRun ①(토큰 pid ↔ 세션 pid)의 소유권 비교 대상 pid를 정한다.
+  //   기본은 세션 pid다. 계정 세션이 "게스트 시절 시작한 판"(runToken.pid ≠ 세션 pid)을 제출하는
+  //   경우에 한해, guestToken(유효 wt1 + pid === runToken.pid)으로 두 신원 동시 보유를 증명하면
+  //   소유권을 인정해 verifyPid = runToken.pid로 통과시킨다. 원장 user_id는 아래 insertRunStmt가
+  //   세션 pid(=계정 pid)로 등재하므로 "남의 토큰은 귀속 불가"(04 §6.2-①) 성질이 유지된다.
+  //   증명 실패(guestToken 부재/서명 무효/pid 불일치, 또는 게스트 세션 제출)면 verifyPid는 세션 pid
+  //   그대로라 verifyRun ①이 invalid_token으로 거부한다(기존 규약 — 아래 조기 반환).
+  let verifyPid = pid;
+  if (token.pid !== pid && isAcct && body.guestToken) {
+    const gv = await verifyToken(
+      body.guestToken,
+      [c.env.SESSION_HMAC_SECRET, c.env.SESSION_HMAC_SECRET_PREV],
+      SessionPayloadSchema,
+      now,
+    );
+    if (gv.ok && gv.payload.pid === token.pid) verifyPid = token.pid;
+  }
+
   const config = await loadAnticheatConfig(c.env.KV);
 
   // 토큰만으로 세트 재현(서버 권위 기준 세트) + 무결성 해시.
@@ -227,7 +252,7 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   const personal = await loadPersonalStats(db, pid, token.modeKey);
 
   const vr = verifyRun({
-    sessionPid: pid,
+    sessionPid: verifyPid,
     token,
     rebuiltSetHash,
     fullSet,
@@ -255,12 +280,25 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
     await c.env.KV.put(KV_KEYS.session(token.rid), "1", { expirationTtl: SESS_FLAG_TTL_SEC });
   }
 
-  // 데일리 1일 1회 등재(§2.3): 같은 (uid, daily:{date})에 이미 정식 기록이 있으면 practice 강등.
-  //   boardValidCount는 modeKey 기준이므로 daily 보드에서 곧 "이 날짜의 과거 정식 제출 수"다.
   let finalVerdict: RunVerdict = vr.verdict;
   let finalReason = vr.verdictReason;
+
+  // D68-① 랭킹 게이팅: 게스트(비계정) 세션 제출은 경쟁 랭킹 미도달 → practice/'guest'로 강등한다.
+  //   원장 INSERT·데일리 alreadyPlayed 판정·안티치트 누적(아래)은 그대로 유지되고 lb_best UPSERT만
+  //   막힌다(doBoard = finalVerdict==='valid'). rejected(물리·정합 위반)만 보존한다 — 섀도우밴
+  //   누적과 invalid_token/replay 조기 반환이 rejected에 걸려 있기 때문. 그 외(valid/flagged/practice)는
+  //   전부 practice/'guest'로 통일한다(게스트는 어느 쪽이든 비경쟁이라 사유를 단일화한다).
+  if (!isAcct && finalVerdict !== "rejected") {
+    finalVerdict = "practice";
+    finalReason = "guest";
+  }
+
+  // 데일리 1일 1회 등재(§2.3): 같은 (uid, daily:{date})에 이미 정식 기록이 있으면 practice 강등.
+  //   boardValidCount는 modeKey 기준이므로 daily 보드에서 곧 "이 날짜의 과거 정식 제출 수"다.
+  //   판정은 게스트 강등 이후의 finalVerdict 기준 — 게스트 데일리는 이미 practice라 valid 분기에
+  //   진입하지 않아 스트릭이 오르지 않는다(비경쟁 practice로 원장에만 남는다).
   let dailyFirstValid = false;
-  if (token.mode === "daily" && vr.verdict === "valid") {
+  if (token.mode === "daily" && finalVerdict === "valid") {
     if (personal.boardValidCount > 0) {
       finalVerdict = "practice";
       finalReason = "daily_practice";

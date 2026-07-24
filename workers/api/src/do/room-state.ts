@@ -26,6 +26,9 @@ export interface RoomConfig {
   isPublic: boolean; // 공개 방 목록 노출 여부
   createdAt: number;
   quickMatch: boolean; // Matchmaker가 만든 방인가 (자동 시작 규칙 적용)
+  // 로비 카드 표시용 방 제목(§11-D68-⑧). 서버 내부 상태(KV 레지스트리·room-status)로만 노출하고
+  // WS room-state 메시지에는 싣지 않는다(D7 프로토콜 불변). 미지정 방은 null.
+  title: string | null;
 }
 
 export type ConnState = 'connected' | 'grace' | 'left' | 'spectator';

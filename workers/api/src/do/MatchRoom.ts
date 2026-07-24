@@ -439,6 +439,7 @@ export class MatchRoomDO {
       isPublic: c.isPublic ?? false,
       createdAt: now,
       quickMatch: c.quickMatch ?? false,
+      title: c.title ?? null, // §11-D68-⑧ 로비 카드 제목(생성 라우트가 검증·주입). 퀵매치는 null.
     };
     if (parsed.timings) this.timings = { ...DEFAULT_TIMINGS, ...parsed.timings };
     if (parsed.dataVersion) this.dataVersion = parsed.dataVersion;
@@ -465,6 +466,8 @@ export class MatchRoomDO {
       lang: this.config?.lang ?? null,
       isPublic: this.config?.isPublic ?? false,
       quickMatch: this.config?.quickMatch ?? false,
+      // §11-D68-⑧: rooms/:code/join 라우트가 grant 응답에 실을 방 제목(내부 조회용 필드 — WS 무관).
+      title: this.config?.title ?? null,
     });
   }
 
@@ -1915,9 +1918,15 @@ export class MatchRoomDO {
   // ───────────────────────── KV 공개 방(§2.4, WT-M4-02 훅) ─────────────────────────
 
   private async updatePublicRoom(): Promise<void> {
-    if (!this.env.KV || !this.config || !this.config.isPublic) return;
+    // §11-D68-⑧ 로비 레지스트리. 공개·비공개 방을 **모두** 등록한다(GET /rooms/public이 공개는 상세로,
+    //   비공개는 counts.private로만 소비 — isPublic 필드로 구분). 등록은 "입장 가능"한 WAITING 동안만이고
+    //   phase는 그래서 항상 'WAITING'이다(진행/종료 방은 여기서 갱신하지 않아 TTL 60s로 자연 소멸 —
+    //   race-finished 훅의 호출은 phase≠WAITING이라 무동작, room-closed는 deletePublicRoom가 즉시 제거).
+    //   WS 메시지·DO 상태머신·프로토콜은 무수정(D7) — 이 KV 훅의 저장 필드만 확장한다.
+    if (!this.env.KV || !this.config) return;
     if (this.phase !== 'WAITING') return;
     const active = this.activePlayers().length;
+    const host = this.hostId ? this.players.get(this.hostId) : undefined;
     try {
       await this.env.KV.put(
         `publicroom:${this.config.roomCode}`,
@@ -1926,6 +1935,10 @@ export class MatchRoomDO {
           lang: this.config.lang,
           players: active,
           maxPlayers: this.config.maxPlayers,
+          title: this.config.title ?? null,
+          isPublic: this.config.isPublic,
+          phase: this.phase,
+          hostCover: host?.passportCover ?? null,
         }),
         { expirationTtl: 60 },
       );

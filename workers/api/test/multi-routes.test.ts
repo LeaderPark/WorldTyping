@@ -13,13 +13,15 @@ const RUN_SECRET = 'test-run-secret'; // vitest.do.config.ts miniflare 바인딩
 
 type Stub = DurableObjectStub;
 
-// 세션 부트스트랩은 서버 레이트리밋(session: IP당 60초 10회 / rooms(create): pid당 60초 5회)에
-// 걸린다 — 테스트 요청은 CF-Connecting-IP가 없어 전부 같은 IP 서브젝트다(세션 어댑테이션 §2:
-// "서버 임계값 완화 금지"). 그래서 토큰 6개를 beforeAll에서 한 번만 발급해 라운드로빈 재사용한다
-// (부트스트랩 6회<10, 방 생성 ~8회를 6 pid에 분산 → pid당 ≤2<5). e2e/helpers/session-budget.ts와
-// 동일한 자기 페이싱 원리의 vitest판.
-const POOL_SIZE = 6;
+// WT-AUTH-02(§11-D68-①): 멀티 REST 4종은 requireAccountAuth로 게이팅됐다 — 게스트 세션은 401
+// LOGIN_REQUIRED다. 따라서 정상 경로는 **계정** 세션이 필요하다. 계정 세션은 dev 심(/auth/dev,
+// §11-D68-⑩)으로만 발급 가능하고 레이트리밋이 없다(auth RL은 /auth/google 전용). 다만 rooms(create)
+// 레이트리밋(pid당 60초 5회)은 계정 pid에도 걸리므로, 서로 다른 sub로 만든 계정 토큰 8개를 라운드
+// 로빈해 방 생성 부하를 분산한다(테스트 요청은 CF-Connecting-IP가 없어 IP 스코프는 공유). 게스트
+// 토큰 1개는 로그인 게이팅(401) 검증에만 쓴다.
+const POOL_SIZE = 8;
 const tokens: string[] = [];
+let guestTok = '';
 let rr = 0;
 function tok(): string {
   const t = tokens[rr % tokens.length]!;
@@ -27,18 +29,29 @@ function tok(): string {
   return t;
 }
 
-async function bootstrap(): Promise<{ token: string; pid: string }> {
+/** 계정 세션(dev 심, 고유 sub) — RL 없음. */
+async function bootstrapAccount(): Promise<string> {
+  const res = await SELF.fetch(`${BASE}/auth/dev`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sub: 'multi-acct-' + crypto.randomUUID() }),
+  });
+  return ((await res.json()) as { token: string }).token;
+}
+
+/** 게스트 세션(비계정) — 로그인 게이팅(401 LOGIN_REQUIRED) 검증 전용. */
+async function bootstrapGuest(): Promise<string> {
   const res = await SELF.fetch(`${BASE}/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ deviceId: crypto.randomUUID() }),
   });
-  const body = (await res.json()) as { token: string; playerId: string };
-  return { token: body.token, pid: body.playerId };
+  return ((await res.json()) as { token: string }).token;
 }
 
 beforeAll(async () => {
-  for (let i = 0; i < POOL_SIZE; i += 1) tokens.push((await bootstrap()).token);
+  for (let i = 0; i < POOL_SIZE; i += 1) tokens.push(await bootstrapAccount());
+  guestTok = await bootstrapGuest();
 });
 
 function authed(token: string, body: unknown, method = 'POST') {
@@ -55,7 +68,40 @@ interface Grant {
   ticket: string;
   mode: string;
   lang: string;
+  title: string | null;
 }
+
+function errCode(body: unknown): string | undefined {
+  return (body as { error?: { code?: string } }).error?.code;
+}
+
+// ───────────────────────── 로그인 게이팅 (§11-D68-①) ─────────────────────────
+
+describe('멀티 REST 로그인 게이팅 — 게스트는 401 LOGIN_REQUIRED', () => {
+  it('POST /rooms (guest) → 401 LOGIN_REQUIRED', async () => {
+    const res = await SELF.fetch(`${BASE}/rooms`, authed(guestTok, { lang: 'ko' }));
+    expect(res.status).toBe(401);
+    expect(errCode(await res.json())).toBe('LOGIN_REQUIRED');
+  });
+
+  it('POST /rooms/:code/join (guest) → 401 LOGIN_REQUIRED', async () => {
+    const res = await SELF.fetch(`${BASE}/rooms/ABCDEF/join`, authed(guestTok, {}));
+    expect(res.status).toBe(401);
+    expect(errCode(await res.json())).toBe('LOGIN_REQUIRED');
+  });
+
+  it('POST /match/quick (guest) → 401 LOGIN_REQUIRED', async () => {
+    const res = await SELF.fetch(`${BASE}/match/quick`, authed(guestTok, { lang: 'en' }));
+    expect(res.status).toBe(401);
+    expect(errCode(await res.json())).toBe('LOGIN_REQUIRED');
+  });
+
+  it('DELETE /match/quick (guest) → 401 LOGIN_REQUIRED', async () => {
+    const res = await SELF.fetch(`${BASE}/match/quick`, authed(guestTok, { ticket: 'x' }, 'DELETE'));
+    expect(res.status).toBe(401);
+    expect(errCode(await res.json())).toBe('LOGIN_REQUIRED');
+  });
+});
 
 // ───────────────────────── 퀵매치 (§2.3) ─────────────────────────
 
@@ -123,6 +169,28 @@ describe('POST /api/v1/rooms', () => {
     const token = tok();
     const res = await SELF.fetch(`${BASE}/rooms`, authed(token, { lang: 'ko', mode: 'race-tier' }));
     expect(res.status).toBe(400);
+  });
+
+  it('accepts a clean title and echoes it in the grant (§11-D68-⑧)', async () => {
+    const token = tok();
+    const res = await SELF.fetch(`${BASE}/rooms`, authed(token, { lang: 'ko', title: '초보 환영 방' }));
+    expect(res.status).toBe(200);
+    const g = (await res.json()) as Grant;
+    expect(g.title).toBe('초보 환영 방');
+  });
+
+  it('omitted title → grant.title is null', async () => {
+    const token = tok();
+    const g = (await (await SELF.fetch(`${BASE}/rooms`, authed(token, { lang: 'ko' }))).json()) as Grant;
+    expect(g.title).toBeNull();
+  });
+
+  it('400 INVALID_TITLE for a title violating the moderation filter (reserved prefix)', async () => {
+    const token = tok();
+    // 'admin*' 예약어 프리픽스 → moderation evaluateText.blocked(닉네임 필터와 동일 파이프라인).
+    const res = await SELF.fetch(`${BASE}/rooms`, authed(token, { lang: 'ko', title: 'admin 전용방' }));
+    expect(res.status).toBe(400);
+    expect(errCode(await res.json())).toBe('INVALID_TITLE');
   });
 });
 
@@ -196,6 +264,44 @@ describe('GET /api/v1/rooms/public', () => {
     const body = (await res.json()) as { rooms: Array<{ code: string; lang: string }> };
     expect(body.rooms.some((r) => r.code === created.roomCode)).toBe(true);
     c1.close();
+  });
+
+  it('공개 방만 상세로 노출하고 비공개는 counts로만 집계한다(§11-D68-⑧)', async () => {
+    const pub = (await (
+      await SELF.fetch(`${BASE}/rooms`, authed(tok(), { lang: 'ko', isPublic: true, title: '공개 레이스' }))
+    ).json()) as Grant;
+    const priv = (await (
+      await SELF.fetch(`${BASE}/rooms`, authed(tok(), { lang: 'en', isPublic: false }))
+    ).json()) as Grant;
+    // 두 방 모두 첫 입장 → WAITING → KV 레지스트리 기록(공개·비공개 모두 등록).
+    const c1 = await connectRoom(roomStub(pub.roomCode), 'gcp', 'pcp');
+    const c2 = await connectRoom(roomStub(priv.roomCode), 'gcv', 'pcv');
+    await env.KV.delete(KV_KEYS.publicRoomsListCache); // 3초 캐시 무시하고 재조립
+
+    const res = await SELF.fetch(`${BASE}/rooms/public`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      rooms: Array<{ code: string; lang: string; players: number; maxPlayers: number; title: string | null; phase: string; hostCover: string | null }>;
+      counts: { public: number; private: number };
+    };
+
+    // 공개 방은 상세 카드로 노출(제목·phase·hostCover 포함).
+    const card = body.rooms.find((r) => r.code === pub.roomCode);
+    expect(card).toBeDefined();
+    expect(card!.title).toBe('공개 레이스');
+    expect(card!.phase).toBe('WAITING'); // 레지스트리는 입장 가능 방만 → 항상 WAITING
+    expect(card!.hostCover).toBe('green'); // connectRoom join의 passportCover
+    expect(card!.players).toBe(1);
+
+    // 비공개 방은 상세에 절대 나오지 않는다.
+    expect(body.rooms.some((r) => r.code === priv.roomCode)).toBe(false);
+
+    // counts는 공개/비공개 모두 최소 1(같은 파일의 다른 방도 누적될 수 있어 정확값 대신 하한).
+    expect(body.counts.public).toBeGreaterThanOrEqual(1);
+    expect(body.counts.private).toBeGreaterThanOrEqual(1);
+
+    c1.close();
+    c2.close();
   });
 });
 

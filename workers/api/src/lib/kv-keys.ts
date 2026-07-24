@@ -53,9 +53,13 @@ export const KV_KEYS = {
   /** run 세션(runToken) 사용 플래그 — 재사용 방지(docs/06 §3.1). */
   session: (sid: string): string => `sess:${sid}`,
 
-  /** 공개 방 목록(TTL 60s). */
+  /** 로비 방 레지스트리(TTL 60s). §11-D68-⑧로 공개·비공개 방을 **모두** 등록한다(엔트리에 isPublic
+   *  포함 — GET /rooms/public이 공개는 상세로, 비공개는 counts로만 노출). 엔트리 shape:
+   *  {code,lang,players,maxPlayers,title,isPublic,phase,hostCover}. 쓰기는 MatchRoom.updatePublicRoom
+   *  (WAITING 동안만), 삭제는 deletePublicRoom(방 폐쇄). 프리픽스는 그대로 두어(publicroom:) 기존
+   *  리더와 무충돌 — "공개 전용"이 아니라 "로비 노출 방 레지스트리"로 의미가 확장됐다. */
   publicRoom: (code: string): string => `publicroom:${code}`,
-  /** 공개 방 KV list 프리픽스(MatchRoom이 publicRoom(code)로 쓴 항목들). */
+  /** 로비 방 레지스트리 KV list 프리픽스(MatchRoom이 publicRoom(code)로 쓴 항목들 — 공개·비공개 모두). */
   publicRoomPrefix: "publicroom:",
   /** GET /rooms/public 조립 결과 3초 캐시(§2.4 "표시용 데이터"). publicroom: 프리픽스와 분리. */
   publicRoomsListCache: "cache:publicrooms",

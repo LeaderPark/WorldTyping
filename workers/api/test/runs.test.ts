@@ -35,7 +35,22 @@ interface PerCountry {
   inputUsed: string;
 }
 
+// WT-AUTH-02(§11-D68-①): 랭킹 등재(verdict='valid')는 계정(Google 로그인) 세션 전용이 됐다. 게스트
+// 제출은 practice/'guest'로 강등되므로, valid/flagged/스트릭을 기대하는 정상 경로 스위트는 계정
+// 세션으로 부트스트랩한다. 계정 세션은 dev 심(/auth/dev)으로만 발급 가능하다(§11-D68-⑩). /auth/dev는
+// 레이트리밋이 없어(auth RL은 /auth/google 전용) 케이스마다 고유 sub로 호출해도 안전하다.
 async function bootstrap(): Promise<{ token: string; pid: string }> {
+  const res = await SELF.fetch(`${BASE}/auth/dev`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sub: "runs-acct-" + crypto.randomUUID() }),
+  });
+  const body = (await res.json()) as { token: string; playerId: string };
+  return { token: body.token, pid: body.playerId };
+}
+
+/** 게스트(비계정) 세션. 게스트 게이팅(강등)·브리지 테스트 전용(§11-D68-①④). */
+async function bootstrapGuest(): Promise<{ token: string; pid: string }> {
   const res = await SELF.fetch(`${BASE}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -384,5 +399,169 @@ describe("POST /runs/submit — 데일리 1일 1회 + 스트릭", () => {
       .first<Pick<RunRow, "verdict" | "verdict_reason">>();
     expect(practiceRow!.verdict).toBe("practice");
     expect(practiceRow!.verdict_reason).toBe("daily_practice");
+  });
+});
+
+// ───────────────── WT-AUTH-02(§11-D68-①) 게스트 랭킹 게이팅 ─────────────────
+
+describe("POST /runs/submit — 게스트(비계정) 강등", () => {
+  it("게스트 clean 제출은 practice/'guest'로 강등, 원장엔 남지만 lb_best 미도달", async () => {
+    const { token, pid } = await bootstrapGuest();
+    const started = (await (await startRun(token, { mode: "worldtour", lang: "en", platform: "desktop" })).json()) as StartRes;
+    const built = buildSubmit(started.countryIds, 2, 80); // 계정이면 valid가 될 clean 레시피
+
+    const res = await submitRun(token, {
+      runToken: started.runToken,
+      result: built.result,
+      clientScore: built.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SubmitRes;
+    // §11-D68-①: 계정이었다면 valid였을 판이 게스트라 practice로 강등된다.
+    expect(body.verdict).toBe("practice");
+    expect(body.rank).toBeNull(); // 랭킹 인라인 없음(비등재)
+
+    // 원장 INSERT는 유지(안티치트·데일리 alreadyPlayed 판정 근거) — verdict_reason='guest'.
+    const row = await env.DB.prepare("SELECT user_id, verdict, verdict_reason FROM runs WHERE run_id=?1")
+      .bind(started.runId)
+      .first<Pick<RunRow, "user_id" | "verdict" | "verdict_reason">>();
+    expect(row!.user_id).toBe(pid);
+    expect(row!.verdict).toBe("practice");
+    expect(row!.verdict_reason).toBe("guest");
+
+    // lb_best엔 도달하지 않는다(랭킹 미등재).
+    const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM lb_best WHERE run_id=?1")
+      .bind(started.runId)
+      .first<{ n: number }>();
+    expect(cnt!.n).toBe(0);
+  });
+
+  it("게스트 데일리 제출: practice/'guest' 강등 + 원장 INSERT 유지 + 스트릭 미증가(1일1회 판정 보존)", async () => {
+    const { token, pid } = await bootstrapGuest();
+    const dateKst = kstDate();
+    const dailyIds = ["KR", "JP", "US", "FR", "BR", "IN", "EG", "AU", "DE", "GB"];
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO daily_challenges (date_kst, daily_no, seed, country_ids, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+    )
+      .bind(dateKst, Date.now(), "daily-seed-guest", JSON.stringify(dailyIds), Date.now())
+      .run();
+
+    const s1 = (await (await startRun(token, { mode: "daily", lang: "en", platform: "desktop" })).json()) as StartRes;
+    const b1 = buildSubmit(s1.countryIds, 2, 80);
+    const r1 = (await (await submitRun(token, {
+      runToken: s1.runToken,
+      result: b1.result,
+      clientScore: b1.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    })).json()) as SubmitRes;
+    // 게스트 강등이 데일리 valid 분기보다 앞서므로 reason은 'guest'(daily_practice 아님). 스트릭은
+    // 계정 전용(첫 정식 제출)이라 게스트는 애초에 valid에 진입하지 않는다.
+    expect(r1.verdict).toBe("practice");
+
+    const row = await env.DB.prepare("SELECT verdict, verdict_reason, mode_key FROM runs WHERE run_id=?1")
+      .bind(s1.runId)
+      .first<Pick<RunRow, "verdict" | "verdict_reason" | "mode_key">>();
+    expect(row!.verdict).toBe("practice");
+    expect(row!.verdict_reason).toBe("guest");
+    expect(row!.mode_key).toBe(`daily:${dateKst}`); // 원장에 데일리 판이 남아 alreadyPlayed 판정 근거 유지
+
+    // 게스트 데일리는 스트릭을 올리지 않는다(1일1회 정식 판정은 계정만).
+    const user = await env.DB.prepare("SELECT streak_daily FROM users WHERE user_id=?1")
+      .bind(pid)
+      .first<Pick<UserRow, "streak_daily">>();
+    expect(user!.streak_daily).toBe(0);
+  });
+});
+
+describe("POST /runs/submit — 게스트→계정 브리지(§11-D68-④)", () => {
+  it("계정 세션 + 유효 guestToken(pid===runToken.pid) → 계정 pid로 valid 등재", async () => {
+    const guest = await bootstrapGuest();
+    const acct = await bootstrap();
+    // 게스트로 판을 시작(runToken.pid = 게스트 pid).
+    const started = (await (await startRun(guest.token, { mode: "worldtour", lang: "en", platform: "desktop" })).json()) as StartRes;
+    const built = buildSubmit(started.countryIds, 2, 80);
+
+    // 계정 토큰으로 제출하며 guestToken을 함께 보내 두 신원 동시 보유를 증명.
+    const res = await submitRun(acct.token, {
+      runToken: started.runToken,
+      guestToken: guest.token,
+      result: built.result,
+      clientScore: built.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as SubmitRes).verdict).toBe("valid"); // 계정 등재 — 강등 아님
+
+    // 원장 user_id는 계정 pid(게스트 pid 아님).
+    const row = await env.DB.prepare("SELECT user_id, verdict FROM runs WHERE run_id=?1")
+      .bind(started.runId)
+      .first<Pick<RunRow, "user_id" | "verdict">>();
+    expect(row!.user_id).toBe(acct.pid);
+    expect(row!.user_id).not.toBe(guest.pid);
+    expect(row!.verdict).toBe("valid");
+
+    // 계정 pid로 lb_best 등재.
+    const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM lb_best WHERE user_id=?1 AND run_id=?2")
+      .bind(acct.pid, started.runId)
+      .first<{ n: number }>();
+    expect(cnt!.n).toBeGreaterThan(0);
+  });
+
+  it("계정 세션 + guestToken 없음 → rejected(invalid_token), 원장 미기록", async () => {
+    const guest = await bootstrapGuest();
+    const acct = await bootstrap();
+    const started = (await (await startRun(guest.token, { mode: "worldtour", lang: "en", platform: "desktop" })).json()) as StartRes;
+    const built = buildSubmit(started.countryIds, 2, 80);
+
+    const res = await submitRun(acct.token, {
+      runToken: started.runToken,
+      result: built.result,
+      clientScore: built.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as SubmitRes).verdict).toBe("rejected");
+    const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM runs WHERE run_id=?1")
+      .bind(started.runId)
+      .first<{ n: number }>();
+    expect(cnt!.n).toBe(0);
+  });
+
+  it("계정 세션 + 다른 게스트의 guestToken(pid 불일치) → rejected", async () => {
+    const guestA = await bootstrapGuest();
+    const guestB = await bootstrapGuest();
+    const acct = await bootstrap();
+    const started = (await (await startRun(guestA.token, { mode: "worldtour", lang: "en", platform: "desktop" })).json()) as StartRes;
+    const built = buildSubmit(started.countryIds, 2, 80);
+
+    const res = await submitRun(acct.token, {
+      runToken: started.runToken,
+      guestToken: guestB.token, // pid !== runToken.pid → 브리지 불성립
+      result: built.result,
+      clientScore: built.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    });
+    expect(((await res.json()) as SubmitRes).verdict).toBe("rejected");
+    const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM runs WHERE run_id=?1")
+      .bind(started.runId)
+      .first<{ n: number }>();
+    expect(cnt!.n).toBe(0);
+  });
+
+  it("계정 세션 + 위조 guestToken(서명 무효) → rejected", async () => {
+    const guest = await bootstrapGuest();
+    const acct = await bootstrap();
+    const started = (await (await startRun(guest.token, { mode: "worldtour", lang: "en", platform: "desktop" })).json()) as StartRes;
+    const built = buildSubmit(started.countryIds, 2, 80);
+
+    const res = await submitRun(acct.token, {
+      runToken: started.runToken,
+      guestToken: "wt1.forged.sig", // 서명 무효 → 브리지 불성립
+      result: built.result,
+      clientScore: built.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    });
+    expect(((await res.json()) as SubmitRes).verdict).toBe("rejected");
   });
 });

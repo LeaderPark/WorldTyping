@@ -11,6 +11,8 @@ import { HomePage } from '../pages/HomePage';
 import { ModeSelectPage } from '../pages/ModeSelectPage';
 import { TrackSelectPage } from '../pages/TrackSelectPage';
 import { PrivacyPage } from '../pages/PrivacyPage';
+import { TermsPage } from '../pages/TermsPage';
+import { SupportPage } from '../pages/SupportPage';
 import { CreditsPage } from '../pages/CreditsPage';
 import { DailyPage } from '../pages/DailyPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
@@ -29,6 +31,9 @@ export const routeChildren: RouteObject[] = [
   { path: 'multi/:roomCode', lazy: () => import('../pages/multi/RoomPage') }, // S10→S11
   { path: 'passport', lazy: () => import('../pages/PassportPage') }, // S13
   { path: 'privacy', element: <PrivacyPage /> },
+  // WT-AUTH-06: docs/00 §11-D68-⑨ 법적 페이지 신설 — 표준 초안 + "법률 자문 아님" 고지.
+  { path: 'terms', element: <TermsPage /> },
+  { path: 'support', element: <SupportPage /> },
   { path: 'credits', element: <CreditsPage /> }, // WT-M6-06: docs/06 §10-8 라이선스 고지
   // WT-M6-06: docs/06 §10-2 SEO 체크리스트가 전제하는 "/daily" 랜딩(실제 플레이 진입은 여전히
   // play/daily/:trackId, router.tsx 상단 세션 조정 주석 + DailyPage 파일 상단 주석 참조).

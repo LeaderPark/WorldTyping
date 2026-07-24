@@ -367,6 +367,8 @@
   "seo.passport.description": "완주한 노선과 업적을 여권에서 확인하세요.",
   "seo.multi.description": "실시간으로 다른 플레이어와 타이핑 대결을 펼치세요.",
   "seo.privacy.description": "TypeTrip의 개인정보처리방침입니다.",
+  "seo.terms.description": "TypeTrip의 이용약관입니다.",
+  "seo.support.description": "TypeTrip 이용 중 자주 묻는 질문과 문의 방법을 안내합니다.",
   "seo.credits.description": "TypeTrip이 사용하는 데이터와 라이선스 고지입니다.",
 
   "credits.title": "크레딧 및 라이선스",

@@ -62,6 +62,83 @@ describe('AppShell — SettingsOverlay 제거(§11-D68-⑥)', () => {
   });
 });
 
+// [WT-AUTH-06] Footer는 브라우징 화면에서만 마운트한다(§11-D68-⑨) — 인게임(/play/*)·대기실/
+// 레이스(/multi/:code)는 제외, 로비(/multi) 자체는 허용. 실제 페이지 컴포넌트(GamePage 등)는
+// 무거운 의존성을 끌고 오므로 라우트 판별 로직만 검증하는 가벼운 스텁 엘리먼트를 대신 마운트한다.
+function renderShellAt(initial: string) {
+  localStorage.setItem('wt:lang', 'en');
+  return render(
+    <AppProviders>
+      <MemoryRouter initialEntries={[initial]}>
+        <Routes>
+          <Route path="/" element={<AppShell />}>
+            <Route index element={<HomePage />} />
+            <Route path="play" element={<div data-testid="stub-mode-select" />} />
+            <Route path="play/:mode" element={<div data-testid="stub-track-select" />} />
+            <Route path="play/:mode/:trackId" element={<div data-testid="stub-game" />} />
+            <Route path="rank" element={<div data-testid="stub-rank" />} />
+            <Route path="multi" element={<div data-testid="stub-lobby" />} />
+            <Route path="multi/:roomCode" element={<div data-testid="stub-room" />} />
+            <Route path="privacy" element={<div data-testid="stub-privacy" />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </AppProviders>,
+  );
+}
+
+describe('AppShell — SiteFooter 노출 범위(§11-D68-⑨, WT-AUTH-06)', () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  it('홈에는 Footer가 보인다', async () => {
+    renderShellAt('/');
+    await screen.findByTestId('home-page');
+    expect(screen.getByTestId('site-footer')).toBeInTheDocument();
+  });
+
+  it('로비(/multi)에는 Footer가 보인다(대기실과 달리 브라우징 화면)', async () => {
+    renderShellAt('/multi');
+    await screen.findByTestId('stub-lobby');
+    expect(screen.getByTestId('site-footer')).toBeInTheDocument();
+  });
+
+  it('랭킹·개인정보처리방침에도 Footer가 보인다', async () => {
+    renderShellAt('/rank');
+    await screen.findByTestId('stub-rank');
+    expect(screen.getByTestId('site-footer')).toBeInTheDocument();
+    cleanup();
+
+    renderShellAt('/privacy');
+    await screen.findByTestId('stub-privacy');
+    expect(screen.getByTestId('site-footer')).toBeInTheDocument();
+  });
+
+  it('인게임(/play, /play/:mode, /play/:mode/:trackId)에는 Footer가 보이지 않는다', async () => {
+    renderShellAt('/play');
+    await screen.findByTestId('stub-mode-select');
+    expect(screen.queryByTestId('site-footer')).not.toBeInTheDocument();
+    cleanup();
+
+    renderShellAt('/play/continent');
+    await screen.findByTestId('stub-track-select');
+    expect(screen.queryByTestId('site-footer')).not.toBeInTheDocument();
+    cleanup();
+
+    renderShellAt('/play/continent/asia-1');
+    await screen.findByTestId('stub-game');
+    expect(screen.queryByTestId('site-footer')).not.toBeInTheDocument();
+  });
+
+  it('대기실/레이스(/multi/:roomCode)에는 Footer가 보이지 않는다', async () => {
+    renderShellAt('/multi/KX7-3QP');
+    await screen.findByTestId('stub-room');
+    expect(screen.queryByTestId('site-footer')).not.toBeInTheDocument();
+  });
+});
+
 describe('AppShell — 전역 LoginModal(§11-D68)', () => {
   beforeEach(() => {
     useSettingsStore.getState().setLang('en');

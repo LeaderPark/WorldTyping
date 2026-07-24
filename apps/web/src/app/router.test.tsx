@@ -25,6 +25,8 @@ import { TrackSelectPage } from '../pages/TrackSelectPage';
 import { RankPage } from '../pages/RankPage';
 import { PassportPage } from '../pages/PassportPage';
 import { PrivacyPage } from '../pages/PrivacyPage';
+import { TermsPage } from '../pages/TermsPage';
+import { SupportPage } from '../pages/SupportPage';
 import { CreditsPage } from '../pages/CreditsPage';
 import { DailyPage } from '../pages/DailyPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
@@ -43,6 +45,8 @@ function renderAt(path: string) {
             <Route path="multi" element={<LobbyPage />} />
             <Route path="passport" element={<PassportPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="support" element={<SupportPage />} />
             <Route path="credits" element={<CreditsPage />} />
             <Route path="daily" element={<DailyPage />} />
             <Route path="*" element={<NotFoundPage />} />
@@ -84,6 +88,8 @@ describe('app routing/shell (WT-M2-05 smoke)', () => {
       '/multi',
       '/passport',
       '/privacy',
+      '/terms',
+      '/support',
       '/credits',
       '/daily',
       '/this-route-does-not-exist', // WT-M6-06: catch-all → NotFoundPage

@@ -79,12 +79,28 @@ describe('PrivacyPage', () => {
     expect(en).toContain('never collect');
   });
 
-  it('leaves the operator/contact placeholders for the lead to fill in (§3 세션 조정 지시)', () => {
+  it('resolves the operator/contact to the confirmed values instead of placeholders (00 §11-D68-⑨)', () => {
     renderPage();
     const ko = screen.getByTestId('privacy-body-ko').textContent ?? '';
     const en = screen.getByTestId('privacy-body-en').textContent ?? '';
-    expect(ko).toContain('{PLACEHOLDER');
-    expect(en).toContain('{PLACEHOLDER');
+    expect(ko).not.toContain('{PLACEHOLDER');
+    expect(en).not.toContain('{PLACEHOLDER');
+    expect(ko).toContain('LeaderPark');
+    expect(en).toContain('LeaderPark');
+    expect(ko).toContain('dkdleldjqkr976@gmail.com');
+    expect(en).toContain('dkdleldjqkr976@gmail.com');
+  });
+
+  it('discloses the Google sign-in collection items and Google LLC as a processing outsourcer (00 §11-D68-⑨)', () => {
+    renderPage();
+    const ko = screen.getByTestId('privacy-body-ko').textContent ?? '';
+    const en = screen.getByTestId('privacy-body-en').textContent ?? '';
+    expect(ko).toContain('Google LLC');
+    expect(en).toContain('Google LLC');
+    expect(ko).toContain('sub');
+    expect(ko).toContain('이메일');
+    expect(en).toContain('sub');
+    expect(en.toLowerCase()).toContain('email');
   });
 
   it('renders the addendum version-history table (§6.5 "부칙: 변경 이력 표")', () => {

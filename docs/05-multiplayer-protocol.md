@@ -619,10 +619,10 @@ DO는 단일 스레드이므로 두 `complete`가 "동시에" 처리되는 일�
 
 ### 7.2 재접속 절차
 
-1. 클라는 WS 끊김 감지 시 지수 백오프(0.5s→1s→2s, 최대 5회)로 같은 URL에 재연결.
+1. 클라는 WS 끊김 감지 시 지수 백오프(0.5s→1s→2s, 최대 5회)로 재연결. **[§11-D89] WS 티켓은 1회용(60s TTL)이라 매 재연결 직전 `POST /rooms/:code/join`을 재호출해 신규 티켓을 발급받아 붙는다**(멤버 미등록·grant만 발급이라 재사용 안전). 재발급이 ROOM_NOT_FOUND/ROOM_IN_PROGRESS/ROOM_FULL/LOGIN_REQUIRED/INVALID_TOKEN이면 잔여 시도 없이 즉시 실패(터미널 중단). E2E mock(VITE_WS_BASE)은 정적 URL 프로바이더로 현행 계약 보존.
 2. `hello`에 `resume: { playerId, resumeKey }` 포함. 서버는 resumeKey 일치 + `connState !== 'left'` 확인.
 3. 성공 시: `welcome{resumed:true}` → **`race-sync`** 1건으로 전체 재수화 — `start` 전문(seed·countries), 본인 권위 상태(`nextIdx`, `serverElapsedMs`, `combo`), 최신 `progress-tick` 스냅샷. 클라는 `nextIdx` 국가부터 입력 UI를 즉시 복원한다(경과 시간은 계속 흘렀음 — 멈춰주지 않는다).
-4. 실패(`resumeKey` 불일치 또는 이미 `left`): `AUTH_FAILED` 또는 관전자 모드 `room-state`(입력 채널 없음).
+4. 실패(`resumeKey` 불일치 또는 이미 `left`): `AUTH_FAILED` 또는 관전자 모드 `room-state`(입력 채널 없음). **[§11-D89] WAITING 절단은 즉시 퇴장이라 resume이 `AUTH_FAILED`로 거부된다 → 클라는 같은 소켓에서 무-resume `hello`+`join`을 1회 조용히 재시도해 신원을 재수립한다(WAITING 재입장 복구).**
 5. 구 연결 처리: 같은 playerId의 새 WS가 인증되면 구 WS는 close(4001, "superseded") — 탭 복제 악용 차단.
 
 ### 7.3 유령 연결 감지

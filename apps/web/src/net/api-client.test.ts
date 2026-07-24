@@ -6,7 +6,6 @@ import {
   apiClient,
   ApiError,
   buildBoardKey,
-  checkNickname,
   ensureSession,
   fetchDailyMe,
   fetchDailyToday,
@@ -17,7 +16,6 @@ import {
   modeKeyFor,
   onAccountTokenRejected,
   onLoginRequired,
-  putNickname,
   setAuthToken,
   startRun,
   submitRun,
@@ -193,23 +191,19 @@ describe('runs/lb/daily/nickname 타입드 래퍼', () => {
     expect(submit.rank).toBe(1);
   });
 
-  it('daily today/me, lb page/me, nickname check/put', async () => {
+  it('daily today/me, lb page/me', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ dailyNo: 1, dateKst: '2026-07-21', seed: 's', countryIds: ['CO'] }))
       .mockResolvedValueOnce(jsonResponse({ dateKst: '2026-07-21', alreadyPlayed: false, streakDaily: 2 }))
       .mockResolvedValueOnce(jsonResponse({ entries: [], nextCursor: null, total: 0 }))
-      .mockResolvedValueOnce(jsonResponse({ rank: null, total: 0, percentile: null, onBoard: false }))
-      .mockResolvedValueOnce(jsonResponse({ ok: true }))
-      .mockResolvedValueOnce(jsonResponse({ nickname: 'NEW' }));
+      .mockResolvedValueOnce(jsonResponse({ rank: null, total: 0, percentile: null, onBoard: false }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(fetchDailyToday()).resolves.toMatchObject({ dailyNo: 1 });
     await expect(fetchDailyMe()).resolves.toMatchObject({ alreadyPlayed: false });
     await expect(fetchLbPage('worldtour|ko|desktop|all')).resolves.toMatchObject({ total: 0 });
     await expect(fetchLbMe('worldtour|ko|desktop|all')).resolves.toMatchObject({ onBoard: false });
-    await expect(checkNickname('nick')).resolves.toMatchObject({ ok: true });
-    await expect(putNickname('nick')).resolves.toMatchObject({ nickname: 'NEW' });
 
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/v1/lb?board=worldtour%7Cko%7Cdesktop%7Call', expect.anything());
   });

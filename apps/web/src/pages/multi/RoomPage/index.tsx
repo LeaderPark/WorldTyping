@@ -27,15 +27,17 @@ import { RaceResult } from './RaceResult';
  *  선택 UI가 없어 신규 참가자는 전부 이 값으로 join한다. */
 const DEFAULT_PASSPORT_COVER = 'basic-green';
 
+/** [§11-D88] 멀티 join 신원의 잔여 폴백. 계정 닉이 비어야만 도달하는데, 프로덕션은 D68 게이트로
+ *  연결 시점에 항상 로그인 상태(계정 닉 존재)라 실도달 경로는 E2E VITE_WS_BASE 게이트 우회뿐이다.
+ *  예약 프리픽스(GUEST_ 등 — moderation engine)가 아니라 서버 필터를 통과하는 안전한 상수를 쓴다. */
+const FALLBACK_NICKNAME = 'PLAYER';
+
 export function RoomPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams<{ roomCode: string }>();
   const roomCode = (params.roomCode ?? '').trim().toUpperCase();
-
-  const nickname = useSettingsStore((s) => s.nickname);
-  const guestId = useSettingsStore((s) => s.guestId);
 
   // [WT-AUTH-05] 멀티 로그인 게이트(§11-D68) — 딥링크 진입은 로비 게이트를 거치지 않아 여기서 검사.
   const isLoggedIn = useAuthStore(selectIsLoggedIn);
@@ -82,8 +84,12 @@ export function RoomPage() {
     startedRef.current = true;
     useMultiplayerStore.getState().reset(); // 이전 방에서 나가기 없이 이탈했던 잔여 상태 방어.
 
+    // [§11-D88] 멀티 join 신원 = 계정(Google) 닉네임(서버 NICK_RE 정제값) 단일 출처. 연결 시점 1회
+    // 읽기라 렌더 구독 불필요(effect deps [roomCode, isLoggedIn]로 로그인 완료 시 재실행돼 최신 값을
+    // 읽는다). 계정 닉이 비면 'PLAYER' 폴백 — GUEST_ 예약 프리픽스는 서버 필터에 차단되므로 금지.
+    const authNickname = (useAuthStore.getState().nickname ?? '').trim();
     const identity = {
-      nickname: nickname || `GUEST_${guestId.slice(0, 4).toUpperCase()}`,
+      nickname: authNickname || FALLBACK_NICKNAME,
       passportCover: DEFAULT_PASSPORT_COVER,
     };
     if (grant && grant.roomCode === roomCode) {
@@ -135,7 +141,9 @@ export function RoomPage() {
     return (
       <main className="wt-room" data-testid="room-page">
         <div className="wt-card wt-room__state">
-          <p>{t('multi.connection.failed')}</p>
+          {/* [§11-D89] 터미널 사유(방 소멸/진행 중/만원/인증)는 기존 i18n 키로 사유별 표기(신규 키 0),
+              사유 미상이면 일반 문구로 폴백. */}
+          <p>{lastError ? t(multiErrorKey(lastError.code)) : t('multi.connection.failed')}</p>
           <button type="button" className="wt-btn wt-btn--primary" data-testid="room-retry" onClick={() => window.location.reload()}>
             {t('multi.connection.retry')}
           </button>

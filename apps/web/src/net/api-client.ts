@@ -355,7 +355,6 @@ export interface RunSubmitReq {
   result: RunResultSubmit;
   clientScore: number;
   inputDigest: InputDigestSubmit;
-  nickname?: string;
   /** [WT-AUTH-04] 게스트→계정 브리지(§11-D68-④). 계정 세션으로 제출하는데 runToken이 로그인 전
    *  (게스트 시절) 발급된 것이면, 그 게스트 세션 토큰(wt:sessiontoken 원문)을 실어 두 신원 동시
    *  보유를 증명한다. runToken이 이미 계정 pid로 발급된 경우엔 서버가 무시하므로 항상 첨부해도
@@ -451,22 +450,8 @@ export function fetchLbMe(board: string, opts: { geo?: string; fresh?: boolean }
   return apiClient.get<LbMeRes>(`/lb/me?${q.toString()}`);
 }
 
-// ───────────────────────── 닉네임(docs/06 §4.2) ─────────────────────────
-
-export type NicknameReason = 'TAKEN' | 'TOO_SHORT' | 'TOO_LONG' | 'INVALID_CHARS' | 'BLOCKED_WORD' | 'RESERVED';
-
-export interface NicknameCheckRes {
-  ok: boolean;
-  reason?: NicknameReason;
-}
-
-export function checkNickname(nickname: string): Promise<NicknameCheckRes> {
-  return apiClient.post<NicknameCheckRes>('/nickname/check', { nickname });
-}
-
-export function putNickname(nickname: string): Promise<{ nickname: string }> {
-  return apiClient.put<{ nickname: string }>('/nickname', { nickname });
-}
+// [§11-D88] 닉네임 check/put 클라 래퍼는 폐지됐다 — 표시/멀티 신원 닉네임은 계정(Google) 이름으로
+// 일원화(수동 입력 플로우 제거). 서버 routes/nickname.ts·users.nickname은 존치(클라 발화만 소멸).
 
 // ───────────────────────── 여권(docs/06 §4.3, WT-M5-03) ─────────────────────────
 

@@ -69,7 +69,6 @@ export function LobbyPage() {
   const navigate = useNavigate();
   const lang = useSettingsStore((s) => s.lang);
   const guestId = useSettingsStore((s) => s.guestId);
-  const settingsNickname = useSettingsStore((s) => s.nickname);
   const authNickname = useAuthStore((s) => s.nickname);
 
   // ── 멀티 로그인 게이트(§11-D68) ──
@@ -231,7 +230,9 @@ export function LobbyPage() {
   }, [publicRooms, filter, search]);
 
   const totalCount = counts.public + counts.private;
-  const defaultRoomTitle = (authNickname || settingsNickname || `GUEST_${guestId.slice(0, 4).toUpperCase()}`).slice(0, 24);
+  // [§11-D88] 방 제목 기본값 = 계정 닉(방 만들기는 withLoginGate 뒤라 프로덕션에선 항상 존재). 빈
+  // 문자열이면 CreateRoomModal이 빈 입력으로 시작하고, 서버는 빈 제목이면 키를 생략해 처리한다(무해).
+  const defaultRoomTitle = (authNickname ?? '').slice(0, 24);
 
   if (matching) {
     // 퀵매치 매칭 화면(디자인 S11 정본) — 마스코트 bob + 타이틀 + ETA + 취소. 취소는 요청 결과를

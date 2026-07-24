@@ -16,8 +16,6 @@ import { useSettingsStore } from '../../stores/settings';
 import { ResultView } from './ResultView';
 
 const submitRunMock = vi.fn();
-const checkNicknameMock = vi.fn();
-const putNicknameMock = vi.fn();
 // [WT-AUTH-04 → §11-D86] ResultView(및 그 안에서 쓰이는 net/run-session.ts)가 stores/auth를 구독한다 —
 // 그 스토어는 net/api-client의 getAuthToken/setAuthToken/onLoginRequired/onAccountTokenRejected를 모듈
 // 로드 시 바로 호출하므로, 이 전체 모듈 목(vi.mock)에도 그 자리표시자가 반드시 있어야 한다(빠지면
@@ -29,8 +27,6 @@ const putNicknameMock = vi.fn();
 const getSessionTokenMock = vi.fn<() => string | null>(() => 'wt1.guest-session-token');
 vi.mock('../../net/api-client', () => ({
   submitRun: (...args: unknown[]) => submitRunMock(...args),
-  checkNickname: (...args: unknown[]) => checkNicknameMock(...args),
-  putNickname: (...args: unknown[]) => putNicknameMock(...args),
   getSessionToken: () => getSessionTokenMock(),
   getAuthToken: () => 'wt1.acct',
   setAuthToken: () => true,
@@ -122,7 +118,6 @@ interface RenderOpts {
   retry?: ReturnType<typeof vi.fn>;
   runToken?: string | null;
   runTokenIssuedAt?: number | null;
-  nickname?: string;
   mode?: 'continent' | 'tier' | 'worldtour' | 'daily';
 }
 
@@ -149,7 +144,6 @@ function renderResult(engine: GameSessionEngine, result: EngineRunResult, opts: 
                 finalLives={null}
                 runToken={opts.runToken ?? null}
                 runTokenIssuedAt={opts.runTokenIssuedAt ?? null}
-                nickname={opts.nickname ?? 'GUEST_TEST'}
                 retry={retry}
               />
             }
@@ -416,46 +410,11 @@ describe('ResultView', () => {
     });
   });
 
-  // ── 닉네임 유도(구현 세부 지시 3) ───────────────────────────────────────────
-  describe('닉네임 유도', () => {
-    it('닉네임 미설정이면 유도 폼이 보이고, 설정되어 있으면 보이지 않는다', () => {
-      useSettingsStore.getState().setLang('ko');
-      const { engine } = mkEngine(false);
-      const { unmount } = renderResult(engine, baseResult(), { nickname: '' });
-      expect(screen.getByTestId('result-nickname-gate')).toBeInTheDocument();
-      unmount();
-
-      renderResult(engine, baseResult(), { nickname: 'NIMBUS' });
-      expect(screen.queryByTestId('result-nickname-gate')).not.toBeInTheDocument();
-    });
-
-    it('check→put 성공 시 settings 스토어 닉네임이 갱신된다', async () => {
-      useSettingsStore.getState().setLang('ko');
-      checkNicknameMock.mockResolvedValue({ ok: true });
-      putNicknameMock.mockResolvedValue({ nickname: 'NEWNAME' });
-      const { engine } = mkEngine(false);
-      renderResult(engine, baseResult(), { nickname: '' });
-
-      const input = screen.getByTestId('result-nickname-input');
-      fireEvent.change(input, { target: { value: 'NEWNAME' } });
-      fireEvent.click(screen.getByTestId('result-nickname-submit'));
-
-      await waitFor(() => expect(useSettingsStore.getState().nickname).toBe('NEWNAME'));
-      expect(checkNicknameMock).toHaveBeenCalledWith('NEWNAME');
-      expect(putNicknameMock).toHaveBeenCalledWith('NEWNAME');
-    });
-
-    it('check 실패(reason) 시 에러 메시지를 표시하고 스토어는 갱신하지 않는다', async () => {
-      useSettingsStore.getState().setLang('ko');
-      checkNicknameMock.mockResolvedValue({ ok: false, reason: 'TAKEN' });
-      const { engine } = mkEngine(false);
-      renderResult(engine, baseResult(), { nickname: '' });
-
-      fireEvent.change(screen.getByTestId('result-nickname-input'), { target: { value: 'NIMBUS' } });
-      fireEvent.click(screen.getByTestId('result-nickname-submit'));
-
-      await waitFor(() => expect(screen.getByTestId('result-nickname-error')).toBeInTheDocument());
-      expect(putNicknameMock).not.toHaveBeenCalled();
-    });
+  // ── 닉네임 유도 제거(§11-D88) ───────────────────────────────────────────────
+  it('닉네임 유도 폼(NicknameGate)은 더 이상 렌더되지 않는다(수동 입력 플로우 폐지)', () => {
+    useSettingsStore.getState().setLang('ko');
+    const { engine } = mkEngine(false);
+    renderResult(engine, baseResult());
+    expect(screen.queryByTestId('result-nickname-gate')).not.toBeInTheDocument();
   });
 });

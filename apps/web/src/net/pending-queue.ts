@@ -40,7 +40,9 @@ export interface PendingEntry {
   result: RunResultSubmit;
   clientScore: number;
   inputDigest: InputDigestSubmit;
-  nickname?: string;
+  // [§11-D88] nickname 필드는 폐지됐다(제출 표시명 = 서버 users.nickname 단일 원천). 기존
+  // IndexedDB에 남은 엔트리의 여분 nickname 프로퍼티는 flush 시 새 코드가 읽지 않으므로 무해
+  // (마이그레이션 불필요).
 }
 
 async function pendingKeys(): Promise<string[]> {
@@ -117,7 +119,6 @@ export async function flushPendingQueue(): Promise<FlushResult> {
         result: e.result,
         clientScore: e.clientScore,
         inputDigest: e.inputDigest,
-        nickname: e.nickname,
         guestToken,
       });
       await removePending(e.id);

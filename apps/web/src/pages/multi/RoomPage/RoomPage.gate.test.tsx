@@ -8,6 +8,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProviders } from '../../../app/providers';
 import { useAuthStore, type AccountSession } from '../../../stores/auth';
 import { useMultiplayerStore } from '../../../stores/multiplayer';
+import { useSettingsStore } from '../../../stores/settings';
 import { RoomPage } from './index';
 
 // useMultiplayer는 실제 WS 매니저를 만든다 — 게이트 검증엔 연결 호출 여부만 필요하므로 훅을 목킹한다.
@@ -67,9 +68,26 @@ describe('RoomPage 딥링크 로그인 게이트 (WT-AUTH-05)', () => {
     expect(mpMocks.join).not.toHaveBeenCalled();
   });
 
-  it('로그인 상태의 딥링크는 REST join으로 연결한다', () => {
+  it('로그인 상태의 딥링크는 REST join으로 연결한다 — 신원=계정 닉(GUEST_ 미포함, §11-D88)', () => {
     act(() => useAuthStore.getState().login(ACCOUNT));
     renderRoom();
-    expect(mpMocks.join).toHaveBeenCalledWith('ABC123', expect.objectContaining({ passportCover: expect.any(String) }));
+    expect(mpMocks.join).toHaveBeenCalledWith(
+      'ABC123',
+      expect.objectContaining({ nickname: 'Tester', passportCover: expect.any(String) }),
+    );
+    const identity = mpMocks.join.mock.calls[0]?.[1] as { nickname: string };
+    expect(identity.nickname).not.toMatch(/^GUEST_/);
+  });
+
+  it('연결 실패 화면은 lastError 사유별 i18n 키를 표기한다 (§11-D89)', async () => {
+    useSettingsStore.getState().setLang('ko');
+    act(() => useAuthStore.getState().login(ACCOUNT));
+    renderRoom();
+    // 마운트 effect가 reset() 후 연결(mock no-op)한 뒤 사유와 함께 실패 상태로 전이시킨다.
+    act(() => {
+      useMultiplayerStore.getState().setLastError({ code: 'ROOM_NOT_FOUND', message: 'x' });
+      useMultiplayerStore.getState().setConnection('failed');
+    });
+    expect(await screen.findByText('방을 찾을 수 없어요')).toBeInTheDocument();
   });
 });

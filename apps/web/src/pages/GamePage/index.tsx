@@ -32,6 +32,7 @@ import { GlobeMap, type GlobeMapHandle } from '../../features/map/globe/GlobeMap
 import { useGlobeIndex } from '../../features/map/globe/useGlobeIndex';
 import { useSessionStore } from '../../stores/session';
 import { useSettingsStore } from '../../stores/settings';
+import { useAuthStore } from '../../stores/auth';
 import { useMetaStore } from '../../stores/meta';
 import { SERVER_SET_MODES } from '../../net/run-session';
 import { useModalA11y } from '../../lib/useModalA11y';
@@ -70,7 +71,9 @@ export function GamePage() {
   const { t } = useTranslation();
   const params = useParams<{ mode: string; trackId: string }>();
   const lang = useSettingsStore((s) => s.lang);
-  const nickname = useSettingsStore((s) => s.nickname);
+  // [§11-D88] 탑승권 승객명은 계정(Google) 닉네임을 우선 표시(수동 입력 플로우 폐지). 비로그인
+  // 게스트는 null → BoardingPass가 GUEST_ 표시 전용 폴백으로 대체(서버 전송 없음, 싱글 코스메틱).
+  const authNickname = useAuthStore((s) => s.nickname);
   const guestId = useSettingsStore((s) => s.guestId);
   const platform = useSettingsStore((s) => s.platform);
   const reducedMotion = useSettingsStore((s) => s.reducedMotion);
@@ -343,7 +346,7 @@ export function GamePage() {
             trackId={trackId}
             countries={countries}
             lang={lang}
-            nickname={nickname}
+            nickname={authNickname ?? ''}
             guestId={guestId}
             platform={platform}
             start={start}
@@ -409,7 +412,6 @@ export function GamePage() {
             finalLives={finalLives}
             runToken={runStart.runToken}
             runTokenIssuedAt={runStart.runTokenIssuedAt}
-            nickname={nickname}
             retry={retry}
           />
         )}

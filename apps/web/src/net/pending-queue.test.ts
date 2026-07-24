@@ -20,9 +20,15 @@ vi.mock('idb-keyval', () => ({
 
 const startRunMock = vi.fn();
 const submitRunMock = vi.fn();
+// [WT-AUTH-04] flush의 게스트→계정 브리지(§11-D68-④)가 참조하는 현재 세션 상태 자리표시자.
+// 기본은 게스트(getAuthToken null)로 두고, 브리지 테스트에서만 계정으로 전환한다.
+const getAuthTokenMock = vi.fn<() => string | null>(() => null);
+const getSessionTokenMock = vi.fn<() => string | null>(() => 'wt1.guest-session-token');
 vi.mock('./api-client', () => ({
   startRun: (...args: unknown[]) => startRunMock(...args),
   submitRun: (...args: unknown[]) => submitRunMock(...args),
+  getAuthToken: () => getAuthTokenMock(),
+  getSessionToken: () => getSessionTokenMock(),
 }));
 
 import {
@@ -63,6 +69,8 @@ describe('pending-queue', () => {
     mem.clear();
     startRunMock.mockReset();
     submitRunMock.mockReset();
+    getAuthTokenMock.mockReset().mockReturnValue(null);
+    getSessionTokenMock.mockReset().mockReturnValue('wt1.guest-session-token');
     __resetPendingQueueAutoFlushForTests();
   });
 
@@ -127,6 +135,42 @@ describe('pending-queue', () => {
     await flushPendingQueue();
     expect(startRunMock).toHaveBeenCalledTimes(1);
     expect(submitRunMock).toHaveBeenCalledWith(expect.objectContaining({ runToken: 'renewed' }));
+  });
+
+  // ── 게스트→계정 브리지(WT-AUTH-04, §11-D68-④) ──────────────────────────────
+  describe('게스트→계정 브리지', () => {
+    it('계정 세션 + 기존 runToken 재사용(tokenFresh) → 현재 게스트 세션 토큰을 guestToken으로 함께 보낸다', async () => {
+      getAuthTokenMock.mockReturnValue('wt1.acct-token'); // flush 시점에 계정으로 로그인된 상태.
+      await enqueuePending(mkEntry({ runToken: 'still-good', runTokenIssuedAt: Date.now() }));
+      submitRunMock.mockResolvedValue({ verdict: 'valid', score: 1, pi: 1, cpm: 1, accMilli: 1000, grade: 'S', completed: true, rank: 1, total: 1, isPersonalBest: true });
+
+      const res = await flushPendingQueue();
+      expect(res).toEqual({ flushed: 1, remaining: 0 });
+      expect(startRunMock).not.toHaveBeenCalled();
+      expect(submitRunMock).toHaveBeenCalledWith(
+        expect.objectContaining({ runToken: 'still-good', guestToken: 'wt1.guest-session-token' }),
+      );
+    });
+
+    it('게스트 세션(비로그인)이면 토큰을 재사용해도 guestToken을 싣지 않는다', async () => {
+      getAuthTokenMock.mockReturnValue(null); // 여전히 게스트.
+      await enqueuePending(mkEntry({ runToken: 'still-good', runTokenIssuedAt: Date.now() }));
+      submitRunMock.mockResolvedValue({ verdict: 'practice', score: 1, pi: 1, cpm: 1, accMilli: 1000, grade: 'S', completed: true, rank: null, total: null, isPersonalBest: null });
+
+      await flushPendingQueue();
+      expect(submitRunMock).toHaveBeenCalledWith(expect.objectContaining({ runToken: 'still-good', guestToken: undefined }));
+    });
+
+    it('계정 세션이어도 토큰을 새로 발급받는 경우(!tokenFresh)엔 guestToken을 싣지 않는다(신규 토큰이 이미 계정 pid로 발급됨)', async () => {
+      getAuthTokenMock.mockReturnValue('wt1.acct-token');
+      const longAgo = Date.now() - 31 * 60 * 1000; // TTL 경과 → 재시작 분기.
+      await enqueuePending(mkEntry({ runToken: 'stale', runTokenIssuedAt: longAgo }));
+      startRunMock.mockResolvedValue({ runToken: 'renewed', runId: 'r3', serverStartTs: 1, countryIds: [], seed: 's' });
+      submitRunMock.mockResolvedValue({ verdict: 'valid', score: 1, pi: 1, cpm: 1, accMilli: 1000, grade: 'S', completed: true, rank: 1, total: 1, isPersonalBest: true });
+
+      await flushPendingQueue();
+      expect(submitRunMock).toHaveBeenCalledWith(expect.objectContaining({ runToken: 'renewed', guestToken: undefined }));
+    });
   });
 
   it('서버가 응답(예: rejected)하면 큐에서 제거한다 — 영구 재시도 대상 아님', async () => {

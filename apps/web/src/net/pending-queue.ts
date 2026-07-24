@@ -14,6 +14,8 @@
 import { del, get, keys, set } from 'idb-keyval';
 import { RUN_TOKEN_TTL_MS, type Continent, type DifficultyTier } from '@wt/shared';
 import {
+  getAuthToken,
+  getSessionToken,
   startRun,
   submitRun,
   type InputDigestSubmit,
@@ -75,6 +77,13 @@ export interface FlushResult {
  *     같은 이유로 실패할 공산이 크다 — 무의미한 연쇄 실패 방지).
  *   - 서버가 응답은 했으나 거절(rejected 등) → "서버가 수용 판단"을 마쳤으므로 큐에서 제거한다
  *     (영구 재시도 대상이 아니다 — submitRun 자체가 throw하지 않는 한 이 분기로 온다).
+ *
+ * [WT-AUTH-04 게스트→계정 브리지, §11-D68-④] 이 큐에 적재되는 항목은 항상 로그인 상태에서
+ * 제출을 "시도"한 이후다(비로그인은 애초에 net/run-session.ts가 제출을 시도하지 않는다 — 랭킹
+ * 게이팅). 즉 flush 시점에 계정 세션이면(getAuthToken() 존재) entry.runToken을 그대로 재사용하는
+ * 경우(tokenFresh)에 한해 현재 게스트 세션 토큰을 guestToken으로 함께 보낸다 — 그 runToken이
+ * 로그인 전(게스트 시절) 발급됐을 수 있어서다. 반대로 토큰을 새로 발급받는 경우(!tokenFresh)는
+ * startRun이 지금 활성 bearer(계정)로 발급하므로 pid가 이미 일치해 브리지가 불필요하다.
  */
 export async function flushPendingQueue(): Promise<FlushResult> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -90,6 +99,7 @@ export async function flushPendingQueue(): Promise<FlushResult> {
         token !== undefined &&
         e.runTokenIssuedAt !== undefined &&
         Date.now() - e.runTokenIssuedAt < RUN_TOKEN_TTL_MS - TOKEN_SAFETY_MARGIN_MS;
+      const guestToken = tokenFresh && getAuthToken() ? (getSessionToken() ?? undefined) : undefined;
 
       if (!tokenFresh) {
         const started = await startRun({
@@ -108,6 +118,7 @@ export async function flushPendingQueue(): Promise<FlushResult> {
         clientScore: e.clientScore,
         inputDigest: e.inputDigest,
         nickname: e.nickname,
+        guestToken,
       });
       await removePending(e.id);
       flushed++;

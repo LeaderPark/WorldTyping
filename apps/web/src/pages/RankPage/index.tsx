@@ -1,15 +1,20 @@
 // spec: docs/01 §10.2(S8 리더보드 와이어프레임), docs/03 §4.1(lazy route)·§4.3(leaderboard 스토어),
-//       docs/06 §1.1(board_key 4차원)·§1.4(조회 계약 — keyset·rank-of-me), docs/00 §11-D9,
-//       WT-M2-05(스텁) → WT-M3-06(실 배선)
+//       docs/06 §1.1(board_key 4차원)·§1.4(조회 계약 — keyset·rank-of-me), docs/00 §11-D9·D68,
+//       WT-M2-05(스텁) → WT-M3-06(실 배선) → WT-AUTH-04(랭킹 게이팅)
 //
 // [일간|주간|전체]×[모드]×[KO|EN]×[플랫폼] 필터 + keyset 커서 무한 스크롤 + 내 행 고정 표시(§8
 // wireframe "841 나 (GUEST_4821) … ← 고정 표시"). 지역(scope) 탭(docs/03 §1.1 "Global/내 지역
 // 두 탭")은 WT-M5-03에서 활성화(docs/00 §11-D44) — GET /session/me의 geo(§11-D44, users.geo)로
 // 판정한다. geo==="XX"(미확보/차단국가)면 "내 지역" 탭은 여전히 비활성(클라 측 IP/타임존 추정은
 // D44가 명시적으로 금지 — 서버가 준 값만 쓴다).
+//
+// [WT-AUTH-04] 랭킹 등재는 로그인 계정 전용(§11-D68-①) — 비로그인은 "내 순위" 고정 표시 자리에
+// 로그인 CTA(rank-login-cta)를 대신 그린다(비로그인 제출은 항상 practice 강등이라 onBoard일 수
+// 없다).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Continent, DifficultyTier } from '@wt/shared';
+import { selectIsLoggedIn, useAuthStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settings';
 import {
   buildBoardKey,
@@ -44,6 +49,10 @@ export function RankPage() {
   const guestId = useSettingsStore((s) => s.guestId);
   const settingsLang = useSettingsStore((s) => s.lang);
   const settingsPlatform = useSettingsStore((s) => s.platform);
+  // [WT-AUTH-04] 랭킹 등재는 로그인 계정만 대상(§11-D68-①) — 비로그인은 "내 순위"에 등재된 값이
+  // 있을 수 없으므로(guest 제출은 항상 practice 강등) 그 자리에 로그인 CTA를 대신 그린다.
+  const isLoggedIn = useAuthStore(selectIsLoggedIn);
+  const openLogin = useAuthStore((s) => s.openLogin);
 
   const modeOptions = useMemo<ModeOption[]>(
     () => [
@@ -289,11 +298,25 @@ export function RankPage() {
         </table>
       )}
 
-      {/* 내 행이 현재 페이지 밖(상위 50 밖)이면 순위 요약만 고정 표시(§8 wireframe "← 고정 표시"). */}
-      {!myRowInPage && me?.onBoard && me.rank !== null && (
-        <p className="wt-rank-page__my-row" data-testid="rank-my-row-pinned">
-          {t('rank.me', { nickname })} — {t('result.rank.value', { rank: me.rank, percent: me.percentile !== null ? Math.round(me.percentile * 100) : 0 })}
-        </p>
+      {/* [WT-AUTH-04] 비로그인은 등재된 "내 순위"가 있을 수 없다 — 로그인 CTA로 대체(§11-D68-①). */}
+      {!isLoggedIn ? (
+        <button
+          type="button"
+          data-testid="rank-login-cta"
+          className="wt-pill"
+          onClick={() => openLogin('ranking')}
+        >
+          {t('rank.loginCta')}
+        </button>
+      ) : (
+        // 내 행이 현재 페이지 밖(상위 50 밖)이면 순위 요약만 고정 표시(§8 wireframe "← 고정 표시").
+        !myRowInPage &&
+        me?.onBoard &&
+        me.rank !== null && (
+          <p className="wt-rank-page__my-row" data-testid="rank-my-row-pinned">
+            {t('rank.me', { nickname })} — {t('result.rank.value', { rank: me.rank, percent: me.percentile !== null ? Math.round(me.percentile * 100) : 0 })}
+          </p>
+        )
       )}
 
       {nextCursor && (

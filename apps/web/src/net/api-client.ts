@@ -317,6 +317,11 @@ export interface RunSubmitReq {
   clientScore: number;
   inputDigest: InputDigestSubmit;
   nickname?: string;
+  /** [WT-AUTH-04] 게스트→계정 브리지(§11-D68-④). 계정 세션으로 제출하는데 runToken이 로그인 전
+   *  (게스트 시절) 발급된 것이면, 그 게스트 세션 토큰(wt:sessiontoken 원문)을 실어 두 신원 동시
+   *  보유를 증명한다. runToken이 이미 계정 pid로 발급된 경우엔 서버가 무시하므로 항상 첨부해도
+   *  안전(04 §6.2-①, workers/api/src/routes/runs.ts의 verifyPid 분기 참조). */
+  guestToken?: string;
 }
 
 export type RunVerdict = 'valid' | 'practice' | 'flagged' | 'rejected';

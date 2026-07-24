@@ -1,14 +1,22 @@
 // spec: docs/06 §3.1(runToken 생명주기)·§3.2(RunSubmission)·§3.4(inputDigest), docs/00 §11-D5·D21
-//       (티어/데일리는 서버 salt 필수 — 클라 계산 금지), docs/07 WT-M3-06 구현 세부 지시 1·4
+//       (티어/데일리는 서버 salt 필수 — 클라 계산 금지)·D68(계정 로그인 하이브리드, 랭킹=로그인
+//       전용), docs/07 WT-M3-06 구현 세부 지시 1·4, WT-AUTH-04(랭킹 게이팅 프론트)
 //
 // 판 시작(useRunStart)과 결과 제출(useRunSubmit) 배선을 모은 net 계층 훅. GamePage가 소유하는
 // useGameSession/ResultView 양쪽에서 공유한다(단일 원천 — 시작/제출 로직을 페이지 컴포넌트에
 // 중복 구현하지 않는다).
-import { useEffect, useState } from 'react';
+//
+// [WT-AUTH-04 랭킹 게이팅] useRunSubmit은 이제 로그인 여부(useAuthStore)를 직접 구독한다 — net
+// 계층이지만 이 파일은 애초에 React 훅(useState/useEffect)이라 순수 유틸(api-client.ts의 "net은
+// 스토어를 직접 import하지 않는다" 원칙)과는 다른 층이다(AuthChip.tsx 등 다른 훅 파일도 스토어를
+// 직접 구독하는 것과 동일 전례). 비로그인은 제출을 시도하지 않고 idle로 남아 ResultView가 CTA를
+// 그린다 — 로그인 성공(스토어 전이) 또는 이미 로그인 상태인 마운트는 즉시 제출을 시도한다.
+import { useEffect, useRef, useState } from 'react';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
 import type { Continent, CountryId, DifficultyTier, GameMode } from '@wt/shared';
 import {
   ensureSession,
+  getSessionToken,
   startRun,
   submitRun,
   type InputDigestSubmit,
@@ -17,6 +25,7 @@ import {
   type RunVerdict,
 } from './api-client';
 import { enqueuePending } from './pending-queue';
+import { selectIsLoggedIn, useAuthStore } from '../stores/auth';
 
 // ───────────────────────── useRunStart ─────────────────────────
 
@@ -168,36 +177,56 @@ export interface UseRunSubmitOpts {
   nickname: string;
 }
 
+export interface UseRunSubmitResult extends RunSubmitState {
+  /** 로그인 게이트를 수동으로 재시도(테스트/방어적 재호출용). 훅 스스로 로그인 전이(isLoggedIn
+   *  false→true)를 감지해 자동 호출하므로 정상 플로우에서 ResultView가 직접 부를 필요는 없다 —
+   *  로그인 CTA는 openLogin()만 트리거한다. 이미 시도했으면(status!=='idle'이 될 시점 이후)
+   *  no-op(중복 제출 방지, 아래 startedRef). */
+  submitNow(): void;
+}
+
 /**
- * 결과 제출 배선(ResultView 마운트 1회). practice/체크포인트 이어하기 판은 네트워크를 타지
- * 않고 즉시 practice로 표시한다(§5.1 — 애초에 랭킹 제출 대상이 아니다). runToken이 없으면
- * (오프라인 출발 — 대륙/세계일주만 도달, 티어/데일리는 애초에 시작 차단) 큐에 적재한다.
- * submitRun 자체가 실패(네트워크)해도 큐에 적재해 온라인 복귀 시 flush를 노린다.
+ * 결과 제출 배선(ResultView 마운트 수명 전체). practice/체크포인트 이어하기 판은 로그인 여부와
+ * 무관하게 네트워크를 타지 않고 즉시 practice로 표시한다(§5.1 — 애초에 랭킹 제출 대상이 아니다).
+ *
+ * [WT-AUTH-04 랭킹 게이팅, §11-D68-①] 그 외(실제 랭킹 대상) 결과는 로그인 상태에서만 제출을
+ * 시도한다 — 비로그인은 idle로 남아 ResultView가 로그인 CTA를 그린다. 이미 로그인 상태로
+ * 마운트됐거나, CTA를 거쳐 로그인에 성공하면(useAuthStore 전이) 그 즉시 1회 제출을 시도한다.
+ * 제출 시점엔 항상 계정 세션이므로 guestToken 브리지(§11-D68-④)를 함께 싣는다 — runToken이
+ * 로그인 전(게스트 시절) 발급됐다면 서버가 이 값으로 두 신원 동시 보유를 확인해 계정 원장에
+ * 등재한다(이미 계정 pid로 시작한 판이면 서버가 무시하므로 항상 첨부해도 무해).
+ *
+ * runToken이 없으면(오프라인 출발 — 대륙/세계일주만 도달, 티어/데일리는 애초에 시작 차단) 큐에
+ * 적재한다. submitRun 자체가 실패(네트워크)해도 큐에 적재해 온라인 복귀 시 flush를 노린다.
  */
-export function useRunSubmit(opts: UseRunSubmitOpts): RunSubmitState {
+export function useRunSubmit(opts: UseRunSubmitOpts): UseRunSubmitResult {
   const [state, setState] = useState<RunSubmitState>(initialRunSubmitState);
+  const isLoggedIn = useAuthStore(selectIsLoggedIn);
+  // 실제 제출 시도(네트워크 호출 또는 큐 적재)가 이미 있었는지 — 로그인 전이로 effect가 재실행돼도
+  // 중복 제출하지 않게 막는 가드(리액트 18 StrictMode 이중 호출에도 동일하게 방어, features/typing/
+  // useTypingEngine.ts의 ref 가드와 동일 패턴 — 같은 컴포넌트 인스턴스에서 ref는 불변 유지된다).
+  const startedRef = useRef(false);
+  const unmountedRef = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  useEffect(
+    () => () => {
+      unmountedRef.current = true;
+    },
+    [],
+  );
 
-    if (opts.result.practice || opts.result.viaCheckpoint) {
-      setState({
-        status: 'submitted',
-        verdict: 'practice',
-        rank: null,
-        total: null,
-        isPersonalBest: null,
-        newUnlocks: [],
-        shareText: null,
-      });
-      return;
-    }
+  const submitNow = (): void => {
+    if (startedRef.current) return;
+    startedRef.current = true;
 
     const submission = opts.engine.buildSubmission();
     const body = buildResultBody(opts.result, submission.perCountry, opts.finalLives);
     const inputDigest = JSON.parse(submission.inputDigest) as InputDigestSubmit;
     const clientScore = opts.result.score.finalScore;
     const nickname = opts.nickname || undefined;
+    // 이 함수는 아래 effect의 게이트(!isLoggedIn → 조기 return)를 통과해야만 호출되므로 도달
+    // 시점엔 항상 계정 세션이다 — guestToken 브리지 값을 항상 실어 보낸다(위 함수 주석 참조).
+    const guestToken = getSessionToken() ?? undefined;
 
     const queueOffline = (runToken?: string, runTokenIssuedAt?: number): void => {
       setState({
@@ -235,9 +264,9 @@ export function useRunSubmit(opts: UseRunSubmitOpts): RunSubmitState {
     }
 
     setState((s) => ({ ...s, status: 'submitting' }));
-    submitRun({ runToken: opts.runToken, result: body, clientScore, inputDigest, nickname })
+    submitRun({ runToken: opts.runToken, result: body, clientScore, inputDigest, nickname, guestToken })
       .then((res) => {
-        if (cancelled) return;
+        if (unmountedRef.current) return;
         setState({
           status: 'submitted',
           verdict: res.verdict,
@@ -249,17 +278,37 @@ export function useRunSubmit(opts: UseRunSubmitOpts): RunSubmitState {
         });
       })
       .catch((err: unknown) => {
-        if (cancelled) return;
+        if (unmountedRef.current) return;
         console.warn('[run-session] runs/submit 실패 — 큐에 적재:', err);
         queueOffline(opts.runToken ?? undefined, opts.runTokenIssuedAt ?? undefined);
       });
+  };
 
-    return () => {
-      cancelled = true;
-    };
-    // result/engine/runToken 등은 ResultView 마운트 수명(phase==='finished') 동안 불변 — 마운트
-    // 1회만 실행한다(ResultView.tsx의 recordRun 이펙트와 동일 전제·동일 패턴).
-  }, []);
+  useEffect(() => {
+    if (startedRef.current) return;
 
-  return state;
+    if (opts.result.practice || opts.result.viaCheckpoint) {
+      startedRef.current = true;
+      setState({
+        status: 'submitted',
+        verdict: 'practice',
+        rank: null,
+        total: null,
+        isPersonalBest: null,
+        newUnlocks: [],
+        shareText: null,
+      });
+      return;
+    }
+
+    // 랭킹 게이팅(§11-D68-①) — 비로그인은 idle 유지(ResultView가 로그인 CTA를 그린다). 로그인
+    // 전이(또는 이미 로그인된 마운트)만 제출을 트리거한다. result/engine/runToken 등은 ResultView
+    // 마운트 수명 동안 불변(기존 전제 유지)이라 isLoggedIn 외엔 재실행 트리거가 필요 없다.
+    if (!isLoggedIn) return;
+    submitNow();
+    // eslint(react-hooks/exhaustive-deps)는 이 레포에 미설정 — opts 전체를 매 렌더 새 객체로
+    // 만드는 호출부(ResultView) 특성상 의도적으로 isLoggedIn만 의존성으로 둔다.
+  }, [isLoggedIn]);
+
+  return { ...state, submitNow };
 }

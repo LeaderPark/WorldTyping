@@ -29,6 +29,8 @@ const ROUTE_META: Array<{ test: (path: string) => boolean; entry: RouteMetaEntry
   { test: (p) => p.startsWith('/multi/'), entry: { titleKey: 'room.title', descKey: 'seo.multi.description' } },
   { test: (p) => p === '/passport', entry: { titleKey: 'passport.title', descKey: 'seo.passport.description' } },
   { test: (p) => p === '/privacy', entry: { titleKey: 'settings.privacy', descKey: 'seo.privacy.description' } },
+  { test: (p) => p === '/terms', entry: { titleKey: 'legal.terms.title', descKey: 'seo.terms.description' } },
+  { test: (p) => p === '/support', entry: { titleKey: 'legal.support.title', descKey: 'seo.support.description' } },
   { test: (p) => p === '/credits', entry: { titleKey: 'credits.title', descKey: 'seo.credits.description' } },
 ];
 

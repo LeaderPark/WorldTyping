@@ -367,6 +367,8 @@
   "seo.passport.description": "See your completed routes and achievements in your passport.",
   "seo.multi.description": "Race other players in real time.",
   "seo.privacy.description": "TypeTrip's privacy policy.",
+  "seo.terms.description": "TypeTrip's terms of service.",
+  "seo.support.description": "Frequently asked questions and how to contact us about TypeTrip.",
   "seo.credits.description": "Data sources and license notices used by TypeTrip.",
 
   "credits.title": "Credits & Licenses",

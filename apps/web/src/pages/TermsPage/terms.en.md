@@ -1,6 +1,6 @@
 # Terms of Service
 
-These Terms of Service govern the use of TypeTrip (the "Service"), operated by LeaderPark, an
+These Terms of Service govern the use of TypeTrip (the "Service"), operated by 박진우, an
 independent developer (the "Operator"). By using the Service, you agree to these Terms.
 
 ## 1. Purpose
@@ -77,7 +77,7 @@ law.
 
 ## Addendum
 
-- Operator: LeaderPark (independent developer)
+- Operator: 박진우
 - Contact: dkdleldjqkr976@gmail.com
 - Effective date: 2026-07-24 (v1.0)
 

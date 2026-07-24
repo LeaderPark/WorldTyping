@@ -305,7 +305,6 @@
   "settings.keySound.mechanical": "Mechanical",
   "settings.keySound.membrane": "Membrane",
   "settings.nickname.change": "Change nickname",
-  "settings.data.reset": "Reset and delete my data",
   "settings.privacy": "Privacy policy",
   "settings.credits": "Credits",
 
@@ -328,14 +327,6 @@
   "settings.theme.label": "Theme",
   "settings.theme.dark": "Dark",
   "settings.theme.light": "Light",
-
-  "settings.data.export": "Download my data",
-  "settings.data.error": "Something went wrong. Please try again in a moment.",
-  "settings.resetConfirm.title": "Are you sure you want to delete your data?",
-  "settings.resetConfirm.body": "Your nickname will be anonymized and your leaderboard records deleted. This cannot be undone.",
-  "settings.resetConfirm.confirm": "Confirm deletion",
-  "settings.resetConfirm.cancel": "Cancel",
-  "settings.resetConfirm.done": "Deletion complete. It may take up to 10 minutes to disappear from leaderboards.",
 
   "privacy.credits.heading": "Data Sources and License Notices",
   "privacy.credits.worldCountries": "Country data: world-countries — ODbL 1.0",
@@ -412,7 +403,5 @@
   "rank.loginCta": "Log in to rank your records",
 
   "legal.terms.title": "Terms of Service",
-  "legal.support.title": "Support",
-
-  "privacy.myData.heading": "My Data"
+  "legal.support.title": "Support"
 }

@@ -55,9 +55,9 @@ describe('SiteFooter (§11-D72)', () => {
     expect(screen.getByTestId('legal-modal')).toBeInTheDocument();
     expect(screen.getByTestId('privacy-body-ko')).toBeInTheDocument();
     expect(screen.queryByTestId('privacy-body-en')).not.toBeInTheDocument();
-    // privacy 모달은 크레딧 고지 + 데이터 열람/삭제 셀프서비스를 포함(§11-D72·D68-⑥).
+    // privacy 모달은 크레딧 고지를 포함하되 내 데이터 셀프서비스 UI는 없다(§11-D72·D76).
     expect(screen.getByTestId('privacy-credits')).toBeInTheDocument();
-    expect(screen.getByTestId('privacy-my-data')).toBeInTheDocument();
+    expect(screen.queryByTestId('privacy-my-data')).not.toBeInTheDocument();
   });
 
   it('닫기 버튼 클릭 → 모달 언마운트 + 포커스가 트리거(footer 버튼)로 복귀', async () => {

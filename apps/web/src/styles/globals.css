@@ -1816,6 +1816,10 @@
   flex-direction: column;
   gap: 1.5rem;
   padding: 1.5rem;
+  /* [Tweak J 핫픽스] Tweak C의 Outlet flex-col 래퍼에서 margin:0 auto(교차축 auto 마진)가 flex
+     stretch를 무력화해 이 컨테이너가 콘텐츠 폭으로 축소되던 회귀 수정 — 폭을 채워 아래 max-width +
+     margin:auto 중앙정렬과 __list 그리드 다중열이 복원된다. (F 배치에서 .wt-page로 정식 대체 예정) */
+  width: 100%;
 }
 /* ── WT-DC-03: 디자인 정본(L128 S3·L159 S4) 컨테이너 상한 폭 + 중앙 정렬. 기존 padding(위
    1.5rem)이 좌우 여백을 이미 보장하므로 이 폭 미만 뷰포트에서는 max-width가 아무 영향이

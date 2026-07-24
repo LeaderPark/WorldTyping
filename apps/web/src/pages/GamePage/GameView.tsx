@@ -94,8 +94,6 @@ export function GameView({
 }: GameViewProps) {
   const { t } = useTranslation();
   const current = countries[currentIndex];
-  const next = countries[currentIndex + 1];
-  const nextName = next ? (lang === 'ko' ? next.nameKo : next.nameEn) : null;
   // 국가당 제한시간이 존재하는 모드만 게이지를 보여준다(GDD §10.2 "서바이벌만" + 멀티 레이스
   // 10초 고정, docs/01 §7.1 매트릭스).
   const showGauge = mode === 'tier' || mode === 'daily' || mode === 'race';
@@ -256,7 +254,6 @@ export function GameView({
         continent={currentContinent}
         countryIds={countryIds}
         currentIndex={currentIndex}
-        nextCountryName={nextName}
         lives={lives}
         ackIndex={race?.ackIndex ?? null}
         ghostIndex={race ? null : ghostIndex}

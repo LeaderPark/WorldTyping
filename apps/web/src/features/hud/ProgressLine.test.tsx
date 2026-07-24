@@ -15,7 +15,7 @@ afterEach(() => cleanup());
 function renderLine(props: Partial<React.ComponentProps<typeof ProgressLine>> = {}) {
   return render(
     <AppProviders>
-      <ProgressLine countryIds={IDS} currentIndex={2} nextCountryName="브라질" {...props} />
+      <ProgressLine countryIds={IDS} currentIndex={2} {...props} />
     </AppProviders>,
   );
 }
@@ -28,7 +28,6 @@ describe('ProgressLine (WT-UI-03)', () => {
     expect(bar.getAttribute('aria-valuenow')).toBe('3');
     expect(bar.getAttribute('aria-valuemax')).toBe(String(IDS.length));
     expect(screen.getByTestId('progress-count').textContent).toBe(`3 / ${IDS.length}`);
-    expect(screen.getByTestId('progress-next').textContent).toContain('브라질');
   });
 
   it('국가 수만큼 도트 세그먼트를 그리고 done/current 클래스를 매긴다', () => {

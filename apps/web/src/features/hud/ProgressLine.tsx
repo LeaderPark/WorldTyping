@@ -18,8 +18,6 @@ import type { CountryId } from '@wt/shared';
 export interface ProgressLineProps {
   countryIds: readonly CountryId[];
   currentIndex: number;
-  /** countries[currentIndex+1]의 표시명(lang에 맞춰 호출부가 미리 골라 넘긴다). null이면 마지막 국가. */
-  nextCountryName: string | null;
   /** 멀티 전용(§6.3): 서버가 마지막으로 확인(country-accepted)한 인덱스. null/undefined면 미표시. */
   ackIndex?: number | null;
   /** 싱글 전용(§9.3, WT-M5-04): 자기 최고 기록 고스트가 현재 위치한 인덱스. null/undefined면
@@ -30,7 +28,6 @@ export interface ProgressLineProps {
 export function ProgressLine({
   countryIds,
   currentIndex,
-  nextCountryName,
   ackIndex = null,
   ghostIndex = null,
 }: ProgressLineProps) {
@@ -73,11 +70,6 @@ export function ProgressLine({
       <span className="wt-progress-line__count" data-testid="progress-count">
         {t('game.progress', { current: Math.min(currentIndex + 1, total), total })}
       </span>
-      {nextCountryName != null && (
-        <span className="wt-progress-line__next" data-testid="progress-next">
-          {t('hud.next', { country: nextCountryName })}
-        </span>
-      )}
       <span className="wt-progress-line__skip" data-testid="progress-skip-hint">
         {t('hud.skipHint')}
       </span>

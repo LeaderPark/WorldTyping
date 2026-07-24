@@ -25,7 +25,6 @@ export interface GameAppBarProps {
   continent: Continent | null;
   countryIds: readonly CountryId[];
   currentIndex: number;
-  nextCountryName: string | null;
   /** null이면 라이프 없는 모드(대륙/레이스) — 하트 숨김. */
   lives: number | null;
   ackIndex?: number | null;
@@ -41,7 +40,6 @@ export function GameAppBar({
   continent,
   countryIds,
   currentIndex,
-  nextCountryName,
   lives,
   ackIndex = null,
   ghostIndex = null,
@@ -84,7 +82,6 @@ export function GameAppBar({
         <ProgressLine
           countryIds={countryIds}
           currentIndex={currentIndex}
-          nextCountryName={nextCountryName}
           ackIndex={ackIndex}
           ghostIndex={ghostIndex}
         />

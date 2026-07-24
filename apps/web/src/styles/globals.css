@@ -625,8 +625,10 @@
   font-size: 1.0625rem;
   box-shadow: var(--shadow-card);
 }
-/* 보조행(디자인 L314: 13px/800/ls.03em 대륙잉크). */
-.wt-strip__secondary { font-size: 0.8125rem; font-weight: 800; letter-spacing: 0.03em; color: var(--wt-strip-ink-strong); white-space: nowrap; }
+/* 보조행(디자인 L314: 13px/800/ls.03em 대륙잉크). 색은 대비 보정 대륙 텍스트 토큰(WT-AUTH-08 a11y —
+   구 --wt-strip-ink-strong 균일 혼합은 골드/시안이 흰 캡슐서 4.5:1 미달). BoardingStrip이 주입하는
+   --wt-strip-continent-text(=var(--continent-*-text), D62 테마별 튜닝)를 쓰고, 부재 시 --wt-strip-ink 폴백. */
+.wt-strip__secondary { font-size: 0.8125rem; font-weight: 800; letter-spacing: 0.03em; color: var(--wt-strip-continent-text, var(--wt-strip-ink)); white-space: nowrap; }
 /* 콤보 배지: 캡슐 하단 중앙 절대 위치(디자인 L317). left/right:0 + text-align 중앙정렬로 배치해
    bounce(scale transform)와 충돌 없음. 색은 grade-a 대비 보정(라이트) / 원색(다크)(D50). */
 .wt-strip__capsule .wt-combo-badge {
@@ -3738,6 +3740,7 @@
 }
 .wt-footer__copyright {
   font-size: 0.75rem;
+  /* opacity 제거(WT-AUTH-08 a11y): opacity 0.8이 유효 전경을 흐려 라이트에서 3.62:1로 미달했다.
+     --text-muted(#5e645e ~5.6:1) 단독으로 이미 충분히 muted하면서 WCAG 2 AA(≥4.5:1)를 만족. */
   color: var(--text-muted);
-  opacity: 0.8;
 }

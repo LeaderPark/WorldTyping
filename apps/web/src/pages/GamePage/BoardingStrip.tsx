@@ -119,7 +119,16 @@ export function BoardingStrip({
     <div
       className="wt-strip"
       data-testid="boarding-strip"
-      style={{ '--wt-strip-continent': `var(--continent-${current.continent})` } as CSSProperties}
+      style={
+        {
+          '--wt-strip-continent': `var(--continent-${current.continent})`,
+          // WT-AUTH-08 a11y: 흰 캡슐(--surface) 위 보조행 잉크는 대비 보정된 대륙 텍스트 토큰을 쓴다.
+          // raw 대륙색+black 균일 혼합(구 --wt-strip-ink-strong)은 골드/시안 계열이 흰 배경 4.5:1 미달
+          // (e10 axe: south-america 2.83:1). --continent-*-text는 D62에서 대륙별·테마별로 --surface
+          // 기준 ≥4.5:1로 튜닝돼 라이트/다크 양쪽 자동 통과한다.
+          '--wt-strip-continent-text': `var(--continent-${current.continent}-text)`,
+        } as CSSProperties
+      }
     >
       <div className="wt-strip__bar">
         <span className="wt-strip__arrow" aria-hidden="true">

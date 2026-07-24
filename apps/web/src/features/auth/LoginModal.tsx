@@ -121,7 +121,7 @@ export function LoginModal() {
               <div ref={buttonHostRef} data-testid="login-gis-host" />
               {gisPhase === 'loading' && <p className="text-sm text-text-muted">{t('auth.modal.title')}…</p>}
               {gisPhase === 'error' && (
-                <p role="alert" data-testid="login-error" className="text-sm text-red-600 dark:text-red-400">
+                <p role="alert" data-testid="login-error" className="text-sm text-red-700 dark:text-red-400">
                   {t('auth.error')}
                 </p>
               )}
@@ -137,7 +137,7 @@ export function LoginModal() {
               {t('auth.devLogin')}
             </button>
           ) : (
-            <p role="alert" data-testid="login-error" className="text-sm text-red-600 dark:text-red-400">
+            <p role="alert" data-testid="login-error" className="text-sm text-red-700 dark:text-red-400">
               {t('auth.error')}
             </p>
           )}

@@ -152,7 +152,7 @@ function MyDataSection() {
               <button
                 type="button"
                 data-testid="settings-data-reset-confirm"
-                className="rounded border border-red-500 px-3 py-1 text-red-600 dark:text-red-400"
+                className="rounded border border-red-500 px-3 py-1 text-red-700 dark:text-red-400"
                 onClick={() => void handleResetConfirm()}
               >
                 {t('settings.resetConfirm.confirm')}
@@ -175,7 +175,7 @@ function MyDataSection() {
           <button
             type="button"
             data-testid="settings-data-reset"
-            className="rounded border px-3 py-1 text-left text-red-600 dark:text-red-400"
+            className="rounded border px-3 py-1 text-left text-red-700 dark:text-red-400"
             onClick={() => setStatus('confirmingReset')}
           >
             {t('settings.data.reset')}
@@ -183,7 +183,7 @@ function MyDataSection() {
         )}
 
         {status === 'error' && (
-          <p role="alert" data-testid="settings-data-error" className="text-sm text-red-600 dark:text-red-400">
+          <p role="alert" data-testid="settings-data-error" className="text-sm text-red-700 dark:text-red-400">
             {t('settings.data.error')}
           </p>
         )}

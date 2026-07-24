@@ -225,8 +225,8 @@ export class PromptRenderer {
       const state = this.stateFor(e, matched, hasError);
       if (typedCount < this.contentSlots.length) {
         this.setGlyph(this.contentSlots[typedCount]!, ch, state);
-      } else if (overflow.length < TAIL_MAX_UNITS) {
-        overflow.push(ch); // 슬롯 초과분 → tail(최대 4유닛, error색)
+      } else {
+        overflow.push(ch); // 슬롯 초과분 → tail(아래에서 마지막 TAIL_MAX_UNITS만 표시, error색)
       }
       typedCount++;
     }
@@ -248,7 +248,12 @@ export class PromptRenderer {
       this.fillJamo(s, m, x);
     }
 
-    this.setTail(overflow.join(''));
+    // 슬롯 초과분 tail = 앞 4유닛 고정이 아니라 **마지막 TAIL_MAX_UNITS 유닛**을 보이는 슬라이딩
+    // 윈도우(§11-D83). 앞-4 고정이면 국가명 유닛+4를 넘긴 뒤 타이핑·백스페이스에도 tail 텍스트가
+    // 불변이라 "입력이 멈춘 것처럼" 보였다(표시 동결 — 값·이벤트·판정은 정상). 마지막-4로 바꾸면
+    // 매 키/백스페이스마다 tail이 최신 입력으로 갱신돼 시각 피드백이 회복된다. 길이는 여전히
+    // ≤ TAIL_MAX_UNITS라 고정폭 캡슐(D77)·nowrap·리플로우 0 계약 불변.
+    this.setTail(overflow.slice(-TAIL_MAX_UNITS).join(''));
 
     // 커서: 첫 빈 비구분자 슬롯(= typed 유닛 수 위치). 오버플로 중엔 tail에.
     if (typedCount < this.contentSlots.length) {

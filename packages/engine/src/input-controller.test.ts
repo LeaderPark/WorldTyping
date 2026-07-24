@@ -52,6 +52,12 @@ const CHAD = makeCountry({ id: 'TD', nameEn: 'Chad', acceptedInputsEn: ['chad'] 
 // D70 Gboard 접두 스트립 테스트용: 옛 값 '가나'가 접두로 재삽입된 뒤 확장분('다')이 이 타깃의
 // 접두(다도=ㄷㅏㄷㅗ)로 평가되는지 확인하기 위한 합성 국가('다'는 ㄷㅏ, '다도' 접두).
 const DADO = makeCountry({ id: 'DD', nameKo: '다도', acceptedInputsKo: ['다도'] });
+// D84(버그 W) 부분 꼬리 스트립 테스트용. INDIA(인도=ㅇㅣㄴㄷㅗ)를 EXACT로 확정하면 staleEcho의
+// 끝 음절이 '도'(ㄷㅗ, ≥2자모)라, 다음 국가 첫 타와 병합된 '도대'류 스냅샷을 재현할 수 있다.
+// DOMINICA(도미니카)는 over-strip 가드용 — 전 국가 끝 음절 '도'로 시작하는 genuine 병합 입력이
+// 전체 판정 PREFIX면 스트립되지 않고 보존됨을 잠근다(의미 중재).
+const INDIA = makeCountry({ id: 'IN', nameKo: '인도', acceptedInputsKo: ['인도'] });
+const DOMINICA = makeCountry({ id: 'DM', nameKo: '도미니카', acceptedInputsKo: ['도미니카'] });
 
 type EvtOf<T extends TypingEvent['type']> = Extract<TypingEvent, { type: T }>;
 
@@ -86,6 +92,17 @@ function reachGhanaExact(h: Harness): void {
   h.type('가', true);
   h.type('간', true);
   h.type('가나', true); // EXACT → 조합 중 flushIme(staleEcho 세팅)
+}
+
+/** INDIA(인도)를 조합 중 EXACT로 확정해 staleEcho(='ㅇㅣㄴㄷㅗ', 끝 음절 '도')를 세팅한다(버그 W). */
+function reachIndiaExact(h: Harness): void {
+  h.ctrl.setCountry(INDIA);
+  h.compositionStart();
+  h.type('ㅇ', true);
+  h.type('이', true);
+  h.type('인', true);
+  h.type('인ㄷ', true);
+  h.type('인도', true); // EXACT → 조합 중 flushIme, staleEcho='ㅇㅣㄴㄷㅗ' / staleRaw='인도'
 }
 
 let nowMs = 0;
@@ -473,13 +490,27 @@ describe('TypingInputController', () => {
       expect(prog.at(-1)?.detail.state).toBe('PREFIX'); // ㅎ은 대한민국/한국 접두
     });
 
-    // ③ 48ms 초과 비삼킴: 옛 꼬리와 동일한 ≥2자모라도 윈도우를 벗어나면 genuine으로 평가한다.
-    it('stale tail after the 48ms window is NOT swallowed (treated as genuine → MISS)', () => {
+    // ③a (D84 개정): 윈도우가 48→150ms로 확대됐다 — 49ms에 도착한 옛-꼬리 전량 재삽입은 이제
+    //   삼켜진다(기존 48ms 기대 반전). 시간 fail-open의 경계가 150ms로 이동했을 뿐 불변식은 유지.
+    it('stale tail at 49ms (inside the widened 150ms window) IS swallowed (D84)', () => {
       const h = harness('ko');
       h.setNow(0);
       reachGhanaExact(h); // flushAt=0
       const before = contentCount(h.events);
-      h.setNow(49); // 윈도우 밖
+      h.setNow(49); // 구 윈도우(48ms) 밖·신 윈도우(150ms) 안
+      h.ctrl.setCountry(KOREA);
+      h.type('가나', true); // ≥2자모 + stale 꼬리 일치 + 윈도우 안 → 삼킴
+      expect(contentCount(h.events)).toBe(before); // 무이벤트
+      expect(h.input.value).toBe(''); // 재플러시로 비워짐
+    });
+
+    // ③b: 150ms 초과는 genuine — 시간 fail-open 불변식은 경계만 이동해 그대로 유지된다.
+    it('stale tail after the 150ms window is NOT swallowed (treated as genuine → MISS)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachGhanaExact(h); // flushAt=0
+      const before = contentCount(h.events);
+      h.setNow(151); // 신 윈도우 밖
       h.ctrl.setCountry(KOREA);
       h.type('가나', true); // '가나'는 대한민국/한국 접두 아님 → genuine MISS
       expect(contentCount(h.events)).toBe(before + 1);
@@ -577,6 +608,191 @@ describe('TypingInputController', () => {
       await Promise.resolve();
       expect(eventsOf(h.events, 'exact')).toHaveLength(1);
       expect(h.events.at(-1)?.type).toBe('exact'); // 유령 재평가 없음
+    });
+  });
+
+  // ── docs/00 §11-D84(버그 W): flush 후 끝음절 접미 재삽입이 사용자 첫 타와 병합된 스냅샷의
+  //    부분 꼬리 스트립(의미 중재) + 재삽입 윈도우 150ms 확대 ─────────────────────────────────
+  describe('D84 stale-tail merge strip / widened window (Bug W)', () => {
+    // W-P1 (PRIMARY 승격·반전): 재삽입 '도' + genuine '대'가 '도대'로 병합된 스냅샷. staleRaw='인도'의
+    //   proper 접미 '도'가 v 접두이고, 전체('도대')=MISS·잔여('대')=PREFIX(의미 중재 통과) → '도'만
+    //   basePrefix로 가상 스트립하고 '대'만 평가. 이어 계속 타이핑하면 '대한민국' EXACT까지 이어진다.
+    it('W-P1: merged "도대" strips the reinserted "도", evaluates only "대" (PREFIX), then reaches EXACT', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // staleEcho='ㅇㅣㄴㄷㅗ', staleRaw='인도', flushAt=0
+      const before = contentCount(h.events);
+      h.setNow(20); // 재삽입 윈도우 안
+      h.ctrl.setCountry(KOREA); // value=''→no flush, staleEcho 이월, reinsertFlushes=0
+      h.compositionStart();
+      h.type('도대', true); // 병합: 재삽입 '도' + genuine '대'
+      expect(contentCount(h.events)).toBe(before + 1);
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('대'); // 잔여만 평가
+      expect(h.ctrl.getValue()).toBe('대'); // 가상 접두 '도' 제외
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+      // 스트립된 접두를 유지한 채 계속 타이핑 → basePrefix 분기가 연장분만 넘긴다 → EXACT.
+      h.type('도대한', true);
+      h.type('도대한민', true);
+      h.type('도대한민국', true); // EXACT('대한민국')
+      const exacts = eventsOf(h.events, 'exact');
+      expect(exacts.at(-1)?.detail.bestTarget.display).toBe('대한민국');
+      expect(h.ctrl.getValue()).toBe(''); // EXACT flush로 basePrefix·버퍼 리셋
+    });
+
+    // W-P2 (SECONDARY-병합): 60ms(구 48ms 윈도우 밖·신 150ms 윈도우 안)에 도착한 병합 스냅샷도
+    //   동일하게 스트립된다 — 윈도우 확대가 late 병합 재삽입을 닫음을 증명.
+    it('W-P2: merged "도대" at 60ms (inside widened window) strips the same as W-P1', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(60);
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('도대', true);
+      expect(contentCount(h.events)).toBe(before + 1);
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('대');
+      expect(h.ctrl.getValue()).toBe('대');
+    });
+
+    // W-S1 (SECONDARY-lone 승격·반전): lone 재삽입 '도'가 60ms(신 윈도우 안)에 도착 → 전량 삼킴 분기가
+    //   삼킨다(48ms에선 누수하던 것이 150ms 확대로 닫힘).
+    it('W-S1: lone reinsert "도" at 60ms (inside widened window) IS swallowed', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(60);
+      h.ctrl.setCountry(KOREA);
+      h.type('도', true); // ㄷㅗ + 윈도우 + stale.endsWith(ㄷㅗ) → 삼킴
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe(''); // 재플러시
+    });
+
+    // W-S2 (CONTRAST 승격·불변): lone '도'가 20ms에 도착 — 전량 삼킴 분기는 무중재 현행 그대로 삼킨다.
+    it('W-S2: lone reinsert "도" at 20ms is swallowed (unchanged — swallow branch has no mediation)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(20);
+      h.ctrl.setCountry(KOREA);
+      h.type('도', true);
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe('');
+    });
+
+    // W-G1 (over-strip 가드 ★): 다음 국가명이 전 국가 끝 음절 '도'로 시작(도미니카)하고 사용자가
+    //   '도미'를 코얼레싱해 쳤을 때 — 전체('도미')가 PREFIX(genuine 유효)라 의미 중재가 스트립을
+    //   막는다. genuine 전량 보존(과삭제 원천 차단).
+    it('W-G1: coalesced genuine "도미" (whole is PREFIX of 도미니카) is NOT stripped — preserved', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.setNow(20);
+      h.ctrl.setCountry(DOMINICA);
+      h.compositionStart();
+      h.type('도미', true);
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('도미'); // 전량 보존
+      expect(h.ctrl.getValue()).toBe('도미');
+    });
+
+    // W-G2 (과억제 현상유지 잠금): lone '도'는 타깃(도미니카)의 genuine 첫 음절이지만, 전량 삼킴
+    //   분기는 무중재라 그대로 삼킨다 — D70 기수용 트레이드(에코 빈도≫잭-genuine)의 명시적 불변.
+    it('W-G2: lone "도" with DOMINICA target is still swallowed (D70 accepted trade — no mediation on lone branch)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(20);
+      h.ctrl.setCountry(DOMINICA);
+      h.type('도', true);
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe('');
+    });
+
+    // W-G3 (양쪽 MISS 비스트립 잠금): '도카' — 전체 MISS·잔여('카')도 MISS → 의미 중재 불발로
+    //   스트립하지 않고 현행대로 누수(빨간 MISS). 과삭제 방지 우선의 의도된 귀결(§1.5 수용 (1)).
+    it('W-G3: "도카" (whole MISS and stripped-rest MISS) is NOT stripped → leaks as MISS (accepted)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.setNow(20);
+      h.ctrl.setCountry(KOREA);
+      h.type('도카', true);
+      expect(eventsOf(h.events, 'miss')).toHaveLength(1);
+      expect(h.ctrl.getValue()).toBe('도카'); // 잔여 누수
+    });
+
+    // W-T1 (스트립 시간 fail-open): 151ms에 도착한 병합 재삽입은 윈도우 밖이라 스트립되지 않고
+    //   genuine MISS로 누수 — 시간 fail-open 불변식(무한 윈도우 금지)이 경계 이동으로 유지됨.
+    it('W-T1: merged "도대" after the 150ms window is NOT stripped → genuine MISS (time fail-open)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.setNow(151);
+      h.ctrl.setCountry(KOREA);
+      h.type('도대', true);
+      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+      expect(h.ctrl.getValue()).toBe('도대');
+    });
+
+    // W-B1 (예산 공유 fail-open + 대조): 부분 꼬리 스트립은 전량 삼킴과 reinsertFlushes 예산을
+    //   공유한다. lone '가나' 3회 삼킴으로 예산을 소진하면, 이어지는 '나다'(r='나'·잔여 '다'는
+    //   다도 PREFIX라 중재는 통과)는 스트립되지 않고 genuine으로 fail-open한다.
+    it('W-B1: partial-tail strip shares the reinsert budget — exhausted budget fails open', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachGhanaExact(h); // staleEcho='ㄱㅏㄴㅏ', staleRaw='가나', flushAt=0
+      h.ctrl.setCountry(DADO); // 다도(ㄷㅏㄷㅗ), staleEcho 이월, reinsertFlushes=0
+      for (let i = 0; i < 3; i++) {
+        h.setNow(10); // 매 재플러시가 flushAt=10으로 갱신 → 항상 윈도우 안
+        h.type('가나', true); // lone 삼킴 3회 → reinsertFlushes=3(예산 소진)
+      }
+      const before = contentCount(h.events);
+      h.setNow(10);
+      h.type('나다', true); // 중재는 통과하나 예산 소진 → 스트립 불발 → genuine MISS
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+      expect(h.ctrl.getValue()).toBe('나다');
+    });
+
+    // W-B1 (대조): 예산이 남아 있으면 같은 '나다'가 스트립된다 — r='나'(2자모 꼬리 접미)까지
+    //   스트립이 일반화됨(끝 음절만이 아니라 임의 proper 접미)을 함께 잠근다.
+    it('W-B1-contrast: with budget available, "나다" strips r="나" → progress "다"', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachGhanaExact(h);
+      h.setNow(10);
+      h.ctrl.setCountry(DADO);
+      h.type('나다', true); // r='나' 스트립 → 잔여 '다'=다도 PREFIX
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('다');
+      expect(h.ctrl.getValue()).toBe('다');
+    });
+
+    // W-C1 (스트립 후 기저 붕괴 승계): W-P1 첫 스냅샷으로 basePrefix='도'가 세워진 뒤, value가 더는
+    //   '도'로 시작하지 않으면(IME가 접두를 삼킴) 기존 ⑤ 기구(조용 flush·리셋)를 그대로 승계한다.
+    it('W-C1: after partial-tail strip, base-prefix collapse silently flushes (inherits ⑤ mechanism)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.setNow(20);
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('도대', true); // 스트립 → basePrefix='도', progress '대'
+      const before = contentCount(h.events);
+      h.type('대', true); // v='대'가 더 이상 '도'로 시작하지 않음 → 기저 붕괴
+      expect(contentCount(h.events)).toBe(before); // 조용한 리셋
+      expect(h.input.value).toBe(''); // 재플러시
+      expect(h.ctrl.getValue()).toBe('');
     });
   });
 });

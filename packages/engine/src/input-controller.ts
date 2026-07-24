@@ -17,7 +17,10 @@
 // 되게(마이크로태스크 재평가 차단). ③ flush 후 첫 입력은 evaluate 단일 관문(resolveRaw)에서
 // 판별한다: 48ms 내 ≥2자모 옛-꼬리 재삽입 = 무이벤트 삼킴(국가당 3회 후 fail-open), 옛 전체값
 // 접두 + 연장 = 접두 가상 스트립(Gboard 승계), 그 외 = genuine(단일 자모는 절대 비삼킴 —
-// §2.10 #4 보존). ④ getValue()는 기저 접두(basePrefix)를 제외한 실입력을 노출한다(additive).
+// §2.10 #4 보존).
+// ③′(D84) 옛 값의 proper 접미(끝음절, ≥2자모)가 첫 입력의 raw 접두로 병합된 경우, 전체 판정 MISS ∧
+// 잔여 판정 non-MISS일 때만(의미 중재) 그 접미를 basePrefix로 가상 스트립하고 연장분만 평가(윈도우·
+// 예산 공유). 재삽입 윈도우는 150ms. ④ getValue()는 기저 접두(basePrefix)를 제외한 실입력을 노출한다(additive).
 import {
   matchInputDetail,
   compileTargets,
@@ -36,8 +39,9 @@ const BULK_INSERT_MAX_ADDED = 8;
 const BUFFER_SLACK = 8;
 /** ko 모드에서 연속 라틴 3자 이상이면 한/영 오입력 신호(§2.9). 오발 방지로 3자 하한. */
 const LATIN_RUN_RE = /[A-Za-z]{3,}/;
-/** flush 직후 이 시간(ms) 안에 도착한 "옛-꼬리 재삽입"만 삼킨다(§2.5·docs/00 §11-D70). */
-const REINSERT_WINDOW_MS = 48;
+/** flush 직후 이 시간(ms) 안에 도착한 "옛-꼬리 재삽입"만 삼킴/스트립한다(§2.5·docs/00 §11-D70·D84).
+ *  D84: 48→150ms — 느린 기기/webview의 비동기 focus 재삽입(late echo)까지 흡수(전량 삼킴·부분 스트립 공용). */
+const REINSERT_WINDOW_MS = 150;
 /** 국가당 재삽입 삼킴 상한 — 넘으면 fail-open(genuine 처리). 무한 삼킴/입력 잠금 방지. */
 const MAX_REINSERT_FLUSHES = 3;
 
@@ -213,7 +217,7 @@ export class TypingInputController {
    * 지점에서 차단하고 Gboard가 남긴 옛 값 접두를 가상으로 스트립한다.
    *  - `null` 반환 = 이 입력을 삼킴(무이벤트·무계상). `string` 반환 = 그 값으로 평가.
    * 분기 순서는 계약(§2.10 #4 보존)이라 바꾸지 않는다: 기저접두 → 무-staleEcho → 빈값 →
-   * 재삽입(≥2자모·윈도우·꼬리일치·상한) → Gboard 접두 → genuine.
+   * 전량삼킴(≥2자모·윈도우·꼬리일치·상한) → Gboard 전체접두 → 부분꼬리 스트립(D84·의미 중재) → genuine.
    */
   private resolveRaw(ev?: Event): string | null {
     const v = this.input.value;
@@ -233,20 +237,40 @@ export class TypingInputController {
     this.staleEchoJamo = ''; // 첫 비어있지 않은 입력에서 one-shot 해제
     this.staleEchoRaw = '';
     const vJamo = this.jamoOf(v);
-    // ≥2자모 조건이 핵심: 실키스트로크 1타 = 자모 1개 → 확정 직후 0ms 첫 타(§2.10 #4)는 절대 안 삼켜짐.
-    if (
-      this.now() - this.flushAt <= REINSERT_WINDOW_MS &&
-      vJamo.length >= 2 &&
-      stale.endsWith(vJamo) &&
-      this.reinsertFlushes < MAX_REINSERT_FLUSHES
-    ) {
+    const inWindow = this.now() - this.flushAt <= REINSERT_WINDOW_MS;
+    const hasBudget = this.reinsertFlushes < MAX_REINSERT_FLUSHES;
+    // (1) 전량 에코 삼킴(D70-③): ≥2자모 조건이 핵심 — 실키스트로크 1타 = 자모 1개 → 확정 직후 0ms
+    //     첫 타(§2.10 #4)는 절대 안 삼켜짐. 무중재 현행 유지, 윈도우 값만 D84로 확대.
+    if (inWindow && vJamo.length >= 2 && stale.endsWith(vJamo) && hasBudget) {
       this.reinsertFlushes++;
       this.flushIme(readIsComposing(ev) || this.composing); // 재삽입 삼킴 + 재플러시
       return null;
     }
+    // (2) Gboard 옛 전체값 접두 스트립(D70-③) — 무게이트 현행 유지(테스트 ④는 윈도우 밖).
     if (v.startsWith(staleRaw) && v.length > staleRaw.length && staleRaw.length > 0) {
       this.basePrefix = staleRaw; // Gboard 접두 스트립 — 이후 basePrefix 분기가 연장분만 넘긴다
       return v.slice(staleRaw.length);
+    }
+    // (3) ★D84(버그 W): 끝음절(부분 꼬리) 접미 재삽입이 사용자 첫 타와 병합된 스냅샷 — staleRaw의
+    //     최장 proper 접미 r이 v의 raw 접두이고 연장분이 있으면, 의미 중재 통과 시에만 r을 기존
+    //     basePrefix 기구로 가상 스트립(지속 스트립·getValue 제외·기저붕괴 조용 flush 승계)하고
+    //     연장분만 평가한다. 국가 전환당 최대 1회 실행이라 핫패스 비용 무시 가능.
+    if (inWindow && hasBudget) {
+      for (let i = 1; i < staleRaw.length; i++) {
+        const r = staleRaw.slice(i); // 최장 proper 접미부터
+        if (!v.startsWith(r) || v.length <= r.length) continue;
+        if (this.jamoOf(r).length < 2) break; // §2.10 #4 게이트 — 1자모 에코 해석 금지
+        const rest = v.slice(r.length);
+        // 의미 중재: genuine 해석(전체 v)이 유효(PREFIX/EXACT)하면 절대 스트립하지 않는다(over-strip 차단).
+        const full = matchInputDetail(v, this.targets, this.lang);
+        const stripped = matchInputDetail(rest, this.targets, this.lang);
+        if (full.state === 'MISS' && stripped.state !== 'MISS') {
+          this.reinsertFlushes++; // 삼킴과 공용 예산 소비(fail-open 일관성)
+          this.basePrefix = r;
+          return rest;
+        }
+        break; // 최장 raw 일치 1회만 중재(결정성) — 실패 시 genuine
+      }
     }
     return v; // genuine 신규 입력
   }

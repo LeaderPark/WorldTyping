@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 //
-// spec: docs/01 §10.2(S1 홈 와이어프레임), §11.1(1단계 — 싱글플레이 카드 펄스), WT-M2-07
+// spec: docs/01 §10.2(S1 홈 와이어프레임), §11.1(1단계 — 싱글플레이 카드 펄스), WT-M2-07,
+//       WT-AUTH-07(홈 배경이 HeroMap+RouteMotifBackdrop에서 HomeGlobe로 교체됨)
 //
-// bootLoader를 일부러 목킹하지 않는다 — HeroMap(useWorldGeoIndex)이 부팅 데이터 없이도 안전하게
-// placeholder로 폴백하는지(app/router.test.tsx의 "로더 없이 홈을 렌더" 전제와 동일 계약)를 이
-// 파일 자체가 실증한다.
+// bootLoader를 일부러 목킹하지 않는다 — HomeGlobe(useGlobeIndex)가 부팅 데이터 없이도 안전하게
+// placeholder로 폴백하는지(app/router.test.tsx의 "로더 없이 홈을 렌더" 전제와 동일 계약, 이전
+// HeroMap/useWorldGeoIndex와 동일한 방어 패턴)를 이 파일 자체가 실증한다.
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -56,15 +57,12 @@ describe('HomePage (S1)', () => {
     vi.clearAllMocks();
   });
 
-  it('부팅 데이터 없이도 히어로 지도가 placeholder로 안전하게 렌더된다(throw 없음)', () => {
+  it('부팅 데이터 없이도 배경 지구본이 placeholder로 안전하게 렌더된다(throw 없음, WT-AUTH-07)', () => {
     renderHome();
-    expect(screen.getByTestId('hero-map')).toBeInTheDocument();
-    expect(screen.getByTestId('hero-map-loading')).toBeInTheDocument();
-  });
-
-  it('RouteMotifBackdrop이 배경으로 부착된다(WT-UI-04 ⑤)', () => {
-    renderHome();
-    expect(screen.getByTestId('route-motif-backdrop')).toBeInTheDocument();
+    // Suspense fallback(HomeGlobePlaceholder)과 HomeGlobe 내부의 "인덱스 대기" 상태가 동일
+    // 마크업(같은 testid)을 공유하므로, 청크/인덱스 로딩 타이밍과 무관하게 항상 참이다(D45 패턴).
+    expect(screen.getByTestId('home-globe')).toBeInTheDocument();
+    expect(screen.getByTestId('home-globe-loading')).toBeInTheDocument();
   });
 
   it('싱글/멀티/데일리 3개 카드와 랭킹/여권/설정 내비를 렌더한다', () => {

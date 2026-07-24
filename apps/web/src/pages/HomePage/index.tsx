@@ -1,8 +1,10 @@
 // spec: docs/01 §10.1(S1 홈/S2 언어 게이트)·§10.2(S1 와이어프레임 전문)·§11.1(온보딩 1단계
 //       "싱글플레이 카드 펄스 하이라이트"), docs/03 §4.2(HomePage 트리)·§8.1(lang 동기화),
-//       docs/00 §11-D45(HeroMap lazy 경계)·D50(브랜드 색은 장식·지도 fill 전용), WT-M2-05(언어
-//       게이트 골격), WT-M2-07(히어로 지도/모드 카드/데일리 뱃지/티커 채움), WT-UI-04(홈 리뉴얼
-//       — 로고 카드+컬러 메뉴 행 5+RouteMotifBackdrop+데일리 뱃지+언어 게이트 라이트)
+//       docs/00 §11-D45(lazy 배경 청크 경계 원칙)·D50(브랜드 색은 장식·지도 fill 전용)·
+//       D67-⑦(평면 WorldMap·HeroMap·RouteMotifBackdrop 홈 배선 폐기, 파일 존치)·D68-⑦(홈 배경 =
+//       GlobeMap 자동 데모), WT-M2-05(언어 게이트 골격), WT-M2-07(모드 카드/데일리 뱃지/티커
+//       채움), WT-UI-04(홈 리뉴얼 — 로고 카드+컬러 메뉴 행 5+데일리 뱃지+언어 게이트 라이트),
+//       WT-AUTH-07(이 태스크 — 홈 배경을 HomeGlobe 전체화면 자동 데모로 교체)
 //
 // 랜딩 → 첫 타이핑 3클릭·15초 여정의 1번째 클릭 지점(§11.1 목표). 언어 게이트(S2)는 WT-M2-05가
 // 이미 완성한 골격(role/aria-label/testid/localStorage 시맨틱)을 그대로 유지하고, WT-UI-04는
@@ -13,17 +15,14 @@
 // 조회 실패(오프라인 등)는 화면을 깨뜨리지 않고 조용히 placeholder/미표시로 폴백한다 — 이
 // 페이지는 "3클릭·15초" 여정의 첫 화면이라 네트워크 대기로 렌더를 막지 않는다(§11.1).
 //
-// [WT-M5-01b, docs/00 §11-D45] HeroMap(d3-geo/topojson/geo-index, vendor-geo 청크)을
-// React.lazy로 분리한다 — entry 정적 import 그래프에 vendor-geo가 남아있으면 그 청크의
-// fetch·parse가 끝날 때까지 첫 페인트(제목/모드 카드 포함) 자체가 지연돼 LCP 예산(§8.5)을
-// 초과한다(§11-D45 실측 2.64s). Suspense fallback은 HeroMapPlaceholder — HeroMap 내부의
-// "위상 데이터 fetch 중" placeholder와 동일 마크업이라 청크 도착 시점 스왑에 레이아웃
-// 시프트가 없다. 게임 라우트(GamePage)의 WorldMap 로딩 경로는 이 변경과 무관(불변).
-//
-// [WT-UI-04] HeroMap을 "축소·배경화"한다 — HeroMap.tsx/HeroMapPlaceholder.tsx 자체는 무수정
-// (같은 testid/className을 그대로 렌더하므로 위 무시프트 계약이 그대로 유지된다), 이 파일과
-// globals.css의 .wt-home__hero/.wt-home-hero__map만 크기·레이어링을 바꿔 로고 카드 뒤에 깔리는
-// 작은 배경 배너로 재배치한다.
+// [WT-AUTH-07, docs/00 §11-D67-⑦·D68-⑦] 홈 배경을 HeroMap(축소된 실루엣 지도)+
+// RouteMotifBackdrop(정적 장식 아크)에서 HomeGlobe(GlobeMap 자동 데모 — idle spin + 8±3s 랜덤
+// 홉)로 전면 교체한다. HeroMap.tsx/HeroMapPlaceholder.tsx/RouteMotifBackdrop.tsx 자체는
+// 무수정으로 존치(다른 화면이 재사용할 수 있게)하되, 이 파일의 배선(import·렌더)만 제거한다.
+// HomeGlobe도 HeroMap과 동일한 이유(D45 — vendor-geo 청크가 entry 정적 import 그래프에 남으면
+// 첫 페인트가 지연돼 LCP 예산을 넘긴다)로 React.lazy 청크 경계를 유지한다. Suspense fallback
+// (HomeGlobePlaceholder)은 HomeGlobe 내부의 "지구본 인덱스 아직 없음" 상태와 동일 마크업이라
+// 청크 도착 시점 스왑에 레이아웃 시프트가 없다.
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -31,13 +30,12 @@ import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
 import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
 import { useModalA11y } from '../../lib/useModalA11y';
-import { RouteMotifBackdrop } from '../../components/RouteMotifBackdrop';
 import { Mascot } from '../../components/Mascot';
 import { AuthChip } from '../../features/auth/AuthChip';
 import { ThemeToggle } from '../../features/auth/ThemeToggle';
-import { HeroMapPlaceholder } from './HeroMapPlaceholder';
+import { HomeGlobePlaceholder } from './HomeGlobePlaceholder';
 
-const HeroMap = lazy(() => import('./HeroMap'));
+const HomeGlobe = lazy(() => import('./HomeGlobe'));
 
 /** [WT-DC-02] 스토어에 별도 'muted' 필드를 새로 두지 않고 기존 volume.master(설정 스토어 기존
  *  필드, sound-manager.ts의 play()가 이미 master*sfx로 게인을 계산한다)를 0으로 두는 것을
@@ -135,8 +133,11 @@ export function HomePage() {
 
   return (
     <main className="wt-home" data-testid="home-page">
-      {/* [WT-UI-04] 대륙 6색 저채도 아크+도트 — 순수 장식(부착만, 컴포넌트 자체는 무수정). */}
-      <RouteMotifBackdrop className="wt-home__backdrop" />
+      {/* [WT-AUTH-07] 홈 전체 화면 배경 지구본(00 §11-D67-⑦·D68-⑦) — GlobeMap 자동 데모(idle
+          spin + 주기 홉). RouteMotifBackdrop/HeroMap의 홈 배선을 대체한다. */}
+      <Suspense fallback={<HomeGlobePlaceholder />}>
+        <HomeGlobe />
+      </Suspense>
 
       <div className="wt-home__content">
         <header className="wt-home__header">
@@ -173,17 +174,12 @@ export function HomePage() {
           </div>
         </header>
 
-        {/* 로고 카드(①) — HeroMap(⑥, 축소·배경화)이 그 뒤로 깔린다. */}
-        <section className="wt-home__hero">
-          <Suspense fallback={<HeroMapPlaceholder />}>
-            <HeroMap />
-          </Suspense>
-          <div className="wt-card wt-home__logo-card">
-            <Mascot width={56} tail="var(--continent-asia)" blush bob />
-            <h1 className="wt-home__title wt-home__title--brand" tabIndex={-1}>{t('app.title')}</h1>
-            <p className="wt-home__tagline">{t(`app.tagline.${lang}`)}</p>
-          </div>
-        </section>
+        {/* 로고 카드(①) — 배경은 이제 홈 전체를 덮는 HomeGlobe(위에서 마운트)가 담당한다. */}
+        <div className="wt-card wt-home__logo-card">
+          <Mascot width={56} tail="var(--continent-asia)" blush bob />
+          <h1 className="wt-home__title wt-home__title--brand" tabIndex={-1}>{t('app.title')}</h1>
+          <p className="wt-home__tagline">{t(`app.tagline.${lang}`)}</p>
+        </div>
 
         {/* 메뉴 행 5(②): 싱글/멀티/데일리/랭킹/여권 — .wt-menu-row(WT-UI-01)를 그대로 쓰고
             행마다 대륙색 좌측 바 + 아이콘 타일 + 킥커 + 제목 + 위트 카피 + 셰브런을 채운다. */}

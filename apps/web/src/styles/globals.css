@@ -1413,24 +1413,49 @@
   }
 }
 
-/* ── S1 홈(WT-M2-07, WT-UI-04 리뉴얼) ────────────────────────────────────
+/* ── S1 홈(WT-M2-07, WT-UI-04 리뉴얼, WT-AUTH-07 배경 교체) ─────────────────
    spec: docs/01 §10.2(S1 와이어프레임 — METRO TYPING 계승 리뉴얼: 로고 카드+컬러 메뉴 행 5+
-   백드롭+데일리 뱃지), §11.1(1단계 — 싱글플레이 행 펄스), docs/00 §11-D45(HeroMap lazy 경계는
-   HeroMap.tsx/HeroMapPlaceholder.tsx 무수정으로 유지 — 아래는 두 컴포넌트가 공유하는 기존
-   클래스의 크기·레이어링만 조정), D50(브랜드 색은 장식·지도 fill 전용 — 메뉴 행 좌측 색 바는
-   장식이라 원색 그대로, 텍스트인 킥커는 *-text 파생 토큰만 사용). */
+   배경+데일리 뱃지), §11.1(1단계 — 싱글플레이 행 펄스), docs/00 §11-D50(브랜드 색은 장식·지도
+   fill 전용 — 메뉴 행 좌측 색 바는 장식이라 원색 그대로, 텍스트인 킥커는 *-text 파생 토큰만
+   사용)·D67-⑦·D68-⑦(홈 배경 = HomeGlobe 자동 데모, HeroMap/RouteMotifBackdrop 홈 배선 폐기).
+   HeroMap.tsx/HeroMapPlaceholder.tsx가 쓰는 .wt-home-hero__map* 클래스는 두 파일이 존치되는 한
+   그대로 남긴다(재사용 대비, WT-AUTH-07이 손대지 않는 영역). */
 .wt-home {
   position: relative;
   min-height: 100%;
-  overflow: hidden; /* RouteMotifBackdrop 배경을 컨테이너 안에 가둔다 */
+  overflow: hidden; /* HomeGlobe 배경을 컨테이너 안에 가둔다 */
 }
-/* [WT-UI-04] RouteMotifBackdrop(aria-hidden·pointer-events:none 자체 내장) 부착 — 콘텐츠 뒤. */
-.wt-home__backdrop {
+/* [WT-AUTH-07, 00 §11-D67-⑦·D68-⑦] HomeGlobe(GlobeMap 자동 데모) 전체 화면 배경 부착 — 콘텐츠
+   뒤(z-index 0, .wt-home__content가 1). pointer-events:none·aria-hidden은 컴포넌트 자체가 문다.
+   canvas/svg 오버레이는 GlobeMap 내부(.wt-globe__canvas/.wt-globe__overlay, tokens.css)가 이미
+   inset:0 처리하므로 이 래퍼는 실제 치수(clientWidth/Height)만 보장하면 된다(GlobeMap의
+   resize()가 컨테이너 div를 읽는다). filter+mask는 컨테이너 한 곳에만 걸어 canvas·svg가 합성된
+   결과에 한 번만 적용되게 한다(저채도 배경화 + 가장자리 radial fade로 위 카드/텍스트 대비 확보,
+   D50 취지와 동일 — 장식 지도 fill은 원색 그대로 두고 배경으로만 읽히게 채도만 낮춘다). */
+.wt-home__globe {
   position: absolute;
   inset: 0;
   z-index: 0;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+}
+.wt-home__globe-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: saturate(0.55) brightness(1.03);
+  mask-image: radial-gradient(ellipse at center, black 45%, transparent 88%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 45%, transparent 88%);
+}
+.wt-home__globe-placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--map-idle);
 }
 .wt-home__content {
   position: relative;
@@ -1465,19 +1490,10 @@
   text-decoration: none;
 }
 
-/* [WT-UI-04] 히어로: HeroMap을 축소·배경화(D45) — 로고 카드(.wt-card)가 그 위에 뜬다. */
-.wt-home__hero {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 960 / 420;
-  max-height: 13rem;
-  border-radius: var(--radius-card);
-  overflow: hidden;
-  background: var(--map-idle);
-  box-shadow: var(--shadow-card); /* [WT-DC-02] 디자인 정본 L59 */
-}
+/* [WT-AUTH-07] .wt-home__hero(HeroMap을 감싸던 축소·배경화 래퍼, D45)는 폐기 — 로고 카드는 이제
+   .wt-home__content(flex column)의 직계 자식으로 align-self:center만으로 중앙 정렬한다(아래
+   .wt-home__logo-card). .wt-home-hero__map*은 HeroMap.tsx/HeroMapPlaceholder.tsx 자신이 쓰는
+   클래스라 그대로 남긴다(두 파일 무수정 존치 원칙). */
 .wt-home-hero__map {
   position: absolute;
   inset: 0;
@@ -1506,13 +1522,17 @@
 }
 /* [WT-DC-02] Mascot(마스코트)를 얹기 위해 flex column + gap으로 개정(디자인 정본 L61) —
    기존 h1/p 두 자녀만 있을 땐 text-align:center 단독으로 충분했지만, 마스코트가 첫 자녀로
-   들어오며 세 요소 간 균일한 2px 간격을 gap이 전담한다(자녀 개별 margin은 아래에서 제거). */
+   들어오며 세 요소 간 균일한 2px 간격을 gap이 전담한다(자녀 개별 margin은 아래에서 제거).
+   [WT-AUTH-07] align-self:center 추가 — .wt-home__hero 래퍼(flex center) 폐기로 이 카드가 이제
+   .wt-home__content(flex column, 기본 stretch)의 직계 자식이 되어, 이게 없으면 카드가 전체
+   너비로 늘어난다(칩 형태 유지를 위해 콘텐츠 너비로 축소). */
 .wt-home__logo-card {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  align-self: center;
   gap: 2px;
   padding: 14px 28px 16px;
   text-align: center;

@@ -62,9 +62,10 @@ describe('AppShell — SettingsOverlay 제거(§11-D68-⑥)', () => {
   });
 });
 
-// [WT-AUTH-06] Footer는 브라우징 화면에서만 마운트한다(§11-D68-⑨) — 인게임(/play/*)·대기실/
-// 레이스(/multi/:code)는 제외, 로비(/multi) 자체는 허용. 실제 페이지 컴포넌트(GamePage 등)는
-// 무거운 의존성을 끌고 오므로 라우트 판별 로직만 검증하는 가벼운 스텁 엘리먼트를 대신 마운트한다.
+// [WT-AUTH-06 / §11-D74] Footer는 실제 게임 플레이 화면(인게임 /play/:mode/:trackId + 멀티
+// 레이스/대기실 /multi/:roomCode)에서만 숨긴다 — 모드선택(/play)·트랙선택(/play/:mode)·로비
+// (/multi)·홈·나머지는 노출. 실제 페이지 컴포넌트(GamePage 등)는 무거운 의존성을 끌고 오므로
+// 라우트 판별 로직만 검증하는 가벼운 스텁 엘리먼트를 대신 마운트한다.
 function renderShellAt(initial: string) {
   localStorage.setItem('wt:lang', 'en');
   return render(
@@ -87,7 +88,7 @@ function renderShellAt(initial: string) {
   );
 }
 
-describe('AppShell — SiteFooter 노출 범위(§11-D68-⑨, WT-AUTH-06)', () => {
+describe('AppShell — SiteFooter 노출 범위(§11-D74, WT-AUTH-06)', () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
@@ -116,17 +117,18 @@ describe('AppShell — SiteFooter 노출 범위(§11-D68-⑨, WT-AUTH-06)', () =
     expect(screen.getByTestId('site-footer')).toBeInTheDocument();
   });
 
-  it('인게임(/play, /play/:mode, /play/:mode/:trackId)에는 Footer가 보이지 않는다', async () => {
+  it('모드선택(/play)·트랙선택(/play/:mode)에는 Footer가 보인다(§11-D74 — 게임 플레이만 제외)', async () => {
     renderShellAt('/play');
     await screen.findByTestId('stub-mode-select');
-    expect(screen.queryByTestId('site-footer')).not.toBeInTheDocument();
+    expect(screen.getByTestId('site-footer')).toBeInTheDocument();
     cleanup();
 
     renderShellAt('/play/continent');
     await screen.findByTestId('stub-track-select');
-    expect(screen.queryByTestId('site-footer')).not.toBeInTheDocument();
-    cleanup();
+    expect(screen.getByTestId('site-footer')).toBeInTheDocument();
+  });
 
+  it('인게임 플레이(/play/:mode/:trackId)에는 Footer가 보이지 않는다', async () => {
     renderShellAt('/play/continent/asia-1');
     await screen.findByTestId('stub-game');
     expect(screen.queryByTestId('site-footer')).not.toBeInTheDocument();

@@ -24,12 +24,14 @@ import { SiteFooter } from '../components/SiteFooter';
 import { getBootData, type BannerConfig } from './bootLoader';
 import { RouteMeta } from './RouteMeta';
 
-/** §11-D68-⑨ 허용목록의 여집합 표현 — `/play`(모드 선택)·`/play/:mode`(트랙 선택)·
- *  `/play/:mode/:trackId`(인게임) 전부와 `/multi/:roomCode`(대기실/레이스)만 제외하고, 그 외
- *  모든 경로(홈·`/multi` 로비·rank·passport·daily·privacy·terms·support·credits·404)는 노출한다. */
+/** §11-D74(Tweak K) — footer는 **실제 게임 플레이 화면에서만** 숨긴다: 인게임 `/play/:mode/:trackId`
+ *  + 멀티 레이스/대기실 `/multi/:roomCode`. 그 외 전부 노출 — 홈·모드선택(`/play`)·트랙선택
+ *  (`/play/:mode`)·`/multi` 로비·rank·passport·daily·privacy·terms·support·credits·404.
+ *  (구 D68-⑨는 /play/* 전체+/multi/:code를 제외했으나, 리드 요청으로 선택 화면은 footer 노출로 반전.) */
 function isBrowsingRoute(pathname: string): boolean {
-  if (pathname === '/play' || pathname.startsWith('/play/')) return false;
-  if (pathname.startsWith('/multi/')) return false; // '/multi'(로비) 자체는 제외 대상이 아님
+  const seg = pathname.split('/').filter(Boolean); // '/play/tier/main' → ['play','tier','main']
+  if (seg[0] === 'play' && seg.length >= 3) return false; // 인게임(/play/:mode/:trackId)만
+  if (seg[0] === 'multi' && seg.length >= 2) return false; // 멀티 레이스/대기실(/multi/:roomCode)
   return true;
 }
 

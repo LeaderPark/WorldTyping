@@ -161,9 +161,10 @@ test.describe('E-AUTH — 로그인/크롬/게이팅/Footer (WT-AUTH)', () => {
   });
 
   test('Footer — 브라우징 화면 노출·법적 모달(URL 불변·포커스 복귀)·인게임 미노출', async ({ page }) => {
-    // §11-D68-⑨: Footer는 브라우징 화면(홈·로비·rank·passport·daily·privacy·terms·support·credits·404)
-    // 에만 노출되고 인게임(/play/*)·대기실(/multi/:code)에는 없다. §11-D72: 개인정보/약관/지원은
-    // 라우트 이동 없이(URL·히스토리 불변) 현재 화면 위 제자리 딤 스크림 모달로 열린다.
+    // §11-D74: Footer는 실제 게임 플레이(인게임 /play/:mode/:trackId + 멀티 레이스/대기실
+    // /multi/:code)에서만 숨고, 그 외(홈·모드/트랙선택·로비·rank·passport·daily·법적·404)엔 노출.
+    // §11-D72: 개인정보/약관/지원은 라우트 이동 없이(URL·히스토리 불변) 현재 화면 위 제자리 딤
+    // 스크림 모달로 열린다.
     await reserveSessionSlot();
     await page.goto('/');
     await dismissLangGate(page);

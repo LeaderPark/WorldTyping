@@ -2161,6 +2161,20 @@
   text-align: center;
 }
 
+/* [Tweak C] 방 목록 내부 스크롤 영역 — 부모 .wt-lobby가 flex-1로 뷰포트를 채운 상태에서(AppShell
+   flex 레이아웃) 남는 높이를 이 영역이 차지한다(flex:1·min-height:0). 목록이 많으면 여기서만
+   세로 스크롤하고 헤더 카드/footer 위치는 고정, 적거나 없어도 flex-grow로 크기를 유지한다.
+   레이아웃 전용 — 색/원색 없음. */
+.wt-lobby__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.wt-lobby__list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* 재사용: 대기실이 쓰는 섹션 제목/행/필드/에러(로비 재디자인 후에도 존치). */
 .wt-lobby__section-title {
   margin: 0;

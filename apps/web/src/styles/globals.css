@@ -144,7 +144,6 @@
   .wt-strip__neighbor-name { font-size: 0.95rem; }
   .wt-appbar-game { padding: 0.4rem 0.6rem; }
   .wt-appbar__title { max-width: 6rem; font-size: 0.85rem; }
-  .wt-progress-line__next { display: none; }
 }
 
 /* 모바일 스킵 고정 버튼(§7.2 "스킵은 화면 우하단 고정 버튼(ESC 없음)"). 44px 터치 타깃(§7.1
@@ -1049,14 +1048,16 @@
   background: var(--surface);
   box-shadow: 0 0 0 2px var(--wt-progress-continent, var(--grade-s));
 }
-.wt-progress-line__count { flex: 0 0 auto; font-weight: 700; color: var(--text); font-size: 0.8rem; }
-.wt-progress-line__next {
-  flex: 0 1 auto;
-  color: var(--text-muted);
+/* Tweak S(§11-D78): 카운트 열을 고정폭("50 / 50" 최대 수납) + 중앙정렬 → 레일(flex:1 1 auto)
+   폭이 카운트 자릿수·국가명과 무관한 상수가 된다(진행바 길이 고정). __next(다음국 미리보기)는
+   제거 — 국가명 길이가 레일 폭을 잠식하던 원인이었다. */
+.wt-progress-line__count {
+  flex: 0 0 auto;
+  min-width: 3.25rem;
+  text-align: center;
+  font-weight: 700;
+  color: var(--text);
   font-size: 0.8rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .wt-progress-line__skip { display: none; }
 
@@ -2884,12 +2885,9 @@
   border: 1px solid var(--map-border);
   border-radius: 14px;
 }
-/* 진행 레일 max 300(디자인 L436) + 다음국 미리보기 숨김(디자인 헤더엔 rail+count만). */
+/* 진행 레일 max 300(디자인 L436) — 디자인 헤더엔 rail+count만(__next는 Tweak S에서 전역 제거). */
 .wt-game-view[data-variant='race'] .wt-progress-line__rail {
   max-width: 18.75rem; /* 300px */
-}
-.wt-game-view[data-variant='race'] .wt-progress-line__next {
-  display: none;
 }
 /* 하드캡 칩 이설 슬롯 — 640 밴드 우측 정렬(디자인 헤더 우측). 음수 마진으로 헤더에 붙인다. */
 .wt-race-hardcap-slot {

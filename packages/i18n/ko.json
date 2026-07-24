@@ -45,7 +45,6 @@
   "hud.cpm": "{cpm}타/분",
   "hud.accuracy": "{accuracy}%",
   "hud.streak": "×{count} STREAK",
-  "hud.next": "다음: {country}",
   "hud.announceNext": "다음: {country}, {position}번째, {total}개 중",
   "hud.progressLabel": "진행률",
   "hud.skipHint": "ESC 스킵",

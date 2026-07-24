@@ -45,7 +45,6 @@
   "hud.cpm": "{cpm} CPM",
   "hud.accuracy": "{accuracy}%",
   "hud.streak": "×{count} STREAK",
-  "hud.next": "Next: {country}",
   "hud.announceNext": "Next: {country}, {position} of {total}",
   "hud.progressLabel": "Progress",
   "hud.skipHint": "ESC to skip",

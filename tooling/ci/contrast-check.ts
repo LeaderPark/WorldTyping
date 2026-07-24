@@ -109,6 +109,13 @@ function buildChecks(tokens: TokenMap): Check[] {
   const WHITE = '#ffffff';
   // AppShell.tsx: `bg-slate-900`(다크 기본 페이지 배경, Tailwind slate-900).
   const PAGE_BG_DARK = '#0f172a';
+  // [§11-D80] 다크 리터럴 상수(PAGE_BG_DARK 선례 — tokens.css [data-theme='dark'] 값과 대조).
+  // 이 스크립트는 :root(라이트) 블록만 파싱하므로, 다크 조합은 tokens.css 다크 오버라이드 값을
+  // 리터럴로 고정해 검사한다(라이트 기본이 바뀌어도 회귀 가드로 유효).
+  const SURFACE_DARK = '#1e293b'; // tokens.css [data-theme='dark'] --surface
+  const SUNKEN_DARK = '#0b1220'; // tokens.css [data-theme='dark'] --surface-sunken
+  const TEXT_DARK = '#f8fafc'; // tokens.css [data-theme='dark'] --text
+  const TEXT_MUTED_DARK = '#94a3b8'; // tokens.css [data-theme='dark'] --text-muted
 
   const gradeS = requireToken(tokens, 'grade-s');
   const gradeA = requireToken(tokens, 'grade-a');
@@ -290,6 +297,17 @@ function buildChecks(tokens: TokenMap): Check[] {
     { label: '.wt-token__circle--oceania ring mix(75%,black) on --surface (비텍스트)', fg: mix(continentOceania, BLACK, 75), bg: surface, minRatio: 3 },
     // 콘솔 헤더 LED 도트(.wt-track-select__console-dot) — 장식이지만 75% 계수 회귀 가드.
     { label: '.wt-track-select__console-dot mix(grade-c 75%,black) on --surface (비텍스트)', fg: mix(gradeC, BLACK, 75), bg: surface, minRatio: 3 },
+
+    // ── [§11-D80] 결과 화면 상태 시인성 강조(globals.css .wt-result-view__rank/__submission/__unlock-toast) ──
+    // 골드 필 텍스트(라이트 45% black 보정 / 다크 grade-s 원색 — 배경이 grade-s 22% 틴트라 개별 실측).
+    { label: '.wt-result-view__rank·__unlock-toast text on gold pill (light)', fg: mix(gradeS, BLACK, 45), bg: mix(gradeS, surface, 22), minRatio: 4.5 },   // 6.15
+    { label: '.wt-result-view__rank·__unlock-toast text on gold pill (dark)', fg: gradeS, bg: mix(gradeS, SURFACE_DARK, 22), minRatio: 4.5 },               // 5.32
+    { label: '.wt-result-view__submission muted on --surface-sunken (light)', fg: textMuted, bg: surfaceSunken, minRatio: 4.5 },                             // 5.18
+    { label: '.wt-result-view__submission muted on sunken (dark)', fg: TEXT_MUTED_DARK, bg: SUNKEN_DARK, minRatio: 4.5 },                                    // 7.30
+    { label: '.wt-result-view__submission--registered --text on sunken (light)', fg: text, bg: surfaceSunken, minRatio: 4.5 },                               // 14.86
+    { label: '.wt-result-view__submission--registered --text on sunken (dark)', fg: TEXT_DARK, bg: SUNKEN_DARK, minRatio: 4.5 },                             // 17.89
+    { label: 'registered ✓ glyph mix(grade-c 55%, black) on sunken (light)', fg: mix(gradeC, BLACK, 55), bg: surfaceSunken, minRatio: 4.5 },                 // 5.57
+    { label: 'registered ✓ glyph grade-c on sunken (dark)', fg: gradeC, bg: SUNKEN_DARK, minRatio: 4.5 },                                                    // 8.22
   ];
 }
 

@@ -2,6 +2,11 @@
 //       §4.2(ResultView, phase: finished), docs/06 §1.4-③(제출 응답 인라인 순위)·§3.1(verdict),
 //       docs/00 §11-D9, WT-M2-06·WT-M3-06.
 //
+// [WT-Tweak U, §11-D80] 제출/순위/자기최고/여권 상태를 3계층 시인성 위계로 강조 — 마크업 변경은
+//       className 문자열 + registered/rank를 묶는 래퍼 div 1개뿐이고, 아이콘(✓·🏆)은 전부 CSS
+//       의사요소(globals .wt-result-view__*)로만 넣는다(testid 요소 textContent 정확일치 계약 보존).
+//       testid 5종·i18n 키/문구·판정·점수·제출 로직(net/run-session.ts)은 불변.
+//
 // [완주 리트레이스 — 구현 메모] §13.3-6은 "노선 전체가 지도 위에서 한 번에 리트레이스"를
 // 요구한다. 이 구현에서 solved/route 레이어는 이미 플레이 중 진행분으로 누적 그려져 있으므로
 // (GamePage의 countryCommitted 배선), finished 전이 시점에 카메라만 전체 노선 bounds로
@@ -306,20 +311,26 @@ function SubmissionStatus({ submission }: { submission: ReturnType<typeof useRun
   // 결과다). 서버 응답의 순위를 그대로 표시(§1.4-③ 인라인). flagged도 본인 화면에는 정상 표시
   // (shadow — 구분 UI 없음, docs/06 §3.5).
   const registered = (
-    <p className="wt-result-view__submission" data-testid="result-registered">
+    <p
+      className="wt-result-view__submission wt-result-view__submission--registered"
+      data-testid="result-registered"
+    >
       {t('result.registered')}
     </p>
   );
   if (submission.rank !== null && submission.total !== null && submission.total > 0) {
     const topPercent = Math.max(1, Math.round((submission.rank / submission.total) * 100));
     return (
-      <>
+      <div className="wt-result-view__status">
         {registered}
-        <p className="wt-result-view__submission" data-testid="result-rank">
+        <p
+          className={`wt-result-view__rank${submission.isPersonalBest ? ' wt-result-view__rank--best' : ''}`}
+          data-testid="result-rank"
+        >
           {t('result.rank.value', { rank: submission.rank, percent: topPercent })}
           {submission.isPersonalBest && ` · ${t('result.rank.personalBest')}`}
         </p>
-      </>
+      </div>
     );
   }
   return registered;

@@ -1451,21 +1451,93 @@
   opacity: 0.35;
 }
 
-/* 제출 상태/업적 토스트/닉네임 유도(ResultView.tsx) — WT-UI-06 이전엔 전용 스타일이 전혀
-   없었다(브라우저 기본 렌더). 시맨틱 토큰만 참조(신규 토큰 없음). */
+/* 제출 상태/성취 피드백(ResultView.tsx) — §11-D80: 시인성 3계층(축하 골드/확인 칩/중립 칩).
+   골드 필은 멀티 .wt-race-result__rank-pill의 확립된 문법 미러(신규 원색 없음 — grade-s 파생만).
+   아이콘은 전부 의사요소(content / '')로만 — testid 요소의 textContent 정확일치 계약 보존. */
 .wt-result-view__submission {
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-sunken);
+  font-size: 0.9rem;
+  font-weight: 500;
   color: var(--text-muted);
   text-align: center;
 }
+.wt-result-view__submission--registered {
+  color: var(--text);
+  font-weight: 600;
+}
+.wt-result-view__submission--registered::before {
+  content: '✓';                 /* 폴백(대체텍스트 구문 미지원 브라우저) */
+  content: '✓' / '';            /* 장식 — SR 낭독 제외 */
+  font-weight: 800;
+  color: color-mix(in srgb, var(--grade-c) 55%, black); /* sunken 위 5.57:1 */
+}
+:root[data-theme='dark'] .wt-result-view__submission--registered::before {
+  color: var(--grade-c);        /* 다크 sunken 위 8.22:1 */
+}
+.wt-result-view__status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+.wt-result-view__rank {
+  margin: 0;
+  padding: 0.5rem 1.125rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--grade-s) 22%, var(--surface));
+  border: 1.5px solid var(--grade-s);
+  color: color-mix(in srgb, var(--grade-s) 45%, black); /* 골드 필 위 6.15:1 */
+  font-weight: 800;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  animation: wt-result-slide-in 420ms ease-out;
+}
+.wt-result-view__rank::before {
+  content: '🏆 ';
+  content: '🏆 ' / '';
+}
+:root[data-theme='dark'] .wt-result-view__rank {
+  color: var(--grade-s);        /* 다크 골드 필 위 5.32:1 */
+}
+.wt-result-view__rank--best {
+  animation: wt-result-slide-in 420ms ease-out, wt-result-pb-glow 1.2s ease-out 420ms 2;
+}
+@keyframes wt-result-pb-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--grade-s) 55%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--grade-s) 0%, transparent); }
+}
 .wt-result-view__unlock-toast {
-  font-size: 0.85rem;
-  font-weight: 700;
+  margin: 0;
+  padding: 0.5rem 1.125rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--grade-s) 22%, var(--surface));
+  border: 1.5px solid var(--grade-s);
+  font-size: 1rem;
+  font-weight: 800;
   text-align: center;
-  color: color-mix(in srgb, var(--grade-s) 55%, black);
+  color: color-mix(in srgb, var(--grade-s) 45%, black);
+  animation: wt-result-slide-in 420ms ease-out;
 }
 :root[data-theme='dark'] .wt-result-view__unlock-toast {
   color: var(--grade-s);
+}
+/* reduced-motion(§7.3) — 기존 이중 등록 패턴 그대로. */
+:root[data-reduced] .wt-result-view__rank,
+:root[data-reduced] .wt-result-view__unlock-toast {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-result-view__rank,
+  .wt-result-view__unlock-toast {
+    animation: none;
+  }
 }
 .wt-result-view__nickname {
   display: flex;

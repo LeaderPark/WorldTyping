@@ -33,6 +33,8 @@ import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry
 import { useModalA11y } from '../../lib/useModalA11y';
 import { RouteMotifBackdrop } from '../../components/RouteMotifBackdrop';
 import { Mascot } from '../../components/Mascot';
+import { AuthChip } from '../../features/auth/AuthChip';
+import { ThemeToggle } from '../../features/auth/ThemeToggle';
 import { HeroMapPlaceholder } from './HeroMapPlaceholder';
 
 const HeroMap = lazy(() => import('./HeroMap'));
@@ -164,14 +166,10 @@ export function HomePage() {
             >
               {isSoundMuted ? t('home.soundToggle.off') : t('home.soundToggle.on')}
             </button>
-            <Link
-              to="/?modal=settings"
-              data-testid="home-nav-settings"
-              aria-label={t('menu.settings')}
-              className="wt-icon-tile wt-home__settings-btn"
-            >
-              ⚙
-            </Link>
+            {/* [WT-AUTH-03] 로그인/프로필 칩(§11-D68-⑥). */}
+            <AuthChip />
+            {/* [WT-AUTH-03] 기어 딥링크(?modal=settings) 폐기 → 테마 토글(§11-D68-⑥). */}
+            <ThemeToggle className="wt-home__settings-btn" />
           </div>
         </header>
 

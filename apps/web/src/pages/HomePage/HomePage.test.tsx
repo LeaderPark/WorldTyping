@@ -17,12 +17,19 @@ const fetchDailyTodayMock = vi.fn();
 const fetchDailyMeMock = vi.fn();
 const fetchLbPageMock = vi.fn();
 const ensureSessionMock = vi.fn();
-vi.mock('../../net/api-client', () => ({
-  fetchDailyToday: (...args: unknown[]) => fetchDailyTodayMock(...args),
-  fetchDailyMe: (...args: unknown[]) => fetchDailyMeMock(...args),
-  fetchLbPage: (...args: unknown[]) => fetchLbPageMock(...args),
-  ensureSession: (...args: unknown[]) => ensureSessionMock(...args),
-}));
+// [WT-AUTH-03] importActual로 실제 모듈을 보존한 뒤 4개 조회 함수만 목킹한다 — HomePage가 이제
+// AuthChip→stores/auth를 거쳐 api-client의 계정 토큰/LOGIN_REQUIRED 시그널 함수를 로드하므로,
+// 전체 대체 목이면 auth 스토어 모듈 로드가 onLoginRequired undefined로 크래시한다.
+vi.mock('../../net/api-client', async () => {
+  const actual = await vi.importActual<typeof import('../../net/api-client')>('../../net/api-client');
+  return {
+    ...actual,
+    fetchDailyToday: (...args: unknown[]) => fetchDailyTodayMock(...args),
+    fetchDailyMe: (...args: unknown[]) => fetchDailyMeMock(...args),
+    fetchLbPage: (...args: unknown[]) => fetchLbPageMock(...args),
+    ensureSession: (...args: unknown[]) => ensureSessionMock(...args),
+  };
+});
 
 function renderHome() {
   return render(

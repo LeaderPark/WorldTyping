@@ -12,9 +12,12 @@ import {
   fetchDailyToday,
   fetchLbMe,
   fetchLbPage,
+  getAuthToken,
   getSessionToken,
   modeKeyFor,
+  onLoginRequired,
   putNickname,
+  setAuthToken,
   startRun,
   submitRun,
   __resetSessionForTests,
@@ -218,5 +221,69 @@ describe('runs/lb/daily/nickname 타입드 래퍼', () => {
     await apiClient.get('/daily/today');
     const [, initNoAuth] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect((initNoAuth.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+});
+
+// ───────────────────────── 계정 토큰 + LOGIN_REQUIRED 시그널(WT-AUTH-03) ─────────────────────────
+describe('계정 토큰 우선순위 & LOGIN_REQUIRED 시그널', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    __resetSessionForTests();
+  });
+
+  function authHeader(fetchMock: ReturnType<typeof vi.fn>): string | undefined {
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    return (init.headers as Record<string, string>).Authorization;
+  }
+
+  it('계정 토큰(wt:authtoken)이 게스트 세션 토큰보다 우선한다', async () => {
+    localStorage.setItem('wt:sessiontoken', 'guest-tok');
+    setAuthToken('acct-tok');
+    expect(getAuthToken()).toBe('acct-tok');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiClient.get('/config');
+    expect(authHeader(fetchMock)).toBe('Bearer acct-tok');
+  });
+
+  it('계정 토큰이 없으면 게스트 세션 토큰으로 폴백한다', async () => {
+    __resetSessionForTests();
+    localStorage.setItem('wt:sessiontoken', 'guest-tok');
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiClient.get('/config');
+    expect(authHeader(fetchMock)).toBe('Bearer guest-tok');
+  });
+
+  it('onLoginRequired는 401 LOGIN_REQUIRED에서만 발화하고 해제할 수 있다', async () => {
+    const handler = vi.fn();
+    const off = onLoginRequired(handler);
+    // 매 호출마다 새 Response(바디는 1회만 소비 가능하므로 인스턴스 재사용 금지).
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ error: { code: 'LOGIN_REQUIRED', message: 'nope' } }, { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiClient.post('/rooms')).rejects.toMatchObject({ code: 'LOGIN_REQUIRED' });
+    expect(handler).toHaveBeenCalledTimes(1);
+
+    off();
+    await expect(apiClient.post('/rooms')).rejects.toMatchObject({ code: 'LOGIN_REQUIRED' });
+    expect(handler).toHaveBeenCalledTimes(1); // 해제 후 미발화
+  });
+
+  it('다른 401(INVALID_TOKEN)에서는 LOGIN_REQUIRED 시그널이 발화하지 않는다', async () => {
+    const handler = vi.fn();
+    const off = onLoginRequired(handler);
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ error: { code: 'INVALID_TOKEN', message: 'bad' } }, { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiClient.get('/config')).rejects.toMatchObject({ code: 'INVALID_TOKEN' });
+    expect(handler).not.toHaveBeenCalled();
+    off();
   });
 });

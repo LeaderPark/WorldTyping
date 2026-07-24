@@ -375,5 +375,45 @@
   "daily.hero.kicker": "A new journey opens every midnight",
   "daily.play.cta": "Start today's challenge",
 
-  "banner.ariaLabel": "Service notice"
+  "banner.ariaLabel": "Service notice",
+
+  "auth.login": "Log in",
+  "auth.logout": "Log out",
+  "auth.cancel": "Cancel",
+  "auth.error": "Sign-in failed. Please try again in a moment.",
+  "auth.devLogin": "Dev login",
+  "auth.modal.title": "Sign in",
+  "auth.reason.general": "Log in to unlock more features.",
+  "auth.reason.multi": "Multiplayer requires a login.",
+  "auth.reason.ranking": "Submitting to the leaderboard requires a login.",
+
+  "theme.toggle": "Toggle light/dark theme",
+
+  "footer.privacy": "Privacy Policy",
+  "footer.terms": "Terms of Service",
+  "footer.support": "Support",
+  "footer.copyright": "© {year} TypeTrip. All rights reserved.",
+
+  "lobby.banner.guest": "Multiplayer requires a login. Sign in to create or join a room.",
+  "lobby.banner.member": "Depart together on the same route. Create a room or join a public one in progress.",
+  "lobby.search.placeholder": "Search by invite code or room title",
+  "lobby.filter.all": "All",
+  "lobby.filter.public": "Public",
+  "lobby.filter.private": "Private",
+  "lobby.room.title": "Multiplayer Rooms",
+  "lobby.room.enter": "Enter",
+  "lobby.room.inProgress": "In progress",
+  "lobby.room.passengers": "{current}/{max} aboard",
+  "lobby.create.title": "Create Room",
+  "lobby.create.titlePlaceholder": "Room title (optional)",
+
+  "result.loginToRank": "Log in to submit to the leaderboard",
+  "result.registered": "Submitted to the leaderboard",
+
+  "rank.loginCta": "Log in to rank your records",
+
+  "legal.terms.title": "Terms of Service",
+  "legal.support.title": "Support",
+
+  "privacy.myData.heading": "My Data"
 }

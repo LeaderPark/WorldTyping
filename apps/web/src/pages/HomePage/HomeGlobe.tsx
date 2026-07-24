@@ -30,6 +30,9 @@ export const HOME_GLOBE_MIN_HOP_DELAY_MS = 10_000;
 export const HOME_GLOBE_MAX_HOP_DELAY_MS = 22_000;
 /** ~16홉마다 reset() 후 재시작(리드 확정). */
 export const HOME_GLOBE_RESET_EVERY_HOPS = 16;
+/** 홈 데모 순항 시간(ms) — 참조 프로토타입의 크루즈 느낌 이식(Tweak E, §11-D73). B의 10~22초 홉
+ *  간격 안에 순항 2.6s + 트레일 페이드 0.6s가 여유 있게 수용된다. 인게임 hopDurationMs는 불변. */
+export const HOME_GLOBE_HOP_DURATION_MS = 2600;
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -112,7 +115,7 @@ export function startHomeGlobeDemo(deps: HomeGlobeDemoDeps): HomeGlobeDemoContro
     } else {
       handle.drawRouteSegment(current, next);
       handle.markSolved(next, `var(--continent-${continentOf(next) ?? 'asia'})`);
-      handle.moveVehicle(current, next);
+      handle.moveVehicle(current, next, { durationMs: HOME_GLOBE_HOP_DURATION_MS });
     }
     current = next;
     hops += 1;

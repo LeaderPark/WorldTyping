@@ -9,6 +9,11 @@
 // canvas: 바다·경위선·전 폴리곤·노선 아크·스테이션 도트(재투영). SVG 오버레이(.wt-map): 숨김
 // ledger([data-layer=solved|skipped]로 e3 셀렉터 보존) · 타깃 펄스 링 · 체크포인트 링 · 라벨 ·
 // 비행기 · 파티클. 카메라는 projection.rotate가 홉 보간 위치를 추적한다(easeInOutCubic).
+//
+// [Tweak E, 00 §11-D73] 비행기 실루엣·이동선을 리드 참조 프로토타입(globe-flight.html)과 정합: 참조
+// 제트 path 원문(정적 `rotate(90) translate(-12 -12)`로 노즈 +x 정렬) + 활성 홉 앰버 점선/글로우 트레일
+// (도착 후 600ms 페이드, 진행 대륙색 프리픽스 폐기) + lift 0.8 기저. Tweak B(idle spin 0.55°/s·홈 홉
+// 간격 10~22s·IDLE_MIN_DT)·인게임 hopDurationMs 불변 — 홈 데모만 durationMs 옵션으로 순항.
 
 import { memo, useEffect, useRef } from 'react';
 import { geoCentroid, geoInterpolate, geoOrthographic, type GeoProjection } from 'd3-geo';
@@ -51,6 +56,14 @@ const LABEL_OFFSET = 14;
 /** 마운트/리셋 카메라 중심(경도, 위도). idle spin이 곧 전 경도를 순회한다. */
 const INITIAL_CENTER: LngLat = [20, 20];
 const DPR_MAX = 2;
+/** 활성 홉 트레일 도착 후 페이드아웃 시간(ms, 참조 fadeTrail ≈625ms 근사, Tweak E §11-D73). */
+const TRAIL_FADE_MS = 600;
+/** 트레일 점 누적 최소 이동(도) — 마지막 점 대비 |Δlng|+|Δlat|가 이 값 이상일 때만 push. */
+const TRAIL_MIN_STEP_DEG = 0.2;
+/** 트레일 점 상한(초과 시 앞에서 절단 — 메모리·드로잉 비용 상한). */
+const TRAIL_MAX_PTS = 512;
+/** 비행기 지상(정지/스냅) 스케일 — 참조 lift 기저 0.8, 정점 1.65(0.8 + 0.85). */
+const PLANE_GROUND_SCALE = 0.8;
 
 const CONTINENTS: readonly Continent[] = [
   'asia',
@@ -133,6 +146,8 @@ function resolvePalette(): GlobePalette {
     skipped: v('--map-skipped'),
     stationFill: v('--map-station-fill'),
     routeCasing: v('--map-route-casing'),
+    trail: v('--globe-trail'),
+    trailGlow: v('--globe-trail-glow'),
     continent,
   };
 }
@@ -173,6 +188,8 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
     lat: INITIAL_CENTER[1],
   });
   const hopRef = useRef<HopState | null>(null);
+  // 활성 홉 트레일(참조 앰버 점선/글로우). pts=비행 위치 누적, fadeStart=도착 페이드 시작(null=순항 중).
+  const trailRef = useRef<{ pts: LngLat[]; fadeStart: number | null } | null>(null);
   const flyToRef = useRef<FlyState | null>(null);
   const idleSpinRef = useRef(false);
   const rampUntilRef = useRef(0);
@@ -229,6 +246,15 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
       const tx = (cw - LOGICAL_W * scale) / 2;
       const ty = (ch - LOGICAL_H * scale) / 2;
       ctx.setTransform(scale * dpr, 0, 0, scale * dpr, tx * dpr, ty * dpr);
+      // 활성 홉 트레일 알파(순항=1, 도착 후 TRAIL_FADE_MS 선형 페이드). 0 도달 시 해제.
+      let trail: { pts: readonly LngLat[]; alpha: number } | null = null;
+      const tr = trailRef.current;
+      if (tr) {
+        const alpha =
+          tr.fadeStart == null ? 1 : 1 - clamp((now - tr.fadeStart) / TRAIL_FADE_MS, 0, 1);
+        if (alpha <= 0) trailRef.current = null;
+        else trail = { pts: tr.pts, alpha };
+      }
       drawGlobe(ctx, proj, pal, {
         index,
         solved: solvedRef.current,
@@ -236,6 +262,7 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
         stations: stationsRef.current,
         targetId: targetIdRef.current,
         route: routeRef.current,
+        trail,
         now,
       });
     };
@@ -300,7 +327,8 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
       const proj = p(h.pos);
       if (!proj) return;
       // 카메라가 h.pos를 추적하므로 proj ≈ 화면 중심 — 비행기는 중심에서 lift 스케일·bearing 회전.
-      const scale = 1 + Math.sin(Math.PI * h.raw) * 0.85;
+      // 참조 프로토타입 동일: 지상 0.8 기저, 정점 1.65(Tweak E §11-D73).
+      const scale = PLANE_GROUND_SCALE + Math.sin(Math.PI * h.raw) * 0.85;
       g.style.display = '';
       g.setAttribute(
         'transform',
@@ -394,6 +422,12 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
     const finishHop = (h: HopState): void => {
       hopRef.current = null;
       if (h.routeEntry) h.routeEntry.progress = 1;
+      // 트레일 페이드 개시(도착) + rampUntil로 페이드 프레임 구동(기존 메커니즘 재사용).
+      const tr = trailRef.current;
+      if (tr) {
+        tr.fadeStart = nowMs();
+        rampUntilRef.current = Math.max(rampUntilRef.current, nowMs() + TRAIL_FADE_MS);
+      }
       arriveStation(h.to); // 도착 시 스테이션 도트 + pop + 파티클(홉 도착 이연 규칙).
     };
     const advance = (now: number): boolean => {
@@ -411,6 +445,18 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
         const ahead = h.interp(Math.min(1, t + 0.02));
         h.heading = bearingDeg([pos[0], pos[1]], [ahead[0], ahead[1]]) - 90;
         if (h.routeEntry) h.routeEntry.progress = raw;
+        // 비행 위치 점 누적(참조 trailPts.push) — 선점 리타깃 궤적도 그대로 이어진다.
+        const tr = trailRef.current;
+        if (tr) {
+          const last = tr.pts[tr.pts.length - 1];
+          if (
+            !last ||
+            Math.abs(wrapLng(pos[0] - last[0])) + Math.abs(pos[1] - last[1]) >= TRAIL_MIN_STEP_DEG
+          ) {
+            tr.pts.push([pos[0], pos[1]]);
+            if (tr.pts.length > TRAIL_MAX_PTS) tr.pts.splice(0, tr.pts.length - TRAIL_MAX_PTS);
+          }
+        }
         moved = true;
         if (raw >= 1) finishHop(h);
       } else if (flyToRef.current) {
@@ -533,7 +579,10 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
       const x = c ? c[0] : LOGICAL_W / 2;
       const y = c ? c[1] : LOGICAL_H / 2;
       g.style.display = '';
-      g.setAttribute('transform', `translate(${round(x)} ${round(y)}) rotate(0) scale(1)`);
+      g.setAttribute(
+        'transform',
+        `translate(${round(x)} ${round(y)}) rotate(0) scale(${PLANE_GROUND_SCALE})`,
+      );
     };
 
     // ── 핸들 ─────────────────────────────────────────────────────────────────
@@ -593,16 +642,16 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
         requestDraw();
       },
       moveVehicle(from, to, opts?: MoveVehicleOptions) {
-        void opts; // duration은 각거리 가중(hopDurationMs)으로 자동 산출 — 표시 전용.
         const g = planeRef.current;
         const b = index.anchor.get(to);
         if (!b || !g) return;
         g.setAttribute('data-country', to);
 
-        // 출발역(from===to): 카메라 스냅 + 비행기 중심 표시(홉·노선 없음).
+        // 출발역(from===to): 카메라 스냅 + 비행기 중심 표시(홉·노선·트레일 없음).
         if (from === to) {
           completeActiveHop();
           hopRef.current = null;
+          trailRef.current = null;
           cameraRef.current = { lng: b[0], lat: b[1] };
           applyCameraRotation();
           showPlaneAtCenter();
@@ -614,6 +663,7 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
         if (immediate()) {
           completeActiveHop();
           hopRef.current = null;
+          trailRef.current = null;
           completeLastRoute(from, to);
           cameraRef.current = { lng: b[0], lat: b[1] };
           applyCameraRotation();
@@ -633,13 +683,17 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
         } else {
           startPos = a ? [a[0], a[1]] : [b[0], b[1]];
         }
+        // 트레일: 선점(활성 홉+기존 트레일)이면 궤적 계속(fadeStart 해제), 아니면 새 트레일 개시.
+        if (active && trailRef.current) trailRef.current.fadeStart = null;
+        else trailRef.current = { pts: [[startPos[0], startPos[1]]], fadeStart: null };
         const routeEntry = claimLastRoute(from, to);
         hopRef.current = {
           from,
           to,
           interp: geoInterpolate([startPos[0], startPos[1]], [b[0], b[1]]),
           start: nowMs(),
-          duration: hopDurationMs([startPos[0], startPos[1]], [b[0], b[1]]),
+          // duration은 각거리 가중(hopDurationMs)으로 자동 산출 — 표시 전용. 홈 데모만 durationMs 옵션으로 순항(§11-D73-④).
+          duration: opts?.durationMs ?? hopDurationMs([startPos[0], startPos[1]], [b[0], b[1]]),
           routeEntry,
           pos: startPos,
           heading: 0,
@@ -729,6 +783,7 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
         }
         rafRef.current = null;
         hopRef.current = null;
+        trailRef.current = null;
         flyToRef.current = null;
         idleSpinRef.current = false;
         rampUntilRef.current = 0;
@@ -865,8 +920,13 @@ function GlobeMapImpl({ index, className, onReady }: GlobeMapProps): JSX.Element
           />
         </g>
         <g ref={planeRef} data-layer="vehicle" aria-hidden="true" style={{ display: 'none' }}>
-          {/* 동쪽(+x)을 향하는 비행기 실루엣 — bearing-90 회전이 진행 방향에 정렬한다. */}
-          <path className="wt-globe__plane" d="M9 0 L-7 -6 L-3 0 L-7 6 Z" />
+          {/* 참조 globe-flight.html 제트 실루엣(24×24, 노즈 (12,3)) — rotate(90)·translate(-12,-12)로
+              원점 중심·노즈 +x 정렬(bearing-90 회전 규약 불변, Tweak E §11-D73). */}
+          <path
+            className="wt-globe__plane"
+            transform="rotate(90) translate(-12 -12)"
+            d="M21.5 15.5v-2l-8-5v-5.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5v5.5l-2 1.5v1.5l3.5-1 3.5 1V20l-2-1.5V13z"
+          />
         </g>
         <g ref={particleRef} data-layer="particles" aria-hidden="true" />
       </svg>

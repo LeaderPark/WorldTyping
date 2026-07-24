@@ -2,8 +2,13 @@
 //       docs/00 §11-D62(브랜드 원색 = 지도 fill 전용, 텍스트 금지), WT-DC-08.
 //
 // canvas 1패스로 지구본을 그린다: 바다 원판→림→경위선→중립→기본 폴리곤→skipped→solved(알파
-// 램프)→target(밝기)→노선 아크(케이싱+대륙색, 진행 홉=프리픽스)→스테이션 도트. projection은
-// 호출부(GlobeMap)가 매 프레임 rotate해 넘긴다. orthographic은 뒷면 폴리곤/아크를 자동 클립한다.
+// 램프)→target(밝기)→노선 아크(완주=대륙색, progress<1 홉은 비드로잉)→활성 홉 트레일(앰버 점선/
+// 글로우 3-패스)→스테이션 도트. projection은 호출부(GlobeMap)가 매 프레임 rotate해 넘긴다.
+// orthographic은 뒷면 폴리곤/아크를 자동 클립한다.
+//
+// [Tweak E §11-D73] 진행 홉의 대륙색 프리픽스 표시는 폐기(트레일과 이중 표시 방지) — 완주 노선
+// (progress=1)만 대륙색 아크로 확정 표시하고, 비행 중 경로는 앰버 트레일이 그린다. 트레일 글로우는
+// blur/shadowBlur(핫루프 크래시 회귀 이력) 대신 폭 계층 3-패스로 에뮬레이트한다.
 //
 // **팔레트는 사전 해석된 색 문자열 객체로 주입한다** — 루프 내 getComputedStyle/문자열 SVG d
 // 재생성/레이아웃 유발 속성 금지(docs/03 §4.5 핫패스 규약). ctx는 fit transform(logical 960×500)
@@ -30,16 +35,21 @@ export interface GlobePalette {
   skipped: string;
   stationFill: string;
   routeCasing: string;
+  /** 활성 홉 트레일 코어(앰버 점선, --globe-trail). */
+  trail: string;
+  /** 활성 홉 트레일 글로우(--globe-trail-glow). */
+  trailGlow: string;
   continent: Record<Continent, string>;
 }
 
-/** 노선 원장 세그먼트 — 아크는 사전 샘플(globe-hop.sampleArc), progress로 프리픽스만 그린다. */
+/** 노선 원장 세그먼트 — 아크는 사전 샘플(globe-hop.sampleArc). progress<1(진행 홉)은 앰버 트레일이
+ *  대신 그리고, 완주(progress=1)만 대륙색 아크로 그린다(§11-D73). */
 export interface RouteEntry {
   from: CountryId;
   to: CountryId;
   arc: LngLat[];
   continent: Continent;
-  /** 0..1 그려진 비율(진행 홉이 구동, 완성=1). */
+  /** 0..1 진행 비율(진행 홉이 구동, 완성=1). 렌더는 완주(=1)만 그린다 — 진행 중은 트레일이 담당. */
   progress: number;
 }
 
@@ -53,6 +63,8 @@ export interface GlobeRenderState {
   stations: ReadonlySet<CountryId>;
   targetId: CountryId | null;
   route: readonly RouteEntry[];
+  /** 활성 홉 트레일(비행 위치 점 + 페이드 알파). null=트레일 없음(Tweak E §11-D73). */
+  trail: { pts: readonly LngLat[]; alpha: number } | null;
   now: number;
 }
 
@@ -169,15 +181,15 @@ export function drawGlobe(
     }
   }
 
-  // 9) 노선 아크(케이싱 4px + 대륙색 2.5px, 진행 홉은 progress 프리픽스). orthographic이 뒷면 클립.
+  // 9) 노선 아크(케이싱 4px + 대륙색 2.5px). 진행 홉(progress<1)은 앰버 트레일이 대신 그리므로
+  // 비드로잉 — 완주(progress=1) 노선만 대륙색 아크로 확정(§11-D73). orthographic이 뒷면 클립.
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const seg of state.route) {
+    if (seg.progress < 1) continue;
     const n = seg.arc.length;
     if (n < 2) continue;
-    const k = Math.max(2, Math.min(n, Math.round(clamp01(seg.progress) * (n - 1)) + 1));
-    const coords = seg.arc.slice(0, k);
-    const line = { type: 'LineString', coordinates: coords };
+    const line = { type: 'LineString', coordinates: seg.arc };
     ctx.beginPath();
     path(line as never);
     ctx.lineWidth = 4;
@@ -189,6 +201,39 @@ export function drawGlobe(
     ctx.strokeStyle = palette.continent[seg.continent];
     ctx.stroke();
   }
+
+  // 9b) 활성 홉 트레일(참조 앰버 점선+글로우). blur/shadowBlur 금지 → 폭 계층 3-패스 에뮬레이트(§11-D73).
+  //     alpha = 페이드 알파(순항 1 → 도착 후 0). 노선 아크 뒤·스테이션 도트 앞.
+  const trail = state.trail;
+  if (trail && trail.pts.length >= 2) {
+    const a = trail.alpha;
+    const line = { type: 'LineString', coordinates: trail.pts };
+    // glow A(넓은 저알파).
+    ctx.beginPath();
+    path(line as never);
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = palette.trailGlow;
+    ctx.globalAlpha = 0.12 * a;
+    ctx.stroke();
+    // glow B(중간).
+    ctx.beginPath();
+    path(line as never);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = palette.trailGlow;
+    ctx.globalAlpha = 0.18 * a;
+    ctx.stroke();
+    // core(앰버 점선).
+    ctx.setLineDash([2.4, 4.8]);
+    ctx.beginPath();
+    path(line as never);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = palette.trail;
+    ctx.globalAlpha = 0.95 * a;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+
   ctx.lineCap = 'butt';
   ctx.lineJoin = 'miter';
 

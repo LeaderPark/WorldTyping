@@ -92,6 +92,12 @@
   --map-ocean: #dbe6ea; /* 바다 원판(폴리곤 밖) */
   --map-rim: #b6c3c9; /* 지구본 외곽 림 */
   --map-graticule: #c6d1d4; /* 경위선(극옅음, 렌더에서 알파 0.32) */
+  /* 지구본 비행 연출(Tweak E, §11-D73) — 참조 프로토타입 고정색(양 테마 공통, 장식 전용·텍스트 금지).
+     흰 기체 + 네이비 윤곽 + 그림자 3요소로 라이트/다크 양 무대에서 실루엣 확보. --continent-*와 동일 패턴. */
+  --globe-plane-fill: #ffffff;
+  --globe-plane-stroke: #274690;
+  --globe-trail: #ffb703;
+  --globe-trail-glow: #ffd166;
 }
 
 /* 다크 테마(옵션, D57 — "삭제 금지, 토글 보존"). 신설 시맨틱 토큰 전부 다크 대응값을 정의한다.
@@ -273,14 +279,15 @@
   height: 100%;
   pointer-events: none;
 }
-/* 비행기: 어두운 실루엣(--text) + 크림 halo(--bg)로 채색 노선/바다 위에서도 또렷하게. transform은
-   moveVehicle이 WAAPI/attribute로 갱신(레이아웃 불변, §4.5). */
+/* 비행기: 참조 프로토타입 제트 실루엣(§11-D73) — 흰 기체(--globe-plane-fill) + 네이비 윤곽
+   (--globe-plane-stroke) + drop-shadow 3요소로 라이트/다크 양 테마 채색 노선·바다 위에서 또렷하게.
+   transform은 moveVehicle이 WAAPI/attribute로 갱신(레이아웃 불변, §4.5). */
 .wt-globe__plane {
-  fill: var(--text);
-  stroke: var(--bg);
-  stroke-width: 1.5;
+  fill: var(--globe-plane-fill);
+  stroke: var(--globe-plane-stroke);
+  stroke-width: 1.4; /* 참조 0.8 × (44/24) ≈ 1.47 CSS px 등가 */
   stroke-linejoin: round;
-  paint-order: stroke;
+  filter: drop-shadow(0 2.5px 3.5px rgba(0, 0, 0, 0.4)); /* 참조 0 6px 8px .45의 크기 비례 축소 */
 }
 /* 웨이포인트 라벨(prev/cur/next): 12px/600, 크림 halo(paint-order stroke). 위치는 setWaypointLabels/
    재투영이 x·y로 지정. non-scaling-stroke halo로 폴리곤 위 가독성 확보. */

@@ -83,6 +83,13 @@ describe('1회 렌더 구조(§3.7)', () => {
     const plane = container.querySelector('[data-layer="vehicle"]') as SVGGElement;
     expect(plane.style.display).toBe('none');
   });
+
+  it('비행기 = 참조 제트 실루엣 path + 정적 transform(노즈 +x 정렬, §11-D73)', () => {
+    const { container } = renderGlobe();
+    const plane = container.querySelector('.wt-globe__plane')!;
+    expect(plane.getAttribute('d')).toMatch(/^M21\.5 15\.5/);
+    expect(plane.getAttribute('transform')).toBe('rotate(90) translate(-12 -12)');
+  });
 });
 
 describe('ledger 추가 — e3 셀렉터 계약(.wt-map [data-layer] [data-country])', () => {

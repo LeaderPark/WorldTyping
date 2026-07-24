@@ -883,7 +883,8 @@
    카운트다운 숫자+딤 스크림(①) / 생명 손실 비네트(②) / 환승 칩·경유지 배너(③) / 결과 타이틀
    페이드(⑥). 고빈도값은 전부 엔진 이벤트 구독 → 명령형 DOM/WAAPI(§4.5)이고, 여기 CSS는 정적
    스타일·입장 키프레임뿐이다. 색은 tokens 변수만 — 단 딤 스크림 rgba(리드 확정 기본값)와 콘솔
-   칩 텍스트 #f8fafc(테마 무관 콘솔 텍스트, .wt-console 전례 globals L2284)는 명시 예외(각 주석).
+   칩 텍스트 #f8fafc(--surface-console 다크 칩 계약 — D79 이후 콘솔(.wt-console)은 라이트,
+   칩·포토피니시만 예외 존치)는 명시 예외(각 주석).
    모든 입장/연속 애니는 :root[data-reduced] + @media(prefers-reduced-motion) 양쪽에서 정지(§7.3). */
 
 /* ① 카운트다운 숫자(디자인 L349, 92px/800). color는 인라인 style로 모드 억센트 토큰 var 주입. */
@@ -928,7 +929,7 @@
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
   background: var(--surface-console);
-  color: #f8fafc; /* 테마무관 콘솔 텍스트(.wt-console 전례) */
+  color: #f8fafc; /* --surface-console 다크 칩 계약(D79 이후 콘솔은 라이트 — 칩·포토피니시만 예외) */
   font-size: 0.75rem;
   font-weight: 700;
   white-space: nowrap;
@@ -956,7 +957,7 @@
   padding: 0.625rem 1.125rem;
   border-radius: 999px;
   background: var(--surface-console);
-  color: #f8fafc; /* 테마무관 콘솔 텍스트(.wt-console 전례) */
+  color: #f8fafc; /* --surface-console 다크 칩 계약(D79 이후 콘솔은 라이트 — 칩·포토피니시만 예외) */
   font-size: 0.875rem;
   font-weight: 700;
   box-shadow: var(--shadow-float);
@@ -1870,10 +1871,10 @@
 }
 .wt-track-item:hover,
 .wt-track-item:focus-visible {
-  background: color-mix(in srgb, #f8fafc 10%, transparent);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 .wt-track-item__best {
-  opacity: 0.75;
+  color: var(--text-muted);
   /* WT-DC-03: 디자인 정본(L176) 12.5px — 현행 0.9rem(14.4px)에서 0.78125rem(12.5px)로. */
   font-size: 0.78125rem;
 }
@@ -1926,13 +1927,12 @@
   padding: 1.5rem 1.5rem 1.25rem;
 }
 
-/* ── [WT-UI-05] S4 "여행 설정" 콘솔 + 토큰 그리드 ──
-   spec: 이 태스크 지시문(WT-UI-05), docs/01 §10.2(S4 와이어프레임).
-   .wt-console/.wt-token/.wt-kicker/.wt-pill은 WT-UI-01이 전역 정의(L1000~)했다 — 그 정의는
-   "보통 라이트 페이지 위" 사용을 가정해 --text-muted(테마 반전) 등을 쓴다. .wt-console은
-   테마 불변 "항상 다크" 카드라 그 안에서 --text-muted를 그대로 쓰면 라이트 테마일 때 저대비가
-   된다(.wt-console 자신이 이미 그래서 #f8fafc를 직접 지정 — 그 전례를 그대로 따른다). 아래
-   스코프 규칙은 전부 결합 셀렉터라 소스 순서와 무관하게 이긴다. */
+/* ── [WT-UI-05 → §11-D79] S4 "여행 설정" 콘솔 + 토큰 그리드 ──
+   spec: WT-UI-05(도입), §11-D79(라이트 재테마), docs/01 §10.2(S4 와이어프레임).
+   콘솔은 D79로 라이트 카드 — 과거 "항상 다크 + #f8fafc 직접 지정" 전제의 스코프 오버라이드
+   (.wt-console .wt-kicker/.wt-token__label)는 삭제됐고 전역 시맨틱 토큰(--text/--text-muted,
+   테마 자동)이 그대로 적용된다. .wt-track-select__console 기하(gap/padding)만 이 화면 고유로
+   유지한다(결합 셀렉터라 소스 순서와 무관하게 이긴다). */
 .wt-track-select__console {
   display: flex;
   flex-direction: column;
@@ -1950,7 +1950,7 @@
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 999px;
-  background: var(--grade-c);
+  background: color-mix(in srgb, var(--grade-c) 75%, black);
   flex: none;
 }
 .wt-track-select__console-title {
@@ -1962,28 +1962,19 @@
 .wt-track-select__console-badge {
   flex: none;
 }
-.wt-console .wt-kicker {
-  color: inherit;
-  opacity: 0.75;
-}
-.wt-console .wt-token__label {
-  color: inherit;
-  opacity: 0.85;
-}
-/* 원형 토큰 — 대륙 6색은 순색 원(글자 없음, 장식 전용 — WCAG 1.4.11 비텍스트 3:1은 진한 대륙색
-   대 콘솔 배경(#14201a)에서 항상 여유롭게 통과). 티어/세계일주는 글자(T1~T5, ✈)가 들어가므로
-   --text-muted 대신 .wt-console과 동일한 고정 밝은 텍스트(#f8fafc)를 쓰는 중립 칩으로 — 실측
-   대비 ~10:1(계산 근거는 최종 보고 참조). */
-.wt-token__circle.wt-token__circle--asia { background: var(--continent-asia); border-color: transparent; }
-.wt-token__circle.wt-token__circle--europe { background: var(--continent-europe); border-color: transparent; }
-.wt-token__circle.wt-token__circle--africa { background: var(--continent-africa); border-color: transparent; }
-.wt-token__circle.wt-token__circle--north-america { background: var(--continent-north-america); border-color: transparent; }
-.wt-token__circle.wt-token__circle--south-america { background: var(--continent-south-america); border-color: transparent; }
-.wt-token__circle.wt-token__circle--oceania { background: var(--continent-oceania); border-color: transparent; }
+/* 원형 토큰(D79 라이트 재테마) — 대륙 6색은 원색 fill 유지(D50) + 링 color-mix(원색 75%, black)로
+   흰 --surface 카드 위 경계 식별(WCAG 1.4.11 비텍스트 3:1 — 전 대륙 ≥3.36:1 실측). 티어/세계일주는
+   글자(T1~T5, ✈)가 들어가므로 base(.wt-token__circle: --surface-sunken/--border)로 복귀 + --text만
+   지정(--surface-sunken 위 14.86:1). fill 원색 자체는 장식이라 대비 검사 대상 아님(링 계수만
+   contrast-check 가드). */
+.wt-token__circle.wt-token__circle--asia { background: var(--continent-asia); border-color: color-mix(in srgb, var(--continent-asia) 75%, black); }
+.wt-token__circle.wt-token__circle--europe { background: var(--continent-europe); border-color: color-mix(in srgb, var(--continent-europe) 75%, black); }
+.wt-token__circle.wt-token__circle--africa { background: var(--continent-africa); border-color: color-mix(in srgb, var(--continent-africa) 75%, black); }
+.wt-token__circle.wt-token__circle--north-america { background: var(--continent-north-america); border-color: color-mix(in srgb, var(--continent-north-america) 75%, black); }
+.wt-token__circle.wt-token__circle--south-america { background: var(--continent-south-america); border-color: color-mix(in srgb, var(--continent-south-america) 75%, black); }
+.wt-token__circle.wt-token__circle--oceania { background: var(--continent-oceania); border-color: color-mix(in srgb, var(--continent-oceania) 75%, black); }
 .wt-token__circle.wt-token__circle--neutral {
-  background: color-mix(in srgb, #f8fafc 14%, transparent);
-  border-color: color-mix(in srgb, #f8fafc 30%, transparent);
-  color: #f8fafc;
+  color: var(--text);
   font-size: 1.05rem;
   font-weight: 700;
 }
@@ -3041,7 +3032,8 @@
   line-height: 1;
   filter: drop-shadow(0 2px 2px rgb(0 0 0 / 0.25));
 }
-/* 포토피니시 다크 카드(디자인 L499~506) — #f8fafc 콘솔 텍스트는 WT-DC-04 전례 예외 승계. */
+/* 포토피니시 다크 카드(디자인 L499~506) — #f8fafc는 --surface-console 다크 칩 계약(D79 이후
+   콘솔(.wt-console)은 라이트, 포토피니시는 예외 존치). */
 .wt-race-result__photo {
   width: 100%;
   max-width: 32.5rem;
@@ -3331,12 +3323,12 @@ a.wt-brand:focus-visible {
   opacity: 0.4;
 }
 
-/* 콘솔: surface-console 다크 카드 — 테마 무관 "항상 다크"(--surface-console은 라이트/다크
-   동일값). 이 카드 안 텍스트는 시맨틱 --text(테마에 따라 반전)를 쓰면 라이트에서 거의 검정이
-   되어 다크 배경 위에서 안 보인다 — 그래서 고정 밝은 텍스트색을 직접 지정한다. */
+/* 콘솔: 과거 테마 무관 다크 카드(WT-UI-05)였으나 §11-D79로 라이트 재테마 — .wt-card 레시피
+   (--surface + --text + --radius-card + --shadow-card, 테마 자동) + 콘솔 고유 padding·tabular-nums.
+   더 이상 --surface-console 토큰을 참조하지 않는다(#f8fafc 직접 지정 제거). */
 .wt-console {
-  background: var(--surface-console);
-  color: #f8fafc;
+  background: var(--surface);
+  color: var(--text);
   border-radius: var(--radius-card);
   padding: 1rem 1.25rem;
   box-shadow: var(--shadow-card);

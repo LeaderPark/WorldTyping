@@ -129,6 +129,7 @@ function buildChecks(tokens: TokenMap): Check[] {
   // WT-UI-01(D57) — 라이트 기본 시맨틱 토큰. 전부 tokens.css :root(라이트) 리터럴.
   const bg = requireToken(tokens, 'bg');
   const surface = requireToken(tokens, 'surface');
+  const surfaceSunken = requireToken(tokens, 'surface-sunken');
   const text = requireToken(tokens, 'text');
   const textMuted = requireToken(tokens, 'text-muted');
   const accent = requireToken(tokens, 'accent');
@@ -274,6 +275,21 @@ function buildChecks(tokens: TokenMap): Check[] {
       bg: surface,
       minRatio: 4.5,
     },
+
+    // ── [D79] S4 트랙선택 콘솔 라이트 재테마 ─────────────────────────────────
+    // 중립 토큰 원 글자(T1~T5·✈, 1.05rem/700 = 16.8px — large text 경계(18.66px bold) 미만 → 4.5:1).
+    { label: '--text on --surface-sunken (.wt-token__circle--neutral 글자)', fg: text, bg: surfaceSunken, minRatio: 4.5 },
+    // 대륙 토큰 원 링(globals .wt-token__circle--*) — 원색 fill이 라이트 --surface 위 3:1 미달인
+    // 대륙(SA 1.92 등)이 있어 color-mix(원색 75%, black) 1px 링이 WCAG 1.4.11 경계 식별을 담당.
+    // fill 원색 자체는 D50대로 검사하지 않는다(장식 fill) — 링 계수(75%)의 회귀만 가드.
+    { label: '.wt-token__circle--asia ring mix(75%,black) on --surface (비텍스트)', fg: mix(continentAsia, BLACK, 75), bg: surface, minRatio: 3 },
+    { label: '.wt-token__circle--europe ring mix(75%,black) on --surface (비텍스트)', fg: mix(continentEurope, BLACK, 75), bg: surface, minRatio: 3 },
+    { label: '.wt-token__circle--africa ring mix(75%,black) on --surface (비텍스트)', fg: mix(continentAfrica, BLACK, 75), bg: surface, minRatio: 3 },
+    { label: '.wt-token__circle--north-america ring mix(75%,black) on --surface (비텍스트)', fg: mix(continentNA, BLACK, 75), bg: surface, minRatio: 3 },
+    { label: '.wt-token__circle--south-america ring mix(75%,black) on --surface (비텍스트)', fg: mix(continentSA, BLACK, 75), bg: surface, minRatio: 3 },
+    { label: '.wt-token__circle--oceania ring mix(75%,black) on --surface (비텍스트)', fg: mix(continentOceania, BLACK, 75), bg: surface, minRatio: 3 },
+    // 콘솔 헤더 LED 도트(.wt-track-select__console-dot) — 장식이지만 75% 계수 회귀 가드.
+    { label: '.wt-track-select__console-dot mix(grade-c 75%,black) on --surface (비텍스트)', fg: mix(gradeC, BLACK, 75), bg: surface, minRatio: 3 },
   ];
 }
 

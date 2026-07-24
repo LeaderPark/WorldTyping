@@ -48,9 +48,9 @@ export function TrackSelectPage() {
     <main className="wt-track-select wt-page" data-testid="track-select-page">
       <PageHeader title={t('route.select.title')} />
 
-      {/* 다크 콘솔 카드("여행 설정", WT-UI-05) — .wt-console/.wt-token은 WT-UI-01 전역 정의를
-          재사용한다. 토큰 그리드 내부 로직(진행도/기록 판정)은 기존 trackBests/bestStatusLabel
-          그대로이고, 여기서는 배선(마크업)만 리스트→토큰 그리드로 바꾼다. */}
+      {/* 여행 설정 콘솔 카드(WT-UI-05 도입, §11-D79 라이트 재테마) — .wt-console/.wt-token은
+          WT-UI-01 전역 정의를 재사용한다. 토큰 그리드 내부 로직(진행도/기록 판정)은 기존
+          trackBests/bestStatusLabel 그대로이고, 여기서는 배선(마크업)만 리스트→토큰 그리드로 바꾼다. */}
       <section className="wt-console wt-track-select__console">
         <div className="wt-track-select__console-head">
           <span className="wt-track-select__console-dot" aria-hidden="true" />

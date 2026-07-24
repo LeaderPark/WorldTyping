@@ -12,16 +12,18 @@
 // 라우트는 여전히 non-lazy `element`(router.tsx, router-config.test.ts eager 불변식 유지) — Google
 // OAuth 동의화면 공개 방침 URL·SEO·외부 직접 링크용으로 존치한다(§11-D72 라우트 존치 결정).
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../components/PageHeader';
 import { LegalArticle } from '../../features/legal/LegalArticle';
 
 export function PrivacyPage() {
   const { t } = useTranslation();
 
   return (
-    <div className="mx-auto max-w-2xl p-6">
-      <h1 className="text-2xl font-bold" tabIndex={-1}>
-        {t('settings.privacy')}
-      </h1>
+    <div className="wt-page">
+      <PageHeader
+        back={{ to: '/', labelKey: 'nav.back.home', testId: 'privacy-back' }}
+        title={t('settings.privacy')}
+      />
       <LegalArticle doc="privacy" />
     </div>
   );

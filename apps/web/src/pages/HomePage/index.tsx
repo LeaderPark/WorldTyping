@@ -31,6 +31,7 @@ import { useMetaStore } from '../../stores/meta';
 import { ensureSession, fetchDailyMe, fetchDailyToday, fetchLbPage, type LbEntry } from '../../net/api-client';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { Mascot } from '../../components/Mascot';
+import { BrandMark } from '../../components/BrandMark';
 import { AuthChip } from '../../features/auth/AuthChip';
 import { ThemeToggle } from '../../features/auth/ThemeToggle';
 import { HomeGlobePlaceholder } from './HomeGlobePlaceholder';
@@ -140,15 +141,18 @@ export function HomePage() {
 
       <div className="wt-home__content">
         <header className="wt-home__header">
-          <Link
-            to={`/play/daily/${todayDailyKey()}`}
-            data-testid="home-daily-badge"
-            className={`wt-home__daily-badge${alreadyPlayed ? ' wt-home__daily-badge--played' : ''}`}
-            data-played={alreadyPlayed}
-          >
-            {t('home.daily.badge', { n: dailyNo ?? placeholderDailyNumber() })}
-          </Link>
+          {/* [D74] 좌상단 브랜드(홈은 자기 링크 소음 방지로 비링크 span). 데일리 뱃지는 우측 액션
+              1번째로 이동 — 요소 속성/testid/링크 계약은 그대로다(HomePage.test 무수정 통과). */}
+          <BrandMark linkToHome={false} />
           <div className="wt-home__header-actions">
+            <Link
+              to={`/play/daily/${todayDailyKey()}`}
+              data-testid="home-daily-badge"
+              className={`wt-home__daily-badge${alreadyPlayed ? ' wt-home__daily-badge--played' : ''}`}
+              data-played={alreadyPlayed}
+            >
+              {t('home.daily.badge', { n: dailyNo ?? placeholderDailyNumber() })}
+            </Link>
             <button
               type="button"
               data-testid="home-lang-toggle"

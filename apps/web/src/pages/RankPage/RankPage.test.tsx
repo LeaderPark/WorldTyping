@@ -3,6 +3,7 @@
 // spec: docs/01 §10.2(S8), docs/06 §1.4(조회 계약), docs/00 §11-D68, WT-M3-06·WT-AUTH-04(랭킹 게이팅)
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
 import { useAuthStore, type AccountSession } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settings';
@@ -58,7 +59,10 @@ function mkEntry(o: {
 function renderPage() {
   return render(
     <AppProviders>
-      <RankPage />
+      {/* [D74] PageHeader(브랜드/뒤로가기 <Link>) 도입으로 Router 컨텍스트가 필요하다. */}
+      <MemoryRouter>
+        <RankPage />
+      </MemoryRouter>
     </AppProviders>,
   );
 }

@@ -14,7 +14,7 @@ actually collected and processed.
 - Service name: TypeTrip
 - Operator: LeaderPark (independent developer)
 - Contact: dkdleldjqkr976@gmail.com
-- Effective date: 2026-07-24 (v1.1)
+- Effective date: 2026-07-24 (v1.0)
 
 ## 2. What We Collect and How
 
@@ -123,9 +123,4 @@ materially affecting user rights are announced 30 days in advance.
 
 ## Addendum
 
-- Effective date: 2026-07-24
-
-| Version | Effective date | Change |
-|---|---|---|
-| v1.0 | 2026-07-22 | Initial version |
-| v1.1 | 2026-07-24 | Revised for Google sign-in — added account identifier (sub) / email (when verified) / profile name as collected items, added Google LLC as a processing outsourcer, finalized operator and contact (LeaderPark / dkdleldjqkr976@gmail.com) |
+- Effective date: 2026-07-24 (v1.0)

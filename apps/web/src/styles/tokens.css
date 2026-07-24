@@ -44,6 +44,9 @@
   --radius-card: 16px;
   --radius-tile: 12px;
   --radius-pill: 999px; /* .wt-pill 실제 높이는 46px(구현 세부 §2.3) — radius 자체는 반경값 */
+  /* [D74] 브라우징 페이지 크롬 통일 콘텐츠 폭(홈 .wt-home__content와 동일 672px). 치수 토큰이라
+     다크 오버라이드 불요 — .wt-page/.wt-home__content가 max-width로 참조한다. */
+  --wt-page-max: 42rem;
 
   /* ── 대륙 6색(docs/01 §1.3, §3.1) — 노선 시그니처. 테마 불변, 장식·지도 fill 전용(D50). ── */
   --continent-asia: #e5484d; /* 레드 */

@@ -3,6 +3,7 @@
 // spec: docs/01 §10.1(S13)·§10.2(여권 펼침 뷰), docs/06 §4.3, WT-M5-03
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
 import { useSettingsStore } from '../../stores/settings';
 import { PassportPage } from './index';
@@ -43,7 +44,10 @@ function basePassport(overrides: Partial<PassportRes> = {}): PassportRes {
 function renderPage() {
   return render(
     <AppProviders>
-      <PassportPage />
+      {/* [D74] PageHeader(브랜드/뒤로가기 <Link>) 도입으로 Router 컨텍스트가 필요하다. */}
+      <MemoryRouter>
+        <PassportPage />
+      </MemoryRouter>
     </AppProviders>,
   );
 }

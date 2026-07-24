@@ -30,7 +30,7 @@ import { selectIsLoggedIn, useAuthStore } from '../../../stores/auth';
 import { multiErrorKey } from '../../../features/multiplayer/error-keys';
 import type { WsGrant } from '../../../features/multiplayer/useMultiplayer';
 import { Mascot } from '../../../components/Mascot';
-import { TopBar } from '../../../components/TopBar';
+import { PageHeader } from '../../../components/PageHeader';
 import { CreateRoomModal, type CreateRoomOptions } from './CreateRoomModal';
 
 /** 공개 방 목록 카드(workers/api/src/routes/multi.ts PublicRoomCard와 동형 — isPublic은 자명해 제외). */
@@ -255,12 +255,13 @@ export function LobbyPage() {
   }
 
   return (
-    <>
-      <TopBar back />
-      {/* [Tweak C] flex-1·min-h-0로 뷰포트를 채워(AppShell flex 레이아웃) 방 목록만 내부
-          스크롤하게 한다 — 헤더 카드는 고정, footer는 뷰포트 하단 유지. */}
-      <main className="wt-lobby min-h-0 flex-1" data-testid="lobby-page">
-        {/* 안내 배너 — 비로그인/로그인 분기(§11-D68 로비 재구성). */}
+    // [Tweak C] flex-1·min-h-0로 뷰포트를 채워(AppShell flex 레이아웃) 방 목록만 내부 스크롤하게
+    // 한다 — 헤더 카드는 고정, footer는 뷰포트 하단 유지. [D74] 폭은 공유 .wt-page로.
+    <main className="wt-lobby min-h-0 flex-1 wt-page" data-testid="lobby-page">
+      {/* [D74] 로비 상단 크롬을 공용 PageHeader로 통일 — 구 <TopBar back /> 배선 해제(TopBar 파일
+          존치). 뒤로가기는 navigate(-1) 대신 홈(/)으로 결정화(직접 진입 시에도 결정적). */}
+      <PageHeader back={{ to: '/', labelKey: 'nav.back.home', testId: 'lobby-back' }} />
+      {/* 안내 배너 — 비로그인/로그인 분기(§11-D68 로비 재구성). */}
         <p
           className="wt-lobby__banner"
           data-testid="lobby-banner"
@@ -423,8 +424,7 @@ export function LobbyPage() {
             onClose={() => setCreateOpen(false)}
           />
         )}
-      </main>
-    </>
+    </main>
   );
 }
 

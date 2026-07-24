@@ -9,6 +9,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Continent } from '@wt/shared';
 import { CONTINENT_ROUTES, ROUTE_WORLD_TOUR } from '@wt/data/content/routes';
+import { PageHeader } from '../../components/PageHeader';
 import { formatMMSS } from '../../lib/format';
 import { useMetaStore, type TrackBest } from '../../stores/meta';
 
@@ -44,13 +45,11 @@ export function TrackSelectPage() {
   }
 
   return (
-    <main className="wt-track-select" data-testid="track-select-page">
-      <div className="wt-track-select__header">
-        <Link to="/play" data-testid="track-select-back" className="wt-nav-back">
-          {t('nav.back.mode')}
-        </Link>
-        <h1 className="wt-track-select__title" tabIndex={-1}>{t('route.select.title')}</h1>
-      </div>
+    <main className="wt-track-select wt-page" data-testid="track-select-page">
+      <PageHeader
+        back={{ to: '/play', labelKey: 'nav.back.mode', testId: 'track-select-back' }}
+        title={t('route.select.title')}
+      />
 
       {/* 다크 콘솔 카드("여행 설정", WT-UI-05) — .wt-console/.wt-token은 WT-UI-01 전역 정의를
           재사용한다. 토큰 그리드 내부 로직(진행도/기록 판정)은 기존 trackBests/bestStatusLabel

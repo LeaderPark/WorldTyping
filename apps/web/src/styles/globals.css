@@ -103,8 +103,15 @@
 :root[data-font-scale="2"] {
   --wt-font-scale: 1.5;
 }
+/* [D77] 글리프 폰트 = min(기존 clamp×fontScale, 고정 폭 칼럼에 한 줄로 수납되는 fit 폰트).
+   100cqw = .wt-prompt-area__col 폭(container-type:inline-size), --wt-prompt-adv = 국가명 진행폭(em,
+   PromptArea가 국가 전환 1회 주입). 0.98 = 서브픽셀 안전계수. fontScale은 fit 캡 이내에서만 확대
+   (오버플로 불가). 변수 부재 폴백 adv=8. */
 .wt-prompt-area__glyphs {
-  font-size: calc(clamp(2rem, 6vw, 3.5rem) * var(--wt-font-scale));
+  font-size: min(
+    calc(clamp(2rem, 6vw, 3.5rem) * var(--wt-font-scale)),
+    calc(100cqw / var(--wt-prompt-adv, 8) * 0.98)
+  );
 }
 
 /* 모바일 키보드 위 프롬프트 앵커(§7.1 "top: calc(var(--vv-offset-top) + var(--vv-height)/2)").
@@ -198,20 +205,28 @@
   align-items: center;
   gap: 0.25rem;
   will-change: transform;
+  /* [D77] 안전망 — 변수 오류·브라우저 최소 폰트 강제 등 극단 상황에서 국가명이 고정 폭을 넘겨도
+     스크롤 컨테이너를 만들지 않고 클리핑으로 마무리한다(래핑 금지 계약 보전). transform 팝/셰이크는
+     박스 전체가 함께 스케일/이동하므로 클립 영역도 같이 변형돼 정상 표시된다. */
+  overflow: clip;
 }
-/* 슬롯 행: 힌트+글리프 칼럼들을 flex-end(글리프 바닥 = tail 텍스트)로 정렬, 긴 국가명은 wrap. */
+/* 슬롯 행: 힌트+글리프 칼럼들을 flex-end(글리프 바닥 = tail 텍스트)로 정렬. [D77] 국가명은 항상
+   한 줄 — flex-wrap:nowrap(줄내림 금지). 고정 폭 칼럼 안에서 폰트 fit(100cqw/adv)이 최장명까지
+   한 줄에 수납하고, 극단 상황은 .wt-prompt overflow:clip이 흡수한다. row-gap은 nowrap에서 사문이라 제거. */
 .wt-prompt__glyphs {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-end;
   justify-content: center;
   gap: 0.14em;
-  row-gap: 0.3em;
 }
-/* 슬롯 = 세로 칼럼(힌트 위 + 에코 글리프 아래). position:relative = 커서 ::after 앵커. */
+/* 슬롯 = 세로 칼럼(힌트 위 + 에코 글리프 아래). position:relative = 커서 ::after 앵커.
+   [D77] flex:none — nowrap 하에서 기본 flex-shrink:1이 슬롯 폭을 압축해 고정 박스 계약(§3.6)을
+   깨는 것을 차단한다(슬롯 기하 = 폰트 fit 산식의 전제). */
 .wt-slot {
   position: relative;
   display: inline-flex;
+  flex: none;
   flex-direction: column;
   align-items: center;
 }
@@ -589,7 +604,10 @@
    글리프가 커질 수 있어 height 대신 min-height로 두어 클리핑을 막는다. */
 .wt-strip__capsule {
   position: relative;
-  flex: 0 1 auto;
+  /* [D77] flex:3 1 0(flex-basis 0) — 캡슐 폭을 콘텐츠에서 완전히 분리. 밴드 잔여폭의 3/(3+1+1)을
+     항상 점유(이웃국 각 1) → 데스크톱 밴드(62.5rem)에서 max-width 캡에 걸려 520px 상수. 같은 뷰포트·
+     같은 variant면 어떤 국가명이든 캡슐 폭 동일(짧은 명도 520px). min/max-width는 유지. */
+  flex: 3 1 0;
   min-width: 13.75rem;
   max-width: 32.5rem;
   min-height: 8.75rem;
@@ -641,9 +659,16 @@
   color: color-mix(in srgb, var(--grade-a) 80%, black);
 }
 :root[data-theme='dark'] .wt-strip__capsule .wt-combo-badge { color: var(--grade-a); }
-/* 캡슐 안 PromptArea: 국기 + 프롬프트 칼럼(글리프 + 활주로). */
-.wt-prompt-area { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.25rem 0.625rem; }
-.wt-prompt-area__col { display: inline-flex; flex-direction: column; align-items: center; gap: 0.1875rem; min-width: 0; max-width: 100%; }
+/* 캡슐 안 PromptArea: 국기 + 프롬프트 칼럼(글리프 + 활주로). [D77] flex-wrap:nowrap(국기/칼럼 줄내림
+   금지). width:100%로 고정 폭 캡슐 내부 폭을 꽉 채운다(캡슐 flex:3 1 0로 상수 → 이 영역도 상수 폭):
+   국기는 flex:none(폭 고정)이고 칼럼이 flex:1 1 0로 잔여를 전부 채워 free space가 0 → justify-center가
+   무효화되면서 [국기+칼럼] 그룹 위치가 콘텐츠와 무관하게 결정적으로 고정된다(Tweak R: 국기 x좌표가
+   국가명 길이와 무관하게 항상 동일). */
+.wt-prompt-area { display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 0.25rem 0.625rem; width: 100%; }
+/* [D77] flex:1 1 0 → 칼럼 = 영역 잔여 폭(= 캡슐 내부 폭 − 국기 − gap) 상수. container-type:inline-size로
+   이 폭이 100cqw가 되어 글리프 fit 폰트의 기준이 된다(활주로/게이지 트랙 길이도 이 상수 폭 추종 —
+   bindGaugeEl/TimeLimitGauge 마크업 불변). */
+.wt-prompt-area__col { display: inline-flex; flex: 1 1 0; flex-direction: column; align-items: center; gap: 0.1875rem; min-width: 0; max-width: 100%; container-type: inline-size; }
 /* 활주로(디자인 L309): 상시 대시 라인(wt-dash 6s, bg-position 애니만 — 리플로우 0). 게이지가 있으면
    이 위에 절대 위치로 오버레이된다. */
 .wt-prompt-area__runway {
@@ -675,10 +700,14 @@
   height: 100%;
   background: transparent;
 }
-/* 스트립 캡슐은 화면 일부 폭이므로 글리프 clamp를 낮춰 긴 국가명 오버플로를 막는다(렌더러 무수정 —
-   font-size 스케일만 CSS로 조정). 디자인 L306: 26~40px/800/lh1.05. fontScale 배수(§7.3)는 곱해진다. */
+/* [D77] 스트립 캡슐 글리프 폰트 = min(디자인 clamp 26~40px×fontScale, 고정 폭 칼럼 fit 폰트). 긴
+   국가명은 칼럼 폭(100cqw)에 정확히 한 줄로 수납되도록 fit 항이 폰트를 낮춘다(렌더러 무수정 —
+   font-size만 CSS 조정, 슬롯 기하 em은 --wt-prompt-adv에 반영됨). 디자인 L306: 26~40px/800/lh1.05. */
 .wt-strip .wt-prompt-area__glyphs {
-  font-size: calc(clamp(1.625rem, 4.4vw, 2.5rem) * var(--wt-font-scale));
+  font-size: min(
+    calc(clamp(1.625rem, 4.4vw, 2.5rem) * var(--wt-font-scale)),
+    calc(100cqw / var(--wt-prompt-adv, 8) * 0.98)
+  );
   font-weight: 800;
   letter-spacing: 0.01em;
   line-height: 1.05;
@@ -2885,6 +2914,11 @@
 .wt-game-view[data-variant='race'] .wt-strip__bar {
   max-width: 40rem;
 }
+/* [D77] race 밴드(40rem)는 잔여폭이 좁아 3/5면 평균 국명 폰트가 30px 미만으로 떨어진다 — 캡슐
+   flex를 4로 올려(4/(4+1+1)) 폭을 확보한다(344px 상수, 이웃국 각 86px). 싱글은 flex:3 유지. */
+.wt-game-view[data-variant='race'] .wt-strip__capsule {
+  flex: 4 1 0;
+}
 
 /* ③ 레이스 카운트다운 오버레이(RaceView, 디자인 L471~478) — WT-DC-04 싱글 방식과 동일: 전체화면
    딤 스크림 + 92px 숫자, 숫자색만 파랑(--grade-b). pointer-events:none(입력 포커스 유지). */
@@ -3830,4 +3864,15 @@ a.wt-brand:focus-visible {
   /* opacity 제거(WT-AUTH-08 a11y): opacity 0.8이 유효 전경을 흐려 라이트에서 3.62:1로 미달했다.
      --text-muted(#5e645e ~5.6:1) 단독으로 이미 충분히 muted하면서 WCAG 2 AA(≥4.5:1)를 만족. */
   color: var(--text-muted);
+}
+
+/* [D77] 모바일(≤639px): 캡슐 국기를 숨겨 좁은 뷰포트에서 국가명 폰트 여유를 확보한다(fit 산식의
+   칼럼 폭 = 캡슐 내부 − 국기 − gap이므로 국기 제거분이 그대로 폰트에 돌아간다). 국기는 장식 중복
+   (낭독은 §7.3 sr-only 라인 담당). 파일 말미 = 캐스케이드 최종 발언권(후행 base 규칙에 밀리지 않음).
+   캡슐 폭은 코어의 flex:3/4 1 0 + cqw fit + overflow:clip으로 모바일에서도 오버플로 없이 성립하므로
+   광범위 모바일 블록 복원은 하지 않는다(Tweak Q 범위 한정). */
+@media (max-width: 639px) {
+  .wt-strip .wt-prompt-area__flag {
+    display: none;
+  }
 }

@@ -10,7 +10,7 @@
 // 스토어에 싣지 않는다(§4.5) — RaceClient가 명령형으로 소비한다. 레이스 엔진/입력 컨트롤러는
 // GameView(WT-M4-04)가 소유하므로 attachRace()로 나중에 배선한다.
 import { useCallback, useEffect, useRef } from 'react';
-import { apiClient, ensureSession, getSessionToken } from '../../net/api-client';
+import { apiClient, ensureSession, getAuthToken, getSessionToken } from '../../net/api-client';
 import { getBootData } from '../../app/bootLoader';
 import { useSettingsStore } from '../../stores/settings';
 import { useMultiplayerStore, type RoomState } from '../../stores/multiplayer';
@@ -75,6 +75,9 @@ export interface WsGrant {
   wsUrl: string;
   ticket: string;
   lang: 'ko' | 'en';
+  /** [WT-AUTH-05] 로비 방 제목(§11-D68-⑧). create는 요청 제목, join은 방의 저장 제목을 싣는다.
+   *  대기실 헤더 표시 전용(WS 무확장) — 없으면 null(퀵매치·제목 미지정 방). */
+  title: string | null;
 }
 
 export interface AttachRaceBindings {
@@ -203,7 +206,9 @@ export function useMultiplayer() {
           ws.send(
             buildHello({
               dataVersion: boot,
-              sessionToken: getSessionToken(),
+              // [WT-AUTH-05] 멀티는 로그인 필수(§11-D68) — hello 인증도 "계정 > 게스트" 우선순위로
+              // 계정 토큰이 있으면 그것으로 붙어 랭킹 등재 신원과 일치시킨다(api-client bearerToken 동일 규약).
+              sessionToken: getAuthToken() ?? getSessionToken(),
               guestId: useSettingsStore.getState().guestId,
               resume:
                 playerIdRef.current && resumeKeyRef.current

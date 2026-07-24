@@ -18,9 +18,12 @@ export interface WaitingRoomProps {
   myPlayerId: string | null;
   mp: ReturnType<typeof useMultiplayer>;
   onLeave: () => void;
+  /** [WT-AUTH-05] 방 제목(§11-D68-⑧, grant.title) — 호스트가 방 만들기 시 지정한 제목. 값(데이터)
+   *  이라 i18n 키가 아니라 그대로 표시한다. null이면(퀵매치/제목 미지정) 표시하지 않는다. */
+  title?: string | null;
 }
 
-export function WaitingRoom({ room, myPlayerId, mp, onLeave }: WaitingRoomProps) {
+export function WaitingRoom({ room, myPlayerId, mp, onLeave, title = null }: WaitingRoomProps) {
   const { t } = useTranslation();
   const chatLog = useMultiplayerStore((s) => s.chatLog);
   const botOffer = useMultiplayerStore((s) => s.botOffer);
@@ -67,6 +70,11 @@ export function WaitingRoom({ room, myPlayerId, mp, onLeave }: WaitingRoomProps)
 
   return (
     <div className="wt-room" data-testid="waiting-room">
+      {title && (
+        <h1 className="wt-room__title" data-testid="room-title" tabIndex={-1}>
+          {title}
+        </h1>
+      )}
       <div className="wt-room__header">
         <span className="wt-room__code-chip" data-testid="room-code">{t('room.code', { code: room.code })}</span>
         <div className="wt-room__header-actions">

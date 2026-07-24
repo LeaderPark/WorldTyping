@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 //
-// spec: docs/01 §10.2(S9 로비 와이어프레임), docs/00 §11-D23(v1 race-mixed만 — 모드 선택 UI 없음),
-//       WT-M4-04
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+// spec: docs/01 §10.2(S9 로비 와이어프레임), docs/00 §11-D23(v1 race-mixed만 — 모드 선택 UI 없음)·
+//       D68(멀티=로그인 필수·로비 재구성), WT-M4-04 → WT-AUTH-05
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProviders } from '../../../app/providers';
 import { useSettingsStore } from '../../../stores/settings';
+import { useAuthStore, type AccountSession } from '../../../stores/auth';
 import { LobbyPage } from './index';
 
 const getMock = vi.fn();
@@ -22,6 +23,19 @@ vi.mock('../../../net/api-client', async () => {
   };
 });
 
+const ACCOUNT: AccountSession = {
+  token: 'acct-tok',
+  playerId: 'acct-1',
+  nickname: 'Tester',
+  expiresAt: Date.now() + 1_000_000_000,
+  geo: 'KR',
+  profile: { name: 'Tester', picture: null, email: null },
+};
+
+function logIn(): void {
+  act(() => useAuthStore.getState().login(ACCOUNT));
+}
+
 function renderLobby() {
   return render(
     <MemoryRouter initialEntries={['/multi']}>
@@ -35,12 +49,22 @@ function renderLobby() {
   );
 }
 
-describe('LobbyPage (WT-M4-04)', () => {
+const PUBLIC_LIST = {
+  rooms: [
+    { code: 'ABC123', lang: 'ko', players: 2, maxPlayers: 8, title: '서울 정복', phase: 'WAITING', hostCover: 'basic-green' },
+    { code: 'XYZ789', lang: 'en', players: 4, maxPlayers: 4, title: 'Speed run', phase: 'RACING', hostCover: null },
+  ],
+  counts: { public: 2, private: 5 },
+};
+
+describe('LobbyPage (WT-AUTH-05)', () => {
   beforeEach(() => {
     useSettingsStore.getState().setLang('ko');
+    useAuthStore.getState().logout();
+    useAuthStore.getState().closeLogin();
     ensureSessionMock.mockResolvedValue({ token: 't', playerId: 'p1', nickname: '', expiresAt: '' });
-    getMock.mockResolvedValue({ rooms: [{ code: 'KX73QP', lang: 'ko', players: 3, maxPlayers: 8 }] });
-    postMock.mockResolvedValue({ roomCode: 'AB12CD', wsUrl: '/ws/room/AB12CD', ticket: 'tk', lang: 'ko' });
+    getMock.mockResolvedValue(PUBLIC_LIST);
+    postMock.mockResolvedValue({ roomCode: 'AB12CD', wsUrl: '/ws/room/AB12CD', ticket: 'tk', lang: 'ko', title: null });
   });
 
   afterEach(() => {
@@ -48,37 +72,95 @@ describe('LobbyPage (WT-M4-04)', () => {
     vi.clearAllMocks();
   });
 
-  it('모드 선택 UI 없이 퀵매치/방 만들기/코드 참가/공개 방 목록을 렌더한다(§11-D23)', async () => {
+  it('모드 선택 UI 없이 배너·퀵매치·방 만들기·검색·필터·방 카드를 렌더한다(§11-D23)', async () => {
     renderLobby();
+    expect(screen.getByTestId('lobby-banner')).toHaveAttribute('data-variant', 'guest');
     expect(screen.getByTestId('lobby-quickmatch')).toBeInTheDocument();
-    expect(screen.getByTestId('lobby-create-submit')).toBeInTheDocument();
-    expect(screen.getByTestId('lobby-join-code')).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-create-open')).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-search')).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-filter-all')).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /mode/i })).not.toBeInTheDocument();
 
     await waitFor(() => expect(getMock).toHaveBeenCalledWith('/rooms/public'));
-    expect(await screen.findByTestId('lobby-public-room-KX73QP')).toBeInTheDocument();
+    expect(await screen.findByTestId('lobby-room-card-ABC123')).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-room-card-XYZ789')).toBeInTheDocument();
   });
 
-  it('퀵매치 클릭 → REST 그랜트 취득 후 /multi/{roomCode}로 이동(grant를 state로 전달)', async () => {
+  it('필터 카운트를 표시하고, 진행 중(RACING) 방은 입장 대신 잠금을 보여준다', async () => {
+    renderLobby();
+    await screen.findByTestId('lobby-room-card-ABC123');
+
+    // 전체 = 공개(2)+비공개(5) = 7, 공개 2, 비밀 5.
+    expect(screen.getByTestId('lobby-filter-all')).toHaveTextContent('7');
+    expect(screen.getByTestId('lobby-filter-public')).toHaveTextContent('2');
+    expect(screen.getByTestId('lobby-filter-private')).toHaveTextContent('5');
+
+    // WAITING 방은 입장 버튼, RACING 방은 잠금.
+    expect(screen.getByTestId('lobby-room-enter-ABC123')).toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-room-enter-XYZ789')).not.toBeInTheDocument();
+    expect(screen.getByTestId('lobby-room-locked-XYZ789')).toBeInTheDocument();
+  });
+
+  it('비밀방 필터는 상세를 숨기고 코드 참가 안내만 보여준다(비공개 상세 비노출)', async () => {
+    renderLobby();
+    await screen.findByTestId('lobby-room-card-ABC123');
+
+    fireEvent.click(screen.getByTestId('lobby-filter-private'));
+    expect(screen.getByTestId('lobby-private-hint')).toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-room-card-ABC123')).not.toBeInTheDocument();
+  });
+
+  it('검색어가 방 제목을 클라이언트 필터한다', async () => {
+    renderLobby();
+    await screen.findByTestId('lobby-room-card-ABC123');
+
+    fireEvent.change(screen.getByTestId('lobby-search'), { target: { value: '서울' } });
+    expect(screen.getByTestId('lobby-room-card-ABC123')).toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-room-card-XYZ789')).not.toBeInTheDocument();
+  });
+
+  it('비로그인 상태에서 퀵매치를 누르면 REST를 호출하지 않고 로그인(멀티)을 연다', async () => {
     renderLobby();
     fireEvent.click(screen.getByTestId('lobby-quickmatch'));
 
-    await waitFor(() => expect(screen.getByTestId('landed-room-page')).toBeInTheDocument());
-    expect(postMock).toHaveBeenCalledWith('/match/quick', { lang: 'ko' });
+    expect(useAuthStore.getState().loginReason).toBe('multi');
+    expect(postMock).not.toHaveBeenCalledWith('/match/quick', expect.anything());
+    // 매칭 풀스크린으로 전환되지 않는다(액션은 보류됨).
+    expect(screen.queryByTestId('lobby-matching')).not.toBeInTheDocument();
   });
 
-  it('코드 참가 입력이 3-3 하이픈으로 자동 포맷된다', () => {
+  it('비로그인 방 만들기 게이트 → 로그인 성공 시 보류 액션(모달 열기)이 재개된다', async () => {
     renderLobby();
-    const input = screen.getByTestId('lobby-join-code') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'kx73qp' } });
-    expect(input.value).toBe('KX7-3QP');
+    fireEvent.click(screen.getByTestId('lobby-create-open'));
+
+    expect(useAuthStore.getState().loginReason).toBe('multi');
+    expect(screen.queryByTestId('lobby-create-modal')).not.toBeInTheDocument();
+
+    logIn();
+    expect(await screen.findByTestId('lobby-create-modal')).toBeInTheDocument();
   });
 
-  it('공개 방 목록의 참가 버튼이 /rooms/:code/join을 호출한다', async () => {
+  it('로그인 상태에서 퀵매치는 즉시 /match/quick을 호출한다', async () => {
+    logIn();
     renderLobby();
-    await screen.findByTestId('lobby-public-room-KX73QP');
-    const entry = screen.getByTestId('lobby-public-room-KX73QP');
-    fireEvent.click(entry.querySelector('button')!);
-    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/rooms/KX73QP/join', {}));
+    fireEvent.click(screen.getByTestId('lobby-quickmatch'));
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/match/quick', { lang: 'ko' }));
+  });
+
+  it('로그인 상태에서 6자 코드 검색 후 Enter는 코드 참가(/rooms/:code/join)를 호출한다', async () => {
+    logIn();
+    renderLobby();
+    const input = screen.getByTestId('lobby-search') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'abc123' } });
+    fireEvent.submit(input.closest('form')!);
+
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/rooms/ABC123/join', {}));
+  });
+
+  it('로그인하면 배너가 member 변형으로 바뀐다', async () => {
+    logIn();
+    renderLobby();
+    expect(screen.getByTestId('lobby-banner')).toHaveAttribute('data-variant', 'member');
   });
 });

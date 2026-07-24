@@ -15,6 +15,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../../../stores/settings';
+import { selectIsLoggedIn, useAuthStore } from '../../../stores/auth';
 import { useMultiplayerStore } from '../../../stores/multiplayer';
 import { useMultiplayer, type WsGrant } from '../../../features/multiplayer/useMultiplayer';
 import { multiErrorKey } from '../../../features/multiplayer/error-keys';
@@ -36,6 +37,11 @@ export function RoomPage() {
   const nickname = useSettingsStore((s) => s.nickname);
   const guestId = useSettingsStore((s) => s.guestId);
 
+  // [WT-AUTH-05] 멀티 로그인 게이트(§11-D68) — 딥링크 진입은 로비 게이트를 거치지 않아 여기서 검사.
+  const isLoggedIn = useAuthStore(selectIsLoggedIn);
+  const openLogin = useAuthStore((s) => s.openLogin);
+  const loginReason = useAuthStore((s) => s.loginReason);
+
   const mp = useMultiplayer();
   const connection = useMultiplayerStore((s) => s.connection);
   const room = useMultiplayerStore((s) => s.room);
@@ -48,8 +54,24 @@ export function RoomPage() {
 
   // 마운트 1회만 연결(StrictMode 이중 호출 방어 — ref는 같은 컴포넌트 인스턴스에서 불변).
   const startedRef = useRef(false);
+  // [WT-AUTH-05] 비로그인 딥링크에서 로그인 모달을 실제로 띄운 뒤에만 취소 복귀가 동작하도록 하는 가드.
+  const gateRequestedRef = useRef(false);
+  const wsBase = import.meta.env.VITE_WS_BASE as string | undefined;
   useEffect(() => {
     if (!roomCode || startedRef.current) return;
+
+    const grant = (location.state as { grant?: WsGrant } | null)?.grant;
+    const hasGrant = !!grant && grant.roomCode === roomCode;
+
+    // [WT-AUTH-05] 멀티 로그인 게이트(§11-D68). grant가 있으면 로비에서 이미 게이트를 통과한 것이고,
+    // VITE_WS_BASE(E2E mock 직결)는 게이트 제외(구현 지시). 그 외 비로그인 딥링크는 로그인 모달을
+    // 오버레이로 띄우고 연결을 보류한다 — 로그인 성공 시 isLoggedIn 변화로 이 effect가 재실행되며 연결.
+    if (!hasGrant && !wsBase && !isLoggedIn) {
+      gateRequestedRef.current = true;
+      openLogin('multi');
+      return;
+    }
+
     startedRef.current = true;
     useMultiplayerStore.getState().reset(); // 이전 방에서 나가기 없이 이탈했던 잔여 상태 방어.
 
@@ -57,8 +79,6 @@ export function RoomPage() {
       nickname: nickname || `GUEST_${guestId.slice(0, 4).toUpperCase()}`,
       passportCover: DEFAULT_PASSPORT_COVER,
     };
-    const grant = (location.state as { grant?: WsGrant } | null)?.grant;
-    const wsBase = import.meta.env.VITE_WS_BASE as string | undefined;
     if (grant && grant.roomCode === roomCode) {
       mp.connectWithGrant(grant, identity);
     } else if (wsBase) {
@@ -66,15 +86,23 @@ export function RoomPage() {
       // 바로 붙어 E2E가 서버 레이트리밋/매치메이커 비결정성에 얽매이지 않게 한다. 프로덕션 빌드엔
       // VITE_WS_BASE가 없어 이 분기가 정적 제거된다 → 딥링크는 아래 mp.join(REST) 경로 그대로.
       mp.connectWithGrant(
-        { roomCode, wsUrl: `/ws/room/${roomCode}`, ticket: 'e2e-mock', lang: useSettingsStore.getState().lang },
+        { roomCode, wsUrl: `/ws/room/${roomCode}`, ticket: 'e2e-mock', lang: useSettingsStore.getState().lang, title: null },
         identity,
       );
     } else {
       void mp.join(roomCode, identity);
     }
-    // roomCode 변경 시(같은 컴포넌트가 다른 방으로 재사용되는 경우는 라우터가 key를 안 바꿔주는
-    // 한 없음)만 재실행 — nickname/guestId/mp/location은 최초 연결 시점의 값으로 충분하다.
-  }, [roomCode]);
+    // roomCode/isLoggedIn 변경 시에만 재실행 — nickname/guestId/mp/location은 최초 연결 시점의 값으로
+    // 충분하다. isLoggedIn은 비로그인 딥링크가 로그인에 성공하면 보류된 연결을 이어가기 위한 의존이다.
+  }, [roomCode, isLoggedIn]);
+
+  // [WT-AUTH-05] 딥링크 로그인 게이트에서 사용자가 로그인을 취소하면(loginReason이 다시 null인데
+  // 여전히 비로그인) 로비로 돌려보낸다. gateRequestedRef로 게이트를 실제로 띄운 뒤에만 동작한다.
+  useEffect(() => {
+    if (gateRequestedRef.current && !startedRef.current && loginReason === null && !isLoggedIn) {
+      navigate('/multi', { replace: true });
+    }
+  }, [loginReason, isLoggedIn, navigate]);
 
   useEffect(() => {
     if (!roomCode) navigate('/multi', { replace: true });
@@ -84,6 +112,10 @@ export function RoomPage() {
     mp.leave();
     navigate('/multi');
   };
+
+  // [WT-AUTH-05] 대기실 헤더에 표시할 방 제목 — 진입 grant(로비 create/join)에 실려 온다(§11-D68-⑧).
+  const entryGrant = (location.state as { grant?: WsGrant } | null)?.grant;
+  const grantTitle = entryGrant && entryGrant.roomCode === roomCode ? entryGrant.title : null;
 
   // grace 만료 후 재접속(§7.2-4): 서버가 room-state에서 본인 connState='left'로 알린다 → 관전 모드.
   const myPlayer = room?.players.find((p) => p.playerId === myPlayerId);
@@ -129,7 +161,7 @@ export function RoomPage() {
       )}
 
       {room.phase === 'waiting' && (
-        <WaitingRoom room={room} myPlayerId={myPlayerId} mp={mp} onLeave={handleLeave} />
+        <WaitingRoom room={room} myPlayerId={myPlayerId} mp={mp} onLeave={handleLeave} title={grantTitle} />
       )}
 
       {(room.phase === 'countdown' || room.phase === 'racing') &&

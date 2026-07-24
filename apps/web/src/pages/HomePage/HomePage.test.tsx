@@ -93,16 +93,6 @@ describe('HomePage (S1)', () => {
     expect(useSettingsStore.getState().lang).toBe('en');
   });
 
-  it('bestPI가 없으면 티커를 렌더하지 않고, 있으면 표시한다', () => {
-    const { unmount } = renderHome();
-    expect(screen.queryByTestId('home-ticker')).not.toBeInTheDocument();
-    unmount();
-
-    useMetaStore.getState().setBestPI(388);
-    renderHome();
-    expect(screen.getByTestId('home-ticker').textContent).toContain('388');
-  });
-
   it('데일리 뱃지가 실 dailyNo·alreadyPlayed를 반영한다(WT-M3-06)', async () => {
     fetchDailyMeMock.mockResolvedValue({ dateKst: '2026-07-21', alreadyPlayed: true, streakDaily: 3 });
     renderHome();

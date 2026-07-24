@@ -161,9 +161,9 @@ describe('startHomeGlobeDemo — pause/resume(document.hidden 대응)·stop', ()
     expect(handle.moveVehicle).toHaveBeenCalledTimes(1);
   });
 
-  it('최소/최대 홉 간격이 8±3초로 산출된다', () => {
-    expect(HOME_GLOBE_MIN_HOP_DELAY_MS).toBe(5_000);
-    expect(HOME_GLOBE_MAX_HOP_DELAY_MS).toBe(11_000);
+  it('최소/최대 홉 간격이 10~22초로 산출된다', () => {
+    expect(HOME_GLOBE_MIN_HOP_DELAY_MS).toBe(10_000);
+    expect(HOME_GLOBE_MAX_HOP_DELAY_MS).toBe(22_000);
   });
 });
 

@@ -64,7 +64,6 @@ export function HomePage() {
   const lang = useSettingsStore((s) => s.lang);
   const setLang = useSettingsStore((s) => s.setLang);
   const guestId = useSettingsStore((s) => s.guestId);
-  const bestPI = useMetaStore((s) => s.bestPI);
   const hasAnyStamp = useMetaStore((s) => Object.keys(s.stamps).length > 0);
 
   // [WT-DC-02] 사운드 토글(②) — 저빈도 사용자 설정 변경이라 §4.5 핫패스 규약(고빈도 값 금지)과
@@ -245,11 +244,6 @@ export function HomePage() {
           </Link>
         </nav>
 
-        {bestPI !== null && (
-          <p className="wt-home__ticker" data-testid="home-ticker">
-            {t('home.ticker.myBest', { pi: bestPI })}
-          </p>
-        )}
         {/* 서버 리더보드 전체 1위(WT-M3-06) — 조회 실패/빈 보드는 조용히 미표시. */}
         {top1 && (
           <p className="wt-home__ticker" data-testid="home-ticker-top1">

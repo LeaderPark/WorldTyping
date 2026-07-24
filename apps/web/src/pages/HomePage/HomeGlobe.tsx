@@ -24,9 +24,10 @@ import { getBootData } from '../../app/bootLoader';
 import { GlobeMap, type GlobeMapHandle } from '../../features/map/globe/GlobeMap';
 import { useGlobeIndex } from '../../features/map/globe/useGlobeIndex';
 
-/** 홉 간격 8±3초(리드 확정, scratchpad/wt-auth-plan.md "홈지구본"). */
-export const HOME_GLOBE_MIN_HOP_DELAY_MS = 5_000;
-export const HOME_GLOBE_MAX_HOP_DELAY_MS = 11_000;
+/** 홉 간격 10~22초([WT-UI 후속] 5~11초는 카메라 스윙이 잦아 "확확 도는" 느낌이라 리드 요청으로
+ *  약 2배로 늘려 더 자연스럽고 은은한 배경으로 — 이동 자체(hopDurationMs)는 게임플레이 공용이라 불변). */
+export const HOME_GLOBE_MIN_HOP_DELAY_MS = 10_000;
+export const HOME_GLOBE_MAX_HOP_DELAY_MS = 22_000;
 /** ~16홉마다 reset() 후 재시작(리드 확정). */
 export const HOME_GLOBE_RESET_EVERY_HOPS = 16;
 

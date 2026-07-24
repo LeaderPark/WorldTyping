@@ -276,7 +276,6 @@
   "home.single.desc": "Continent / Tier / World Tour",
   "home.multi.desc": "Real-time race",
   "home.ticker.today": "Today's #1: {nickname} · PI {pi} · {route} {time}",
-  "home.ticker.myBest": "My best: PI {pi}",
   "home.ticker.top1": "World Tour #1: {nickname} · score {score}",
 
   "home.menu.navLabel": "Main menu",

@@ -38,8 +38,9 @@ const LOGICAL_W = 960;
 const LOGICAL_H = 500;
 /** great-circle 아크 샘플 점 수(노선 원장·진행 홉 프리픽스 소스). */
 const ARC_SAMPLES = 64;
-/** idle spin 각속도 ~1.2°/s(보딩/결과 배경, 홉·juice 강등·reduced-motion 시 자동 정지). */
-const SPIN_DEG_PER_MS = 1.2 / 1000;
+/** idle spin 각속도 ~0.55°/s(보딩/결과 배경 은은한 드리프트, 홉·juice 강등·reduced-motion 시 자동 정지).
+ *  [WT-UI 후속] 1.2°/s가 "확확 도는" 느낌이라 리드 요청으로 절반↓ — 더 자연스러운 배경 회전. */
+const SPIN_DEG_PER_MS = 0.55 / 1000;
 /** idle spin 재그리기 스로틀(~25fps). 배경 연출은 저프레임으로 충분하고, 상시 60fps 전-폴리곤
  * 재투영이 헤드리스/저사양·백그라운드에서 렌더러를 넘기던 회귀(E1 크래시·cheat-suite 실패)를 막는다. */
 const IDLE_MIN_DT = 40;

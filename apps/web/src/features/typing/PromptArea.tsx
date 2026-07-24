@@ -5,10 +5,11 @@
 // 리렌더하고, 키스트로크 단위 채색은 renderer가 DOM을 직접 갱신한다(React 커밋 0회). 국기 아이콘은
 // flag-icons 스프라이트(M5) 도입 전까지 flagEmoji로 대체하되, 마크업 자리(FlagIcon 슬롯)는 고정한다.
 import { useEffect, useRef } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { Country } from '@wt/shared';
 import type { TypingInputController } from '@wt/engine';
 import { PromptRenderer, type JuiceLevel } from './prompt-renderer';
+import { promptAdvanceEm } from './prompt-advance';
 import { FlagIcon } from '../../components/FlagIcon';
 
 export interface PromptAreaProps {
@@ -87,12 +88,17 @@ export function PromptArea({
     return unsub;
   }, [controller]);
 
+  const name = lang === 'ko' ? country.nameKo : country.nameEn;
+  // [D77] 고정 폭 칼럼 내 국가명 폰트 fit용 진행폭(em). 국가 전환(저빈도) 리렌더에서만 재계산 —
+  // 키스트로크 경로 무관(§4.5). CSS가 `100cqw/var(--wt-prompt-adv)`로 최장명을 한 줄에 수납한다.
+  const promptAdv = promptAdvanceEm(name, lang);
+
   return (
     <div className="wt-prompt-area" data-testid="prompt-area">
       <FlagIcon
         id={country.id}
         emoji={country.flagEmoji}
-        label={lang === 'ko' ? country.nameKo : country.nameEn}
+        label={name}
         size="lg"
         className="wt-prompt-area__flag"
         testId="prompt-flag"
@@ -100,7 +106,10 @@ export function PromptArea({
 
       {/* WT-DC-10(B안): 프롬프트 칼럼 = 글리프 마운트 + 활주로. 렌더러/testid/게이지 계약은 불변이고,
           여기 마크업은 순수 표시 크롬이다(고빈도 값 미경유). */}
-      <div className="wt-prompt-area__col">
+      <div
+        className="wt-prompt-area__col"
+        style={{ '--wt-prompt-adv': promptAdv } as CSSProperties}
+      >
         <div ref={mountRef} className="wt-prompt-area__glyphs" data-testid="prompt-mount" />
         {/* 상시 활주로 대시 라인(wt-dash). 게이지(children)가 있으면 이 안에 절대 위치로 오버레이된다
             (bindGaugeEl 계약·TimeLimitGauge 마크업 불변). */}

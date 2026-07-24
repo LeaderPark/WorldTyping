@@ -9,12 +9,13 @@
 // 가로 중앙은 항상 진행바(비상호작용)라 버튼을 누르지 않는다.
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, RefCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { EngineEvent, GameSessionEngine } from '@wt/engine';
 import type { Continent, CountryId } from '@wt/shared';
 import { formatPercent } from '../../lib/format';
 import { ProgressLine } from './ProgressLine';
+import { ThemeToggle } from '../auth/ThemeToggle';
 
 export interface GameAppBarProps {
   engine: GameSessionEngine;
@@ -104,14 +105,7 @@ export function GameAppBar({
           🎯
         </span>
         <span ref={accRef} className="wt-appbar__acc-value" data-testid="hud-acc" />
-        <Link
-          to="/?modal=settings"
-          className="wt-appbar__settings"
-          data-testid="game-settings-link"
-          aria-label={t('menu.settings')}
-        >
-          <span aria-hidden="true">⚙</span>
-        </Link>
+        <ThemeToggle className="wt-appbar__settings" />
       </div>
     </header>
   );

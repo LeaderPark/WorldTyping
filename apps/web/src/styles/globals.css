@@ -1859,7 +1859,6 @@
   max-width: 48rem;
   margin: 0 auto;
 }
-.wt-lobby__header,
 .wt-room__header {
   display: flex;
   flex-wrap: wrap;
@@ -1867,63 +1866,80 @@
   justify-content: space-between;
   gap: 1rem;
 }
-.wt-lobby__back {
-  color: var(--text-muted);
-  font-weight: 600;
-  text-decoration: none;
-}
-.wt-lobby__back:hover,
-.wt-lobby__back:focus-visible {
-  color: var(--text);
+/* 대기실 방 제목(WT-AUTH-05, grant.title) — 방 코드 칩 위 큰 제목. */
+.wt-room__title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 800;
+  line-height: 1.2;
+  word-break: break-word;
 }
 
-/* 히어로(①) — 홈 로고 카드와 같은 어휘: 아이콘 타일 + 제목 + 카피. */
-.wt-lobby__hero {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.25rem 0.25rem 0.5rem;
+/* ── 로비 재디자인(WT-AUTH-05, §11-D68) ──────────────────────────────────────
+   spec: docs/01 §10.2(S9), docs/00 §11-D23(모드 미노출)·D68(멀티=로그인 필수·로비 재구성).
+   TopBar(공용) + 안내 배너 + 방 목록 헤더 카드(킥커/제목/부제/액션) + 퀵매치 스트립 + 검색바 +
+   필터 탭 + 방 카드 리스트. 시각 계층만 — 판정/프로토콜 무관. 색은 전부 시맨틱 토큰만 참조. */
+
+/* 안내 배너: 비로그인/로그인 분기 카피(pointer 없음, 정보 표시). accent 옅은 톤. */
+.wt-lobby__banner {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--text);
+  font-size: 0.9rem;
+  text-align: center;
 }
-.wt-lobby__hero-icon {
-  font-size: 1.375rem;
-}
-.wt-lobby__hero-body {
+
+/* 방 목록 헤더 카드(.wt-card 위 내부 레이아웃). */
+.wt-lobby__panel {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+.wt-lobby__panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wt-lobby__panel-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
   min-width: 0;
 }
-.wt-lobby__hero-title {
+.wt-lobby__panel-title {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 800;
+  line-height: 1.15;
 }
-.wt-lobby__hero-subtitle {
+.wt-lobby__panel-subtitle {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.9rem;
 }
+.wt-lobby__panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Link로 렌더되는 필(.wt-pill는 inline-flex라 밑줄만 제거하면 버튼과 동일 외형). */
+.wt-lobby__panel-actions a.wt-pill {
+  text-decoration: none;
+}
 
-/* 섹션 카드: 예전엔 얇은 보더 박스였다 — .wt-card와 동일한 표면/그림자/반경으로 승격(구현 세부
-   지시 3의 "--surface 계열" 방침 계승, 신규 토큰 없음). */
-.wt-lobby__section {
+/* 퀵매치 스트립: 중앙 정렬 CTA + 힌트. */
+.wt-lobby__quickmatch {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 1.25rem;
-  border-radius: var(--radius-card);
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-}
-.wt-lobby__section-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-}
-.wt-lobby__section--quickmatch {
   align-items: center;
+  gap: 0.5rem;
   text-align: center;
-  gap: 0.75rem;
 }
 .wt-lobby__quickmatch-cta {
   width: 100%;
@@ -1934,6 +1950,64 @@
   margin: 0;
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+/* 검색바: 6자 코드=Enter 코드 참가 / 그 외=제목 필터. 단일 필드. */
+.wt-lobby__search {
+  display: flex;
+}
+.wt-lobby__search-input {
+  flex: 1 1 auto;
+  height: 46px;
+  padding: 0 1.25rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+  min-width: 0;
+}
+.wt-lobby__search-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 필터 탭 + 카운트 배지. */
+.wt-lobby__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.wt-lobby__filter-count {
+  margin-inline-start: 0.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: inherit;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.wt-pill--active .wt-lobby__filter-count {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* 안내/빈 목록 문구(비밀방 코드 참가 안내·공개방 없음). */
+.wt-lobby__notice {
+  margin: 0;
+  padding: 1.5rem 1rem;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* 재사용: 대기실이 쓰는 섹션 제목/행/필드/에러(로비 재디자인 후에도 존치). */
+.wt-lobby__section-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
 }
 .wt-lobby__row {
   display: flex;
@@ -1957,31 +2031,9 @@
   color: var(--wt-prompt-error, #ef4444);
   font-size: 0.9rem;
 }
-/* 방 코드 입력: .wt-rank-page__mode-select와 동일한 46px 필 규격(§2.3 필 반경). */
-.wt-lobby__code-input {
-  height: 46px;
-  padding: 0 1.25rem;
-  border-radius: var(--radius-pill);
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-variant-numeric: tabular-nums;
-  min-width: 9rem;
-}
-.wt-lobby__code-input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.wt-lobby__empty-hint {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-.wt-lobby__public-list {
+
+/* 방 카드 리스트. */
+.wt-lobby__rooms {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -1989,23 +2041,150 @@
   padding: 0;
   margin: 0;
 }
-/* 공개 방 목록 카드화(①) — .wt-card(TSX가 부여) 위에 내부 레이아웃만 이 selector가 잡는다. */
-.wt-lobby__public-entry {
+.wt-lobby-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
 }
-.wt-lobby__public-entry-info {
+.wt-lobby-card__avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 1.05rem;
+  text-transform: uppercase;
+}
+.wt-lobby-card__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.wt-lobby-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.wt-lobby-card__badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.wt-lobby-card__badge--race {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent-text);
+}
+.wt-lobby-card__code {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-/* 목록 행의 참가 필은 .wt-track-item__cta(WT-UI-05)와 동일한 압축 기법 — 46px 기본 높이를
-   목록 행 밀도에 맞게 줄인다. */
-.wt-pill.wt-lobby__public-entry-cta {
+.wt-lobby-card__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt-lobby-card__sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.wt-lobby-card__right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.wt-lobby-card__passengers {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* 카드 입장 필: 목록 행 밀도에 맞춰 46px 기본 높이를 줄인다(.wt-track-item__cta와 동일 기법). */
+.wt-pill.wt-lobby-card__cta {
   height: 2.25rem;
   padding: 0 0.9rem;
   font-size: 0.85rem;
+}
+.wt-lobby-card__locked {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+@media (max-width: 30rem) {
+  .wt-lobby-card__sub {
+    display: none;
+  }
+  .wt-lobby-card__title {
+    max-width: 8rem;
+  }
+}
+
+/* 방 만들기 모달(CreateRoomModal) — .wt-bot-offer와 동일 스크림 규약(불투명 박스 + 뒤 스크림). */
+.wt-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.5);
+}
+.wt-create-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.5rem;
+}
+.wt-create-modal__title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.wt-create-modal__label {
+  font-weight: 600;
+}
+.wt-create-modal__input {
+  height: 44px;
+  padding: 0 0.875rem;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.wt-create-modal__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.wt-create-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 /* 대기실(§10.2 S10). */

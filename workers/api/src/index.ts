@@ -7,6 +7,7 @@ import { Hono } from "hono";
 import type { Env } from "./env";
 import { health } from "./routes/health";
 import { session } from "./routes/session";
+import { auth } from "./routes/auth";
 import { config } from "./routes/config";
 import { data } from "./routes/data";
 import { runs } from "./routes/runs";
@@ -51,6 +52,7 @@ app.use("/api/*", corsMiddleware);
 // 직접 등록해야 한다 — 그렇지 않으면 아래 SPA/ASSETS 폴백까지 흘러가 200이 나가버린다.
 app.route("/api/v1", health);
 app.route("/api/v1", session); // WT-M3-02: POST /session, GET /session/me
+app.route("/api/v1", auth); // WT-AUTH-01: POST /auth/google, POST /auth/dev(dev 전용) — 404 캐치 위
 app.route("/api/v1", config); // WT-M3-02: GET /config
 app.route("/api/v1", data); // WT-M3-02: GET /data/countries (KV 핫스왑 서빙)
 app.route("/api/v1", runs); // WT-M3-03: POST /runs/start, POST /runs/submit

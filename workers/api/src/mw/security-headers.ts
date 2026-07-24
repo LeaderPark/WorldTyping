@@ -18,14 +18,22 @@
 
 import type { MiddlewareHandler } from "hono";
 
-/** 게임 본체(기본) CSP — frame-ancestors 'self'(§9.4). */
+// WT-AUTH-01(docs/00 §11-D68-⑤): 인증 채널은 "런타임 네트워크 없음"(02) 원칙의 명시적 예외다.
+// GIS 클라이언트 스크립트/로그인 iframe/XHR은 accounts.google.com, 프로필 이미지는
+// *.googleusercontent.com에서 온다 — 게임 본체 CSP(CSP_BASE)에만 이 오리진들을 허용한다(공유 랜딩
+// /r/*의 CSP_EMBEDDABLE에는 로그인이 없어 추가하지 않는다).
+const GOOGLE_ACCOUNTS = "https://accounts.google.com";
+const GOOGLE_USERCONTENT = "https://*.googleusercontent.com";
+
+/** 게임 본체(기본) CSP — frame-ancestors 'self'(§9.4) + Google 로그인 오리진(D68-⑤). */
 const CSP_BASE = [
   "default-src 'self'",
-  "connect-src 'self' wss:",
-  "img-src 'self' data:",
-  "script-src 'self'",
+  `connect-src 'self' wss: ${GOOGLE_ACCOUNTS}`,
+  `img-src 'self' data: ${GOOGLE_USERCONTENT}`,
+  `script-src 'self' ${GOOGLE_ACCOUNTS}`,
   "style-src 'self' 'unsafe-inline'",
   "base-uri 'none'",
+  `frame-src ${GOOGLE_ACCOUNTS}`,
   "frame-ancestors 'self'",
 ].join("; ");
 

@@ -23,6 +23,11 @@ services:
     build:
       context: ../..
       dockerfile: tooling/selfhost/Dockerfile
+      # VITE_GOOGLE_CLIENT_ID(WT-AUTH-01): 프론트 GIS 로그인의 공개 client ID를 빌드 시점에 주입.
+      # .env의 GOOGLE_CLIENT_ID(서버 aud와 동일 공개값)를 그대로 넘기고, 미설정 시 공개 기본값으로
+      # 폴백한다. 이 값은 apps/web 번들에 정적으로 구워지므로 값 변경 시 재빌드가 필요하다.
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-615582111042-oq4vmmcnr5i2apap4d01b21a4laup3dj.apps.googleusercontent.com}
     restart: unless-stopped
     env_file: .env
     volumes:

@@ -43,6 +43,11 @@ export interface Env {
   DAILY_SALT: string;
   SENTRY_DSN?: string;
   TURNSTILE_SECRET?: string;
+  // Google GIS ID-token 검증의 aud 값(WT-AUTH-01, docs/04 §5.5). **공개값**(client secret 아님) —
+  // 시크릿 카탈로그가 아니라 wrangler.toml [vars]/.dev.vars에 평문으로 둔다. 서버는 이 값으로
+  // ID-token의 aud 클레임을 검증하고, 프론트(W3)는 VITE_GOOGLE_CLIENT_ID(동일 공개값)로 GIS를 띄운다.
+  // 미설정이면 POST /auth/google이 503(계정 로그인 비활성) — 게스트 플레이는 영향 없다.
+  GOOGLE_CLIENT_ID?: string;
   // AE SQL API(계정 토큰) — cron/retention.ts의 kpi_daily 일 스냅샷이 AE 집계(DAU/share_clicks/
   // matchmaking_*)를 끌어올 때만 필요(docs/06 §5.4, WT-M6-03). 미설정 시 그 조회만 스킵하고
   // D1에서 직접 계산 가능한 열(completed_runs/daily_play_users/flagged_runs/rejected_runs/

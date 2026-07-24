@@ -231,6 +231,10 @@ me.delete("/users/me", requireAuth, async (c) => {
       .bind(pid, DELETED_NICKNAME, normDeleted, deviceHashReleased, now),
     db.prepare(`DELETE FROM lb_best WHERE user_id = ?1`).bind(pid),
     db.prepare(`DELETE FROM user_unlocks WHERE user_id = ?1`).bind(pid),
+    // WT-AUTH-01(docs/04 §5.5): 계정 로그인 매핑도 삭제권 대상 — Google sub↔user 연결을 끊는다.
+    // 게스트 계정은 auth_identities 행이 없어 no-op. 같은 sub로 재로그인하면 auth.ts가 새로 만들되
+    // reactivateAccountUser가 닉네임/스트릭을 초기화한 "사실상 신규 계정"으로 되살린다(§6.3 정합).
+    db.prepare(`DELETE FROM auth_identities WHERE user_id = ?1`).bind(pid),
   ]);
 
   if (c.env.KV) {

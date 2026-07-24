@@ -18,6 +18,10 @@ export const KV_KEYS = {
    *  종료 후 `wrangler kv key delete config:loadtest`로 원복한다(ops/loadtest-report.md 절차). */
   configLoadtest: "config:loadtest",
   dataCountriesOverride: "data:countries:override",
+  /** Google JWKS(RS256 공개키 세트) 캐시(WT-AUTH-01, docs/04 §5.5). 6h TTL로 저장하고,
+   *  ID-token의 kid가 캐시에 없으면 1회 재조회해 갱신한다(lib/google-idtoken.ts). config:* 채널이
+   *  아니라 인증 인프라 캐시라 auth: 프리픽스로 분리한다. */
+  authGoogleJwks: "auth:google:jwks",
 
   /** 데일리 세트 캐시. dateKst = 'YYYY-MM-DD'(KST). */
   daily: (dateKst: string): string => `daily:${dateKst}`,

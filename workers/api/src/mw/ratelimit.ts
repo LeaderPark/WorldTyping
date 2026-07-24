@@ -17,6 +17,9 @@ interface LimitRule {
 /** docs/04 §6.5 LIMITS 표 그대로. 키(scope 문자열)를 바꾸지 말 것 — rl:{scope}:... 로 그대로 쓰인다. */
 export const LIMITS = {
   session: { per: "ip", window: 60, max: 10 },
+  // POST /auth/google — Google ID-token 검증 → 계정 세션 발급(WT-AUTH-01, docs/04 §2.2-#17).
+  // 비인증 라우트(토큰 발급 전)라 IP 기준. 정상 로그인은 IP당 극소수라 10/60s로 충분하다.
+  auth: { per: "ip", window: 60, max: 10 },
   "runs/start": { per: "pid", window: 60, max: 10 },
   "runs/submit": { per: "pid", window: 60, max: 10 },
   nickname: { per: "pid", window: 3600, max: 5 },

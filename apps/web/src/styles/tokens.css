@@ -101,6 +101,31 @@
   --globe-plane-stroke: #274690;
   --globe-trail: #ffb703;
   --globe-trail-glow: #ffd166;
+
+  /* ── 골드 러너(chase) 디자인 토큰 6종(docs/09 §8.7, 00 §11-D90~D97) — WT-CH-05 단독 소유
+     (apps/web/src/features/map/globe/globe-chase.ts 소비, 다른 CH 태스크는 정의 금지·소비만).
+     라이트 값은 §8.7 표 그대로. ── */
+  --chase-siren-red: #e5484d; /* 경찰 마커·danger·체포 연출 */
+  --chase-siren-blue: #3e63dd; /* 경찰 마커 교차색·차단조 */
+  --chase-gold: #c69c10; /* 금·홈·matching·별(라이트 크림 배경 대비 확보 위해 원색보다 어둡게, §8.7) */
+  /* danger 비네트(§7.5 setThreatLevel) — 공간 채널(rgb 트리플릿)만 토큰화하고 알파는 setThreatLevel이
+     매 호출마다 대상 요소에 `--chase-vignette-alpha`로 인라인 주입한다(기존 --continent-color 인라인
+     주입 패턴과 동일 — GlobeMap.tsx의 setTarget 참조). 라이트/다크 동일(§8.7 "동일"). */
+  --chase-danger-vignette: 229 72 77;
+  /* WANTED 전단·브리핑 카드 크라프트지 배경(§7.1, WT-CH-08 소비). 기존 크라프트지 변수는 저장소에
+     존재하지 않음을 확인(grep 검증) — §8.7 "기존 변수 재사용" 문구는 참조 아트 기준 표기라 이 토큰이
+     최초 정의다. 테마 무관(--surface-console과 동일 패턴 — 종이 질감은 라이트/다크 모두 동일 톤). */
+  --chase-paper: #d9c7a3;
+  /* 경찰 추적선(great-circle 점선, §7.5) — 라이트/다크 동일(§8.7 "〃"). */
+  --chase-trail-police: rgb(229 72 77 / 0.6);
+  /* [독립 검증 — 이 태스크 실측] §8.7 "명도 대비 AA 4.5:1" 요구를 raw --chase-gold/--chase-siren-red를
+     텍스트/작은 라벨(예: CH-06 "검문 중" 태그, 티어 배지 텍스트)에 직접 쓸 경우 위반한다(실측:
+     라이트 --chase-gold vs --bg 2.35:1·vs --surface 2.57:1, --chase-siren-red vs --bg 3.57:1·vs
+     --surface 3.91:1 — 전부 4.5:1 미달). tokens.css의 기존 --continent-*-text 파생 패턴(D62)을
+     그대로 승계해 텍스트 전용 파생값을 추가한다 — 마커/장식 원색(raw 토큰)은 표 그대로 무수정,
+     2px 백색 halo로 지도 위 판독성을 확보(§8.7)하고, 텍스트/라벨은 이 파생값을 쓴다. */
+  --chase-gold-text: color-mix(in srgb, var(--chase-gold) 65%, black); /* 실측 5.03:1 / 5.51:1 */
+  --chase-siren-red-text: color-mix(in srgb, var(--chase-siren-red) 80%, black); /* 실측 5.20:1 / 5.70:1 */
 }
 
 /* 다크 테마(옵션, D57 — "삭제 금지, 토글 보존"). 신설 시맨틱 토큰 전부 다크 대응값을 정의한다.
@@ -145,6 +170,19 @@
   --map-ocean: #0f1a29;
   --map-rim: #2a3b50;
   --map-graticule: #24334a;
+
+  /* 골드 러너(chase) 다크 대응값(§8.7 표 — WT-CH-05 단독 소유). */
+  --chase-siren-red: #ff6369;
+  --chase-siren-blue: #6e8bff;
+  --chase-gold: #f5b301;
+  --chase-danger-vignette: 229 72 77; /* 표 "동일" */
+  --chase-paper: #d9c7a3; /* 표 "〃" — 테마 무관 */
+  --chase-trail-police: rgb(229 72 77 / 0.6); /* 표 "〃" */
+  /* 다크는 원색이 이미 AA 충족(실측: gold vs bgDark 9.63:1/vs surfaceDark 7.89:1, siren-red vs
+     bgDark 6.16:1/vs surfaceDark 5.04:1) — 보정 불요, 라이트처럼 어둡게 mix하면 오히려 다크 배경에서
+     또렷함이 떨어진다(--continent-*-text의 라이트/다크 비대칭 보정과 동일 논리). */
+  --chase-gold-text: var(--chase-gold);
+  --chase-siren-red-text: var(--chase-siren-red);
 }
 
 /* ── 지도 레이어 스타일(§3.2 계층) — .wt-map 아래 5 레이어. 모든 색은 위 변수만 참조. ── */
@@ -362,5 +400,263 @@
 @media (prefers-reduced-motion: reduce) {
   .wt-globe__target-ring {
     animation: none;
+  }
+}
+
+/* ── 골드 러너(chase) 오버레이(docs/09 §7.5·§8.3·§8.9, 00 §11-D90~D97) — WT-CH-05,
+   apps/web/src/features/map/globe/globe-chase.ts. GlobeMap 코어(canvas/.wt-globe__overlay) 위에
+   형제 노드로 조합되는 별도 레이어(코어 마크업 무수정) — 좌표계는 코어와 동일 viewBox 960×500
+   (globe-chase.ts가 자체 미러 projection으로 동일 좌표계를 재현, 최종 보고 참조). 색은 위 --chase-*
+   토큰만(원색 텍스트 금지 D62 승계). 상시 애니메이션은 transform/opacity/filter만(리플로우 0). ── */
+.wt-chase__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+/* 위협 비네트(§7.5 setThreatLevel) — 네 모서리 radial-gradient. 알파는 JS가 대상 요소에
+   --chase-vignette-alpha로 인라인 주입(공간색은 --chase-danger-vignette 트리플릿 고정). */
+.wt-chase__vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 60% 45% at 0% 0%,
+      rgb(var(--chase-danger-vignette) / var(--chase-vignette-alpha, 0)),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 100% 0%,
+      rgb(var(--chase-danger-vignette) / var(--chase-vignette-alpha, 0)),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 0% 100%,
+      rgb(var(--chase-danger-vignette) / var(--chase-vignette-alpha, 0)),
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 100% 100%,
+      rgb(var(--chase-danger-vignette) / var(--chase-vignette-alpha, 0)),
+      transparent 70%
+    );
+}
+
+/* 홈 비컨(§7.5 setHome) — 금색 2겹 펄스(scale 0.6→1.8 + fade). */
+.wt-chase__home-ring {
+  fill: none;
+  stroke: var(--chase-gold);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wt-chase-home-pulse 2.4s ease-in-out infinite;
+}
+.wt-chase__home-ring--outer {
+  animation-delay: 1.2s;
+}
+@keyframes wt-chase-home-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+/* 경찰 마커(§7.5) — 3종 아이덴티티. 2px halo(--surface)로 양 테마 판독성(§8.7). */
+.wt-chase__police {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.wt-chase__police-dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+  paint-order: stroke;
+}
+.wt-chase__police--chaser .wt-chase__police-dot {
+  fill: var(--chase-siren-red);
+  animation: wt-chase-chaser-blink 0.8s step-end infinite;
+}
+@keyframes wt-chase-chaser-blink {
+  0%,
+  49% {
+    fill: var(--chase-siren-red);
+  }
+  50%,
+  100% {
+    fill: var(--chase-siren-blue);
+  }
+}
+.wt-chase__police--interceptor .wt-chase__police-dot,
+.wt-chase__police--heli .wt-chase__police-dot {
+  fill: var(--chase-siren-blue);
+}
+.wt-chase__police-rotor {
+  stroke: var(--chase-siren-blue);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wt-chase-rotor-spin 0.5s linear infinite;
+}
+@keyframes wt-chase-rotor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.wt-chase__police-cone {
+  fill: var(--chase-siren-blue);
+  opacity: 0.12;
+}
+.wt-chase__police-ring {
+  fill: none;
+  stroke: var(--chase-siren-red);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wt-chase-home-pulse 0.8s ease-out infinite;
+}
+
+/* 금 마커(§7.5 setGoldMarkers) — 대각선 시머 1회 대체를 상시 저강도 브라이트니스 펄스로 근사. */
+.wt-chase__gold {
+  fill: var(--chase-gold);
+  stroke: var(--surface);
+  stroke-width: 2;
+  paint-order: stroke;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wt-chase-gold-shimmer 2.4s ease-in-out infinite;
+}
+@keyframes wt-chase-gold-shimmer {
+  0%,
+  80%,
+  100% {
+    filter: brightness(1);
+  }
+  90% {
+    filter: brightness(1.5);
+  }
+}
+
+/* 후보국 앵커 도트(§7.5 setCandidateAnchors) — CH-06 리더 라인 시작점(4px). */
+.wt-chase__candidate-anchor {
+  fill: var(--text);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  paint-order: stroke;
+  opacity: 0.85;
+}
+
+/* matching 폴리곤 프리하이라이트(§7.5 setCandidatePrehighlight, §8.5) — canvas 재그리기 0 계약(D67)의
+   핵심: 폴리곤 채색을 canvas가 아니라 이 SVG path로만 수행한다. */
+.wt-chase__prehighlight {
+  fill: var(--chase-gold);
+  opacity: 0.35;
+  stroke: none;
+  pointer-events: none;
+}
+
+/* 경찰 추적선(great-circle 점선, §7.5) — juice 풀(코드 juice===0) + 비-reduced-motion에서만 그려짐
+   (JS가 엘리먼트 생성 자체를 gating, 아래 규칙은 저사양 진입 시 기존 노드 은닉을 담당). */
+.wt-chase__trail {
+  fill: none;
+  stroke: var(--chase-trail-police);
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+  stroke-linecap: round;
+}
+
+/* 레이더 에지 화살표(§7.5·§8.9) — 뒷면·화면 밖 위협/목표 방위 상시 표시. */
+.wt-chase__radar-arrow {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.wt-chase__radar-arrow-shape {
+  stroke: var(--surface);
+  stroke-width: 1;
+  paint-order: stroke;
+}
+.wt-chase__radar-arrow--police .wt-chase__radar-arrow-shape {
+  fill: var(--chase-siren-red);
+}
+.wt-chase__radar-arrow--gold .wt-chase__radar-arrow-shape,
+.wt-chase__radar-arrow--home .wt-chase__radar-arrow-shape {
+  fill: var(--chase-gold);
+}
+
+/* 일회성 팝 효과(playPickup/playArrest의 마커 레벨 효과 — 전체 타임라인은 CH-07 소관).
+   WAAPI가 opacity/scale만 구동(리플로우 0). */
+.wt-chase__pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* 비행기 후미 금 가방 배지(§7.5 setCarriedCount) — D73 제트 실루엣 자체는 무변경, 배지만 부착.
+   텍스트는 --surface-console(테마 무관 항상 어두운 톤 — 기존 재사용)로 금색 배경 위 판독성 확보. */
+.wt-chase__carried-bg {
+  fill: var(--chase-gold);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.wt-chase__carried-text {
+  fill: var(--surface-console);
+  font-size: 8px;
+  font-weight: 700;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* juice 강등(§11 — 이 앱의 실제 JuiceLevel은 0=풀/1=강등 이진: GamePage가 reduced 시 1, 아니면
+   0만 사용하고 GlobeMap core의 immediate()도 juice>0을 강등으로 취급한다. docs/09 §7 헤더의
+   "level 2 기준·level 1 파티클 off·level 0 추가 강등" 3단 서술은 이 앱의 실제 0/1 이진 스케일과
+   번호 방향이 반대인 별도 설계 스케일이다 — 최종 보고에 명시한 해석: docs의 "level 2(=풀)"를 코드
+   juice===0에, "level 1 이하(=강등)"를 코드 juice>0에 매핑해 core의 기존 immediate() 판정과 동일
+   경계로 통일했다)/reduced-motion: 경찰 블링크·로터 회전·금 시머·홈/체포링 펄스 애니메이션 정지
+   + 서치라이트 콘·추적선 은닉(§11 "저사양: 추적선·파티클·서치라이트 off, 경찰 마커는 정적
+   도트+화살표만"). */
+.wt-chase__overlay[data-juice='1'] .wt-chase__police--chaser .wt-chase__police-dot,
+.wt-chase__overlay[data-juice='2'] .wt-chase__police--chaser .wt-chase__police-dot,
+.wt-chase__overlay[data-juice='1'] .wt-chase__police-rotor,
+.wt-chase__overlay[data-juice='2'] .wt-chase__police-rotor,
+.wt-chase__overlay[data-juice='1'] .wt-chase__gold,
+.wt-chase__overlay[data-juice='2'] .wt-chase__gold,
+.wt-chase__overlay[data-juice='1'] .wt-chase__home-ring,
+.wt-chase__overlay[data-juice='2'] .wt-chase__home-ring,
+.wt-chase__overlay[data-juice='1'] .wt-chase__police-ring,
+.wt-chase__overlay[data-juice='2'] .wt-chase__police-ring {
+  animation: none;
+}
+.wt-chase__overlay[data-juice='1'] .wt-chase__police-cone,
+.wt-chase__overlay[data-juice='2'] .wt-chase__police-cone,
+.wt-chase__overlay[data-juice='1'] .wt-chase__trail,
+.wt-chase__overlay[data-juice='2'] .wt-chase__trail {
+  display: none;
+}
+:root[data-reduced] .wt-chase__overlay .wt-chase__police--chaser .wt-chase__police-dot,
+:root[data-reduced] .wt-chase__overlay .wt-chase__police-rotor,
+:root[data-reduced] .wt-chase__overlay .wt-chase__gold,
+:root[data-reduced] .wt-chase__overlay .wt-chase__home-ring,
+:root[data-reduced] .wt-chase__overlay .wt-chase__police-ring {
+  animation: none;
+}
+:root[data-reduced] .wt-chase__overlay .wt-chase__police-cone,
+:root[data-reduced] .wt-chase__overlay .wt-chase__trail {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-chase__overlay .wt-chase__police--chaser .wt-chase__police-dot,
+  .wt-chase__overlay .wt-chase__police-rotor,
+  .wt-chase__overlay .wt-chase__gold,
+  .wt-chase__overlay .wt-chase__home-ring,
+  .wt-chase__overlay .wt-chase__police-ring {
+    animation: none;
+  }
+  .wt-chase__overlay .wt-chase__police-cone,
+  .wt-chase__overlay .wt-chase__trail {
+    display: none;
   }
 }

@@ -23,6 +23,16 @@ export default {
         "text-muted": "var(--text-muted)",
         border: "var(--border)",
         accent: "var(--accent)",
+        // WT-CH-05(docs/09 §8.7, 00 §11-D90~D97) — chase 디자인 토큰 6종 중 Tailwind 유틸리티로
+        // 소비 가능한 색 5개(+AA 텍스트 파생 2개). --chase-danger-vignette는 rgb 트리플릿(alpha
+        // 합성 전용, tokens.css .wt-chase__vignette 참조)이라 단일 색 유틸로 의미가 없어 제외한다.
+        "chase-siren-red": "var(--chase-siren-red)",
+        "chase-siren-red-text": "var(--chase-siren-red-text)",
+        "chase-siren-blue": "var(--chase-siren-blue)",
+        "chase-gold": "var(--chase-gold)",
+        "chase-gold-text": "var(--chase-gold-text)",
+        "chase-paper": "var(--chase-paper)",
+        "chase-trail-police": "var(--chase-trail-police)",
       },
       borderRadius: {
         card: "var(--radius-card)",

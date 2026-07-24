@@ -15,8 +15,8 @@
 // <a> 렌더) 이번에 처음 정의한다 — 새 클래스가 아니라 기존 미정의 클래스를 채우는 것이라 다른
 // 소비처(ModeSelectPage/TrackSelectPage)에도 동일하게 적용되지만 그 페이지들의 마크업은
 // 무수정이다(순수 CSS 추가, WT-UI-09 §2.3 근처 마킹 블록 참조).
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../components/PageHeader';
 
 const LICENSES = [
   {
@@ -40,15 +40,13 @@ export function CreditsPage() {
   const { t } = useTranslation();
 
   return (
-    <div className="mx-auto max-w-2xl p-6" data-testid="credits-page">
-      <Link to="/" data-testid="credits-back" className="wt-nav-back">
-        {t('nav.back.home')}
-      </Link>
+    <div className="wt-page" data-testid="credits-page">
+      <PageHeader
+        back={{ to: '/', labelKey: 'nav.back.home', testId: 'credits-back' }}
+        title={t('credits.title')}
+      />
       <div className="wt-card mt-3 p-6">
-        <h1 className="text-2xl font-bold" tabIndex={-1}>
-          {t('credits.title')}
-        </h1>
-        <p className="mt-2 text-sm text-text-muted">{t('credits.intro')}</p>
+        <p className="text-sm text-text-muted">{t('credits.intro')}</p>
 
         <ul className="mt-4 list-disc space-y-2 pl-6 text-sm leading-relaxed" data-testid="credits-list">
           {LICENSES.map((item) => (

@@ -5,23 +5,19 @@
 // 위임한다(중복 0). 본문은 이제 ko/en 병기가 아니라 settings.lang 단일 언어만 렌더한다(§11-D72 —
 // 병기·privacy.lang.* 헤딩 폐기). 파서/렌더러는 여전히 components/MarkdownLiteBody(재구현 금지),
 // md 본문(support.{ko,en}.md)은 legal-docs.ts가 ?raw로 소비. 라우트는 eager `element` 존치.
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../components/PageHeader';
 import { LegalArticle } from '../../features/legal/LegalArticle';
 
 export function SupportPage() {
   const { t } = useTranslation();
 
   return (
-    <div className="mx-auto max-w-2xl p-6" data-testid="support-page">
-      <Link to="/" data-testid="support-back" className="wt-nav-back">
-        {t('nav.back.home')}
-      </Link>
-
-      <h1 className="mt-3 text-2xl font-bold" tabIndex={-1}>
-        {t('legal.support.title')}
-      </h1>
-
+    <div className="wt-page" data-testid="support-page">
+      <PageHeader
+        back={{ to: '/', labelKey: 'nav.back.home', testId: 'support-back' }}
+        title={t('legal.support.title')}
+      />
       <LegalArticle doc="support" />
     </div>
   );

@@ -110,15 +110,23 @@ describe('PrivacyPage', () => {
     expect(en.toLowerCase()).toContain('email');
   });
 
-  it('renders the addendum version-history table (§6.5 "부칙: 변경 이력 표")', () => {
+  it('normalizes the addendum to v1.0 in the terms format — no revision-history table (§11-D74)', () => {
+    // [§11-D74/Tweak H] 2026-07-24 시행판 = v1.0 확정. v1.1 라벨·개정이력 표(v1.0 2026-07-22 포함)는
+    // 폐기하고 부칙을 terms와 동일 포맷("시행일: 2026-07-24 (v1.0)")으로 통일한다.
     renderPage('ko');
-    expect(screen.getByTestId('privacy-body-ko').textContent).toContain('v1.0');
-    // 보유기간(§4)·변경이력(부칙) 두 개씩 — 파이프 테이블이 실제로 <table>로 렌더되는지만 확인.
-    expect(within(screen.getByTestId('privacy-body-ko')).getAllByRole('table').length).toBeGreaterThanOrEqual(2);
+    const ko = screen.getByTestId('privacy-body-ko').textContent ?? '';
+    expect(ko).toContain('v1.0');
+    expect(ko).not.toContain('v1.1');
+    expect(ko).not.toContain('2026-07-22');
+    // 개정이력 표는 삭제되고 §4 보유기간 표 하나만 남는다.
+    expect(within(screen.getByTestId('privacy-body-ko')).getAllByRole('table').length).toBe(1);
 
     cleanup();
     renderPage('en');
-    expect(within(screen.getByTestId('privacy-body-en')).getAllByRole('table').length).toBeGreaterThanOrEqual(2);
+    const en = screen.getByTestId('privacy-body-en').textContent ?? '';
+    expect(en).toContain('v1.0');
+    expect(en).not.toContain('v1.1');
+    expect(within(screen.getByTestId('privacy-body-en')).getAllByRole('table').length).toBe(1);
   });
 
   it('renders the credits section with notice.disputed and ODbL/Natural Earth/flag-icons notices', () => {

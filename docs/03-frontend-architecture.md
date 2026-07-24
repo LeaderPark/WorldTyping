@@ -545,9 +545,13 @@ const router = createBrowserRouter([
 ├─ multi/RoomPage (S10–S11)
 │   ├─ WaitingRoom | RaceView(GameView 재사용 + OpponentTracks) | RaceResult
 └─ RankPage / PassportPage / ...
+    └─ PageHeader (브라우징 하위 페이지 공용 크롬 — 홈 제외)  // 00 §11-D74
+        ├─ BrandMark (✈+app.title — 하위=/ 링크, 홈=비링크 span)
+        └─ [기본 액션] AuthChip + ThemeToggle / [2행] .wt-nav-back + h1
 ```
 
 - `GameView`는 싱글/멀티가 **동일 컴포넌트**: 멀티는 `variant="race"` prop으로 OpponentTracks·하드캡 타이머만 추가. 타이핑 파이프라인 코드는 1벌.
+- `PageHeader`/`BrandMark`(00 §11-D74)는 브라우징 하위 페이지(/play·/play/:mode·/rank·/multi 로비·/passport·/daily·/privacy·/terms·/support·/credits) 공용 상단 크롬이다 — 홈은 자체 `.wt-home__header`를 기준으로 유지하고, 인게임/대기실·레이스는 몰입 예외라 쓰지 않는다. 콘텐츠 폭은 공유 클래스 `.wt-page`(토큰 `--wt-page-max` 42rem)로 홈과 픽셀 동일하게 통일한다.
 
 ### 4.3 상태 슬라이스 (Zustand)
 

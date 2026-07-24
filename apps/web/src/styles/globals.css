@@ -1621,7 +1621,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  max-width: 42rem;
+  max-width: var(--wt-page-max); /* [D74] 홈 콘텐츠 폭을 페이지 크롬 토큰으로 — 시각 델타 0(42rem 동일) */
   margin: 0 auto;
   padding: 1.5rem 1.25rem 2.5rem;
 }
@@ -1809,39 +1809,20 @@
   opacity: 0.7;
 }
 
-/* ── S3/S4 모드·노선 선택(WT-M2-07) ── */
+/* ── S3/S4 모드·노선 선택(WT-M2-07) ──
+   [D74] 폭·마진·패딩은 이제 공유 클래스 .wt-page가 담당(마크업 wt-mode-select wt-page / wt-track-
+   select wt-page). 여기는 페이지 내부 레이아웃(flex column·gap)만 유지한다 — Tweak J width:100%
+   핫픽스와 WT-DC-03 per-page max-width(60rem/53.75rem)·헤더 규칙은 .wt-page/PageHeader로 대체되어 삭제. */
 .wt-mode-select,
 .wt-track-select {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  padding: 1.5rem;
-  /* [Tweak J 핫픽스] Tweak C의 Outlet flex-col 래퍼에서 margin:0 auto(교차축 auto 마진)가 flex
-     stretch를 무력화해 이 컨테이너가 콘텐츠 폭으로 축소되던 회귀 수정 — 폭을 채워 아래 max-width +
-     margin:auto 중앙정렬과 __list 그리드 다중열이 복원된다. (F 배치에서 .wt-page로 정식 대체 예정) */
-  width: 100%;
-}
-/* ── WT-DC-03: 디자인 정본(L128 S3·L159 S4) 컨테이너 상한 폭 + 중앙 정렬. 기존 padding(위
-   1.5rem)이 좌우 여백을 이미 보장하므로 이 폭 미만 뷰포트에서는 max-width가 아무 영향이
-   없다 — 모바일 오버플로 리스크 없음(넓은 데스크톱 뷰포트에서 콘텐츠가 무한히 늘어지지
-   않게 상한만 추가). */
-.wt-mode-select {
-  max-width: 60rem; /* 디자인 정본 960px */
-  margin: 0 auto;
-}
-.wt-track-select {
-  max-width: 53.75rem; /* 디자인 정본 860px */
-  margin: 0 auto;
-}
-.wt-mode-select__header,
-.wt-track-select__header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
 }
 .wt-mode-select__cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  /* [D74] 42rem 컬럼(내부 39.5rem)에서 카드 3장 1행 유지 — 14rem이면 2+1로 꺾인다. */
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 1rem;
 }
 /* [WT-UI-05] 토큰 그리드로 개정 — 과거엔 세로 리스트였다. .wt-token(전역, L1000~)이 원형+레이블
@@ -2012,7 +1993,9 @@
    rAF 계약). WT-UI-08은 WT-UI-01의 전역 컴포넌트 클래스(.wt-card/.wt-pill/.wt-icon-tile/.wt-kicker,
    아래쪽 "전역 컴포넌트 클래스" 절 참조)를 로비/대기실/레이스에 처음 실제로 배선한다 — 판정/
    프로토콜/엔진 코드는 무관, 여기는 시각 계층만 다룬다. */
-.wt-lobby,
+/* [D74] .wt-lobby(브라우징)와 .wt-room(대기실/레이스 — 몰입 예외)의 공유 규칙을 분리한다.
+   .wt-room은 48rem·패딩 등 현행 선언값 그대로 단독 규칙으로 존치(무변경), .wt-lobby는 폭·패딩을
+   공유 클래스 .wt-page로 넘기고 내부 flex 레이아웃만 남긴다(마크업 wt-lobby ... wt-page). */
 .wt-room {
   display: flex;
   flex-direction: column;
@@ -2020,6 +2003,11 @@
   padding: 1.5rem;
   max-width: 48rem;
   margin: 0 auto;
+}
+.wt-lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 .wt-room__header {
   display: flex;
@@ -2372,6 +2360,9 @@
   flex-direction: column;
   width: min(42rem, 100%);
   max-height: 85vh;
+  /* [D74] 이 모달은 SiteFooter의 <footer class="wt-footer">(text-align:center) 안에 마운트돼 본문이
+     중앙정렬로 상속됐다 — 라우트 페이지는 원래 좌정렬이므로 모달 카드에서 상속을 차단한다. */
+  text-align: left;
 }
 @supports (height: 85dvh) {
   .wt-legal-modal {
@@ -3160,6 +3151,70 @@
   color: var(--text);
 }
 
+/* ── [D74] 페이지 크롬 통일(Tweak F·G·I) ──────────────────────────────────────
+   spec: docs/00 §11-D74. 브라우징 페이지(홈·/play·/play/:mode·/rank·/multi 로비·/passport·/daily·
+   /privacy·/terms·/support·/credits)의 콘텐츠 폭·헤더·좌상단 브랜드를 홈 기준으로 일원화한다.
+   인게임(/play/:mode/:trackId)·대기실/레이스(/multi/:roomCode)는 몰입 예외라 이 클래스를 쓰지 않는다. */
+
+/* 공유 콘텐츠 폭 컨테이너 — 홈 .wt-home__content와 픽셀 동일(width 100%·max-width 토큰·중앙 정렬·
+   동일 padding). 각 페이지 루트에 이 클래스를 얹고 페이지 전용 규칙에서는 폭/마진/패딩을 뺀다. */
+.wt-page {
+  width: 100%;
+  max-width: var(--wt-page-max);
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 2.5rem;
+}
+
+/* 하위 페이지 공용 헤더(홈 제외 — 홈은 자체 .wt-home__header 유지). 1행 bar(좌 브랜드 + 우 액션)
+   기하는 홈 헤더와 동일하고, 뒤로가기·타이틀은 하위 전용 2행(nav)으로 분리한다(한 행에 욱여넣지
+   않음). components/PageHeader.tsx가 소비. */
+.wt-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.wt-page-header__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.wt-page-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.wt-page-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.wt-page-header__title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* 좌상단 워드마크(✈ + app.title) — 홈 로고 카드 --brand 수정자와 동일 문법(font-weight 800·
+   letter-spacing). 색은 기존 토큰만 참조(신규 색 쌍 0). 하위 페이지에서는 <a>(홈 링크)라 호버/
+   포커스에서만 accent-text로, 홈에서는 <span>(비링크)이라 항상 --text. components/BrandMark.tsx. */
+.wt-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-size: 1.0625rem;
+  color: var(--text);
+  text-decoration: none;
+}
+a.wt-brand:hover,
+a.wt-brand:focus-visible {
+  color: var(--accent-text);
+}
+
 /* 메뉴 행: 좌 4px 색 바(::before, 기본 --accent — 소비처가 --wt-menu-row-accent로 대륙색 등을
    인라인 지정) + 44px 아이콘 타일(.wt-icon-tile 조합 사용) + 킥커/제목/카피 + 우측 셰브런. */
 .wt-menu-row {
@@ -3337,17 +3392,10 @@
   cursor: not-allowed;
 }
 
-/* S8 랭킹 — 필터 pill 행 + 리스트 카드화 + 내 행 sticky. */
-.wt-rank-page {
-  max-width: 56rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
-}
-.wt-rank-page__title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
-}
+/* S8 랭킹 — 필터 pill 행 + 리스트 카드화 + 내 행 sticky.
+   [D74] 폭·마진·패딩은 공유 .wt-page(마크업 wt-rank-page wt-page)로, 맨 h1은 PageHeader(1.5rem/700
+   타이틀 규격 .wt-page-header__title)로 대체 — .wt-rank-page/.wt-rank-page__title 규칙 삭제.
+   .wt-rank-page 클래스명 자체는 마크업에 존치(아래 __filters 등 자손 규칙 유지). */
 .wt-rank-page__filters {
   display: flex;
   flex-wrap: wrap;
@@ -3469,17 +3517,10 @@
   text-align: right;
 }
 
-/* S13 여권 — 펼친 2페이지 스프레드(좌: 커버/닉네임/스트릭/PI 최고, 우: 스탬프 .wt-token 그리드). */
-.wt-passport-page {
-  max-width: 52rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
-}
-.wt-passport-page__title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 1rem;
-}
+/* S13 여권 — 펼친 2페이지 스프레드(좌: 커버/닉네임/스트릭/PI 최고, 우: 스탬프 .wt-token 그리드).
+   [D74] 폭·마진·패딩은 공유 .wt-page(마크업 wt-passport-page wt-page)로, 맨 h1은 PageHeader로
+   대체 — .wt-passport-page/.wt-passport-page__title 규칙 삭제. .wt-passport-page 클래스명은 마크업
+   존치(아래 [data-testid] 자손 셀렉터 유지). */
 .wt-passport-page [data-testid='passport-loading'],
 .wt-passport-page [data-testid='passport-error'] {
   padding: 1.25rem;
@@ -3654,17 +3695,18 @@
   font-size: 0.875rem;
 }
 
-/* /daily — SEO 랜딩 라이트 히어로(콘텐츠/메타는 불변, D56). */
+/* /daily — SEO 랜딩 라이트 히어로(콘텐츠/메타는 불변, D56).
+   [D74] 폭·패딩은 공유 .wt-page(마크업 wt-daily-page wt-page)로. PageHeader가 첫 자식으로 붙으므로
+   flex column으로 두고 히어로는 margin:auto로 남는 공간에 센터링(구 부모 center 정렬 대체). */
 .wt-daily-page {
-  min-height: 60vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
+  flex-direction: column;
+  min-height: 60vh;
 }
 .wt-daily-page__hero {
   max-width: 28rem;
   width: 100%;
+  margin: auto; /* [D74] flex column 잔여 공간에서 히어로를 상하·좌우 중앙에 둔다. */
   padding: 2.5rem 2rem;
   text-align: center;
   display: flex;

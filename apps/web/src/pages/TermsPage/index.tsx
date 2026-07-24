@@ -6,23 +6,19 @@
 // 병기·privacy.lang.* 헤딩 폐기, 그 키는 ko/en.json 양쪽에서 삭제됨). 파서/렌더러는 여전히
 // components/MarkdownLiteBody(재구현 금지), md 본문(terms.{ko,en}.md)은 legal-docs.ts가 ?raw로 소비.
 // 라우트는 eager `element` 존치(router.tsx 무수정 — SEO·직접 링크용).
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../components/PageHeader';
 import { LegalArticle } from '../../features/legal/LegalArticle';
 
 export function TermsPage() {
   const { t } = useTranslation();
 
   return (
-    <div className="mx-auto max-w-2xl p-6" data-testid="terms-page">
-      <Link to="/" data-testid="terms-back" className="wt-nav-back">
-        {t('nav.back.home')}
-      </Link>
-
-      <h1 className="mt-3 text-2xl font-bold" tabIndex={-1}>
-        {t('legal.terms.title')}
-      </h1>
-
+    <div className="wt-page" data-testid="terms-page">
+      <PageHeader
+        back={{ to: '/', labelKey: 'nav.back.home', testId: 'terms-back' }}
+        title={t('legal.terms.title')}
+      />
       <LegalArticle doc="terms" />
     </div>
   );

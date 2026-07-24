@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Continent } from '@wt/shared';
 import { CONTINENT_ROUTES } from '@wt/data/content/routes';
+import { PageHeader } from '../../components/PageHeader';
 import { useMetaStore } from '../../stores/meta';
 import { useSettingsStore } from '../../stores/settings';
 
@@ -40,13 +41,11 @@ export function ModeSelectPage() {
     : null;
 
   return (
-    <main className="wt-mode-select" data-testid="mode-select-page">
-      <div className="wt-mode-select__header">
-        <Link to="/" data-testid="mode-select-back" className="wt-nav-back">
-          {t('nav.back.home')}
-        </Link>
-        <h1 className="wt-mode-select__title" tabIndex={-1}>{t('mode.select.title')}</h1>
-      </div>
+    <main className="wt-mode-select wt-page" data-testid="mode-select-page">
+      <PageHeader
+        back={{ to: '/', labelKey: 'nav.back.home', testId: 'mode-select-back' }}
+        title={t('mode.select.title')}
+      />
 
       {/* 위트 헤드라인 히어로(WT-UI-05) — 순수 장식용 카피, 판정/점수/진행도 로직과 무관. h1은
           위 헤더의 것 하나만 유지한다(useRouteFocus가 문서의 첫 h1을 찾는다, docs/03 §7.3). */}

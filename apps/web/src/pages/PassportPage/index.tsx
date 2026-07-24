@@ -10,6 +10,7 @@ import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Continent, DifficultyTier } from '@wt/shared';
 import { useSettingsStore } from '../../stores/settings';
+import { PageHeader } from '../../components/PageHeader';
 import {
   ensureSession,
   fetchPassport,
@@ -137,10 +138,11 @@ export function PassportPage() {
   );
 
   return (
-    <main className="wt-passport-page" data-testid="passport-page">
-      <h1 className="wt-passport-page__title" tabIndex={-1}>
-        {t('passport.title')}
-      </h1>
+    <main className="wt-passport-page wt-page" data-testid="passport-page">
+      <PageHeader
+        back={{ to: '/', labelKey: 'nav.back.home', testId: 'passport-back' }}
+        title={t('passport.title')}
+      />
 
       {status === 'loading' && (
         <p data-testid="passport-loading">{t('passport.loading')}</p>

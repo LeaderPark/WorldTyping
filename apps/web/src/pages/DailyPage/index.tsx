@@ -12,6 +12,7 @@
 // 실제 플레이 진입/판정은 여전히 기존 `/play/daily/:date` 경로가 전담한다.
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '../../components/PageHeader';
 
 /** HomePage.tsx의 todayDailyKey()와 동일 규약(UTC 자정 기준 ISO 날짜). 페이지 하나만을 위해
  *  공유 모듈로 승격할 만큼 무겁지 않아 그대로 복제한다(회귀 표면 최소화 — 마감 태스크 원칙). */
@@ -23,7 +24,9 @@ export function DailyPage() {
   const { t } = useTranslation();
 
   return (
-    <main className="wt-daily-page" data-testid="daily-page">
+    <main className="wt-daily-page wt-page" data-testid="daily-page">
+      {/* [D74] 크롬 통일 — 뒤로가기만(히어로 h1 유지, PageHeader title 없음). */}
+      <PageHeader back={{ to: '/', labelKey: 'nav.back.home', testId: 'daily-back' }} />
       <div className="wt-daily-page__hero wt-card">
         <p className="wt-kicker">{t('daily.hero.kicker')}</p>
         <h1 className="wt-daily-page__title" tabIndex={-1}>

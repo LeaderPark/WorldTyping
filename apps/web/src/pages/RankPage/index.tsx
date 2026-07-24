@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import type { Continent, DifficultyTier } from '@wt/shared';
 import { selectIsLoggedIn, useAuthStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settings';
+import { PageHeader } from '../../components/PageHeader';
 import {
   buildBoardKey,
   ensureSession,
@@ -170,8 +171,11 @@ export function RankPage() {
   const nickname = useSettingsStore((s) => s.nickname) || `GUEST_${guestId.slice(0, 4).toUpperCase()}`;
 
   return (
-    <main className="wt-rank-page" data-testid="rank-page">
-      <h1 className="wt-rank-page__title" tabIndex={-1}>{t('rank.title')}</h1>
+    <main className="wt-rank-page wt-page" data-testid="rank-page">
+      <PageHeader
+        back={{ to: '/', labelKey: 'nav.back.home', testId: 'rank-back' }}
+        title={t('rank.title')}
+      />
 
       <div className="wt-rank-page__filters" data-testid="rank-filters">
         <div role="group" aria-label="period" data-testid="rank-filter-period">

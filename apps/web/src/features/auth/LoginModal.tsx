@@ -51,6 +51,10 @@ export function LoginModal() {
         if (cancelled) return;
         google.accounts.id.initialize({
           client_id: clientId,
+          // COOP postMessage 차단 브라우저 대응 — FedCM 버튼 플로우 우회.
+          use_fedcm_for_prompt: true,
+          use_fedcm_for_button: true,
+          itp_support: true,
           callback: (resp) => {
             setSubmitting(true);
             handleCredential(resp.credential)

@@ -20,6 +20,8 @@ interface GsiIdConfig {
   auto_select?: boolean;
   cancel_on_tap_outside?: boolean;
   use_fedcm_for_prompt?: boolean;
+  use_fedcm_for_button?: boolean;
+  itp_support?: boolean;
 }
 
 interface GsiButtonConfig {

@@ -28,6 +28,28 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
 
 ---
 
+## 1.5 진행 갱신 (2026-07-25) — 다른 PC 이관용 스냅샷
+
+> §1(2026-07-24)은 M6까지의 스냅샷이다. 이후 진행은 이 절이 최신이다. `main` = `origin/main` = **`98bc89d`**.
+
+### 라이브 배포 완료 (worldtyping.leaderpark.net, 배포 커밋 `d09fb97`)
+2026-07-25 UI/판정 튜닝 + 멀티/인증 버그 수정을 일괄 배포. §11 결정 D80~D89:
+- **표시 튜닝**: U(결과 화면 상태 시인성 D80)·X(순번 배지·국기 겹침 D81)·V(프롬프트 오버플로 슬라이딩 tail D83)·AA(홈 전체1위 티커 제거 D87).
+- **판정/데이터**: Y(조기-EXACT 유발 진접두 별칭 3건 제거 + 빌드 게이트 D82)·W(flush-후 끝음절 재삽입 병합 누수 차단, D70 개정 D84).
+- **인프라/인증/멀티**: Z1(터널 WebSocket 502 → cloudflared **http2 전송**으로 해소, D85·D71 해소 — `tooling/selfhost/docker-compose.yml` cloudflared 2026.7.3 + `TUNNEL_TRANSPORT_PROTOCOL=http2`)·Z2(클라 인증 split-brain 봉인 D86)·멀티 D88(닉네임=구글 이름·수동 입력 플로우 제거)·D89(WS 재연결 신규 티켓 재발급). **멀티 실 2인 라이브 테스트는 사용자 수동 확인 잔여**(실 구글 로그인 재현 불가).
+- 후속(미착수): O1(레이스 중 재연결 서버 최소 변경)·WT-INV-ROOMNULL(config-null 404 근본 조사).
+
+### 골드 러너(chase) 신규 싱글 모드 — 구현 진행 중 (스펙 `docs/09`·`docs/09a`, §11 **D90~D97**)
+경찰-도둑 추격 무한생존 모드. §14 태스크 표 WT-CH-01~11.
+- **병합 완료(main `98bc89d`, 게이트 통과, 단 미배포 — chase는 아직 `/play/chase` 미배선)**: CH-01(chase-graph nearest-12+전쌍 km 행렬)·CH-02(shared/chase 결정성 심·선택지·상수)·CH-03(computeChaseScore)·CH-04(ChaseSessionEngine 3-타깃 입력)·CH-05(GlobeChaseHandle+토큰)·CH-06(인월드 콜아웃·포커스 스트립·슬림 HUD+i18n)·CH-09(백엔드 /chase/start·submit 검증·lb·KV). **7/10 완료.** `GameMode 'chase'` 유니온 확장으로 깨진 exhaustive 소비처 6곳은 조정 스텁 커밋(`42f9199`)으로 봉합(CH-04가 createModeRules 스텁을 `chaseRules()`로 정제 완료; useCountries/route-label 등 나머지 스텁은 CH-08이 정제 예정).
+- **WIP 브랜치(origin push 완료, 미완·미게이트 — 다른 PC에서 마무리)**:
+  - **CH-08** 라우팅·브리핑·결과·모드카드 = 브랜치 **`worktree-agent-a656b18a74683bb82`**(`2ef233c`). 진행: BriefingCard·ChaseGameRoot·ChaseResultCard·load-chase-graph·use-chase-submission + GamePage/api-client 배선. i18n 테스트 통과, web 테스트 실행 직전에 중단. 잔여: web/typecheck/lint/size-limit gate·최종 배선·정식 커밋.
+  - **CH-07** 이벤트 연출 4종+SFX = 브랜치 **`worktree-agent-a9cf01c9c99e5ec6e`**(`4d5643a`). 진행: sequences·use-chase-juice·chase-audio·chase-sprites + audio 스프라이트 파이프라인. **web 704 테스트 통과**, size-limit 직전 중단(거의 완성). CH-08이 `useChaseJuice` 훅을 마운트하도록 배선 접점 조율 필요.
+- **잔여 단계(다른 PC에서)**: ① CH-08·CH-07 WIP 브랜치 각각 마무리(gate 통과·정식 커밋) → main 병합(단일 소유: audio=CH-07, pages/router=CH-08, tokens=CH-05, i18n=CH-06 — 충돌 시 union) ② **CH-10** E2E 3종(E-C1 완주→금→배송·E-C2 체포→결과→재도전·E-C3 reduced-motion) + 성능 계약 + i18n 키 CI ③ **전체 e2e 게이트 → Docker 배포**(chase가 `/play/chase`에 배선되는 이 지점이 첫 chase 배포) ④ **CH-11** 밸런스 튜닝(리드+Fable, `config:chase` KV·실 SFX 에셋 교체).
+- **참고**: 구현 킷(태스크별 상세 프롬프트)은 이 세션 스크래치패드에만 있음(이관 안 됨) — `docs/09` §14 표 + `docs/07` 형식으로 재생성 가능. chase 심·판정·점수는 `packages/shared/chase`(클라·서버 공용), 서버 검증이 `simulateChase`+`computeChaseScore` 재실행(패리티).
+
+---
+
 ## 2. 새 PC 셋업 절차
 
 저장소 이동은 **git 히스토리 포함 전체**여야 한다(GitHub 원격 push 후 clone, 또는 폴더 통째 복사 — `.git` 포함).

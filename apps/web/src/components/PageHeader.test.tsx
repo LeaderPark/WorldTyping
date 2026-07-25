@@ -33,8 +33,8 @@ describe('PageHeader (D74·D75)', () => {
   it('1행 bar에 브랜드 링크와 기본 액션(로그인 버튼 + 테마 토글)을 렌더한다', () => {
     renderHeader();
     expect(screen.getByTestId('page-header')).toBeInTheDocument();
-    // 브랜드는 하위 페이지용 홈 링크(<a href="/">).
-    expect(screen.getByTestId('brand-mark')).toHaveAttribute('href', '/');
+    // 브랜드는 홈으로 가는 링크(<a href="/">, WT-TWEAK-BRAND-LINK — 전 페이지 공통).
+    expect(screen.getByTestId('brand-home-link')).toHaveAttribute('href', '/');
     // actions 기본값 = AuthChip(비로그인 → topbar-login) + ThemeToggle.
     expect(screen.getByTestId('topbar-login')).toBeInTheDocument();
     expect(screen.getByTestId('theme-toggle')).toBeInTheDocument();

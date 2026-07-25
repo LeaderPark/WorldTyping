@@ -3310,8 +3310,9 @@
 }
 
 /* 좌상단 워드마크(✈ + app.title) — 홈 로고 카드 --brand 수정자와 동일 문법(font-weight 800·
-   letter-spacing). 색은 기존 토큰만 참조(신규 색 쌍 0). 하위 페이지에서는 <a>(홈 링크)라 호버/
-   포커스에서만 accent-text로, 홈에서는 <span>(비링크)이라 항상 --text. components/BrandMark.tsx. */
+   letter-spacing). 색은 기존 토큰만 참조(신규 색 쌍 0). [WT-TWEAK-BRAND-LINK] 홈 포함 전
+   페이지에서 <a>(홈 링크)로 렌더 — 기본은 --text, 호버/포커스에서만 accent-text.
+   components/BrandMark.tsx. */
 .wt-brand {
   display: inline-flex;
   align-items: center;

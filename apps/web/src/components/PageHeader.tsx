@@ -4,7 +4,8 @@
 // 브라우징 하위 페이지 공용 헤더(홈 제외 — 홈은 자체 .wt-home__header를 유지하므로 이 컴포넌트를
 // 쓰지 않는다). [D75] 홈과 픽셀 동일한 1행 bar만으로 구성한다(2행 nav 시각 폐지 — 메인→하위 진입
 // 시 헤더 크기 점프 0):
-//   .wt-page-header(=.wt-home__header와 동일 기하) — 좌 BrandMark(홈으로 가는 링크) + 우
+//   .wt-page-header(=.wt-home__header와 동일 기하) — 좌 BrandMark(전 페이지 홈 링크,
+//   WT-TWEAK-BRAND-LINK) + 우
 //   .wt-page-header__actions(기본 <AuthChip/> + <ThemeToggle/> — 홈 헤더와 동일한 34px 컴팩트
 //    문법. actions prop으로 대체·확장 가능).
 // title이 주어지면 시각적으로 감춘 sr-only <h1 tabIndex={-1}>로만 남긴다 — useRouteFocus가 라우트

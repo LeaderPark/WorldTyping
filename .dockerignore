@@ -19,3 +19,6 @@ e2e/artifacts
 tooling/selfhost/.env
 tooling/selfhost/cloudflared/*.json
 tooling/selfhost/backups
+
+# 배포툴 로그(deploy.ps1이 빌드 중 실시간으로 쓰는 파일 — 컨텍스트 tar 변경 오류 방지)
+tooling/selfhost/deploy-logs

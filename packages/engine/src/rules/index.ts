@@ -10,6 +10,7 @@ import { tierRules } from './tier';
 import { worldtourRules } from './worldtour';
 import { dailyRules } from './daily';
 import { raceRules } from './race';
+import { chaseRules } from './chase';
 
 /**
  * onSkip이 변경할 수 있는 최소 런 상태 뷰. 엔진의 내부 상태 객체가 이 형태를 만족해
@@ -50,10 +51,14 @@ export function createModeRules(mode: GameMode, lang: 'ko' | 'en'): ModeRules {
       return dailyRules(lang);
     case 'race':
       return raceRules();
-    // [WT-CH 조정 스텁] chase는 ChaseSessionEngine 소관 — createModeRules 경로 미사용. WT-CH-04가 정제.
+    // WT-CH-04: chase의 실질 오케스트레이션은 ChaseSessionEngine(chase-session.ts)이며 chaseRules()를
+    // 직접 사용한다 — 이 팩토리를 경유하지 않는다. 그럼에도 여기서 조정 스텁(throw)을 얇은 실객체
+    // 반환으로 정제한다: 'chase'는 유효한 GameMode이므로 팩토리가 valid GameMode에 throw하는 지뢰를
+    // 남기지 않는다(다른 5종과 동일하게 total). 반환값은 ChaseSessionEngine이 쓰는 것과 동일한 얇은
+    // ModeRules라 두 경로가 일관된다.
     case 'chase':
-      throw new Error('createModeRules: chase는 ChaseSessionEngine 소관이다 (WT-CH-04).');
+      return chaseRules();
   }
 }
 
-export { continentRules, tierRules, worldtourRules, dailyRules, raceRules };
+export { continentRules, tierRules, worldtourRules, dailyRules, raceRules, chaseRules };

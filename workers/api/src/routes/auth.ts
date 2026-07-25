@@ -9,11 +9,13 @@
 // 신원 파생(docs/04 §5.5, D38 승계): 계정 user_id = derivePlayerId(SESSION_HMAC_SECRET,"google:"+sub),
 // device_hash = deriveDeviceHash(SESSION_HMAC_SECRET,"google:"+sub). sub당 결정적이라 재로그인 멱등.
 //
-// 닉네임: Google name을 NICK_RE 형식으로 정제해 최초 생성 시 초기 닉네임으로 쓰고, nickname_norm
-// UNIQUE 충돌 시 GUEST_xxxx와 동형의 USER_xxxx로 폴백 재시도(session.ts insertNewUser 선례). 비속어
-// 콘텐츠 필터는 여기서 적용하지 않는다 — 실명 표시명이라 오탐 위험이 크고, 유저는 PUT /nickname(전체
-// moderation 파이프라인)으로 언제든 변경 가능하다. 재로그인 시에는 기존 닉네임을 보존한다(유저가
-// 커스터마이즈했을 수 있으므로 Google name으로 덮어쓰지 않는다).
+// 닉네임(WT-FIX-GOOGLENAME, §11 후속): Google 표시명을 최소 정제(sanitizeNickname)해 그대로 표시명
+// 으로 쓴다 — ID형 값(USER_xxxx) 부여는 하지 않는다. 계정 유저의 nickname_norm은 `u#${userId}`로
+// 고정한다(user_id가 PK라 구조적으로 항상 유일 — 표시명 중복은 전역 허용). NICK_RE/normalizeNickname
+// 검사는 적용하지 않는다: 실명 표시명이라 오탐·강제 축약 위험이 크고, 유일성 판정도 더 이상 필요
+// 없다(PUT /nickname은 D88로 클라 미사용이지만 API는 존치, 전체 moderation 파이프라인은 그 경로가
+// 그대로 담당). 재로그인 시 정제된 Google 이름이 저장된 nickname과 다르면 자동 재동기화한다 — 과거
+// USER_xxxx 폴백으로 강등됐던 계정도 다음 로그인에 원래 이름으로 치유된다.
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
@@ -23,7 +25,6 @@ import {
   signAccountSessionToken,
   SESSION_TTL_MS,
 } from "@wt/shared";
-import { NICK_RE, normalizeNickname } from "@wt/moderation/src/nickname";
 import type { Env } from "../env";
 import type { UserRow } from "../db/types";
 import { ApiHttpError } from "../lib/api-error";
@@ -132,9 +133,10 @@ async function issueAccountSession(c: Context<AuthEnv>, identity: GoogleIdentity
 }
 
 /**
- * Google 계정 ↔ users upsert(WT-AUTH-01). user_id/device_hash는 "google:"+sub에서 결정적 파생.
+ * Google 계정 ↔ users upsert(WT-AUTH-01, WT-FIX-GOOGLENAME). user_id/device_hash는
+ * "google:"+sub에서 결정적 파생.
  *  - users: 신규면 INSERT(Google name 정제 닉네임), status='deleted'면 신규처럼 reactivate,
- *    기존 활성 계정이면 그대로(닉네임 보존).
+ *    기존 활성 계정이면 정제된 Google 이름으로 재동기화(다르면만 UPDATE — resyncAccountNickname).
  *  - auth_identities(0005): (provider,subject) upsert — email(검증 시만)/name/last_login 갱신.
  */
 export async function upsertGoogleAccount(
@@ -156,6 +158,10 @@ export async function upsertGoogleAccount(
     // 계정" 복원(닉네임/스트릭/커버 초기화, device_hash 재파생). auth_identities 행은 DELETE
     // /users/me 시점에 함께 삭제됐으므로 아래 upsert가 새로 만든다.
     user = await reactivateAccountUser(db, userId, deviceHash, geo, identity.name, now);
+  } else {
+    // 기존 활성 계정 재로그인 — 정제된 Google 이름으로 닉네임을 자동 치유(§11 후속). 과거
+    // USER_xxxx 폴백으로 강등됐던 계정도 다음 로그인에 원래 이름으로 복원된다.
+    user = await resyncAccountNickname(db, user, identity.name, now);
   }
 
   const email = identity.emailVerified ? (identity.email ?? null) : null;
@@ -186,31 +192,44 @@ async function selectUser(db: D1Database, userId: string): Promise<UserRow | nul
   return row ?? null;
 }
 
-const MAX_INSERT_ATTEMPTS = 5;
+/** sanitizeNickname 결과가 빈 문자열일 때의 상수 폴백(랜덤 접미사 금지 — 표시명 중복이 전역
+ *  허용이므로 상수 하나로 충분하다). */
+const ACCOUNT_NICKNAME_FALLBACK = "PLAYER";
 
 /**
- * Google name을 닉네임 형식(NICK_RE, docs/06 §4.2)으로 정제. 허용 문자만 남기고 연속 `_`/`-`를
- * 접고 양끝 `_`/`-`를 제거한 뒤 12자로 클램프한다. 결과가 NICK_RE(2~12자·한글/라틴 1자 이상)를
- * 통과하지 못하면 null(호출측이 USER_xxxx 폴백).
+ * Google 표시명을 계정 닉네임으로 그대로 쓰기 위한 최소 정제(WT-FIX-GOOGLENAME). NFC 정규화 후
+ * 모든 스크립트의 문자·숫자(\p{L}\p{M}\p{N})와 공백/`_`/`-`만 남긴다(제어·포맷 문자·이모지·기호는
+ * 이 화이트리스트에 들지 않으므로 자연히 제거된다) → 연속 공백을 1개로 접기 → trim → 코드포인트
+ * 12자로 클램프(클램프 경계에 남는 공백도 다시 trim). NICK_RE 검사는 하지 않는다(실명 표시명 정책
+ * — docs/06 §4.2의 형식 제약은 게스트/PUT-닉네임 경로 소유). 결과가 빈 문자열이면
+ * ACCOUNT_NICKNAME_FALLBACK.
  */
-function sanitizeNickname(name: string | undefined): string | null {
-  if (!name) return null;
+function sanitizeNickname(name: string | undefined): string {
+  if (!name) return ACCOUNT_NICKNAME_FALLBACK;
   const kept = Array.from(name.normalize("NFC"))
-    .filter((ch) => /[가-힣a-zA-Z0-9_-]/u.test(ch))
+    .filter((ch) => /[\p{L}\p{M}\p{N} _-]/u.test(ch))
     .join("");
-  let s = kept.replace(/[_-]{2,}/g, "_").replace(/^[_-]+/, "").replace(/[_-]+$/, "");
-  const cp = Array.from(s);
-  if (cp.length > 12) s = cp.slice(0, 12).join("").replace(/[_-]+$/, "");
-  return NICK_RE.test(s) ? s : null;
-}
-
-function randomAccountSuffix(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 4).toUpperCase();
+  const collapsed = kept.replace(/ {2,}/g, " ").trim();
+  const cp = Array.from(collapsed);
+  const clamped = (cp.length > 12 ? cp.slice(0, 12).join("") : collapsed).trim();
+  return clamped.length > 0 ? clamped : ACCOUNT_NICKNAME_FALLBACK;
 }
 
 /**
- * 신규 계정 유저 INSERT. 최초 닉네임 = 정제된 Google name(있으면), 없으면 USER_xxxx. nickname_norm
- * UNIQUE 충돌 시 USER_xxxx로 재시도(session.ts insertNewUser의 GUEST_ 재시도와 동형).
+ * 계정 유저의 nickname_norm. user_id(PK)에서 결정적으로 파생해 `u#` 프리픽스를 붙인다 — user_id가
+ * 구조적으로 항상 유일하므로 이 값도 항상 유일하고, 표시명(nickname) 자체의 중복은 전역 허용된다
+ * (실명 정책이라 두 유저가 같은 Google 이름을 가질 수 있다). `u#` 프리픽스는 게스트 경로의
+ * normalizeNickname(원문 NFC lowercase) 출력과 형태가 겹치지 않는다(원문 닉네임은 2~12자 한글/
+ * 라틴/숫자/`_`/`-`만 허용되어 `#`을 포함할 수 없다 — NICK_RE).
+ */
+function accountNicknameNorm(userId: string): string {
+  return `u#${userId}`;
+}
+
+/**
+ * 신규 계정 유저 INSERT. 닉네임 = 정제된 Google name(sanitizeNickname, 없으면 PLAYER). nickname_norm
+ * 은 user_id 기반이라 더 이상 충돌하지 않는다 — 남는 것은 user_id(PK) 충돌뿐이며, 동시 요청이 이미
+ * 만든 행을 그대로 쓰는 멱등 처리로 해소한다(session.ts insertNewUser 선례).
  */
 async function insertAccountUser(
   db: D1Database,
@@ -220,48 +239,43 @@ async function insertAccountUser(
   googleName: string | undefined,
   now: number,
 ): Promise<UserRow> {
-  const base = sanitizeNickname(googleName);
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < MAX_INSERT_ATTEMPTS; attempt += 1) {
-    const nickname = attempt === 0 && base ? base : `USER_${randomAccountSuffix()}`;
-    const norm = normalizeNickname(nickname);
-    try {
-      await db
-        .prepare(
-          `INSERT INTO users (user_id, device_hash, nickname, nickname_norm, geo, created_at, updated_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`,
-        )
-        .bind(userId, deviceHash, nickname, norm, geo, now)
-        .run();
-      return {
-        user_id: userId,
-        device_hash: deviceHash,
-        nickname,
-        nickname_norm: norm,
-        passport_cover: "basic-green",
-        geo,
-        status: "active",
-        streak_daily: 0,
-        streak_updated: null,
-        created_at: now,
-        updated_at: now,
-      };
-    } catch (err) {
-      lastErr = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!/UNIQUE/i.test(msg)) throw err;
-      // user_id(PK) 충돌 → 동시 요청이 이미 만든 행을 그대로 쓴다(멱등).
-      const existing = await selectUser(db, userId);
-      if (existing) return existing;
-      // 아니면 nickname_norm 충돌 — 접미사를 바꿔 재시도.
-    }
+  const nickname = sanitizeNickname(googleName);
+  const norm = accountNicknameNorm(userId);
+  try {
+    await db
+      .prepare(
+        `INSERT INTO users (user_id, device_hash, nickname, nickname_norm, geo, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)`,
+      )
+      .bind(userId, deviceHash, nickname, norm, geo, now)
+      .run();
+    return {
+      user_id: userId,
+      device_hash: deviceHash,
+      nickname,
+      nickname_norm: norm,
+      passport_cover: "basic-green",
+      geo,
+      status: "active",
+      streak_daily: 0,
+      streak_updated: null,
+      created_at: now,
+      updated_at: now,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/UNIQUE/i.test(msg)) throw err;
+    // user_id(PK) 충돌 → 동시 요청이 이미 만든 행을 그대로 쓴다(멱등).
+    const existing = await selectUser(db, userId);
+    if (existing) return existing;
+    throw err;
   }
-  throw lastErr instanceof Error ? lastErr : new Error("insertAccountUser: exhausted retries");
 }
 
 /**
  * 삭제된 계정을 재로그인으로 "사실상 신규 계정" 복원(session.ts reactivateDeletedUser와 동일 정책).
- * 닉네임은 Google name 재정제로 초기화한다(삭제 시 익명 닉네임으로 바뀌었으므로).
+ * 닉네임은 Google name 재정제로 초기화한다(삭제 시 익명 닉네임으로 바뀌었으므로). nickname_norm이
+ * user_id 기반이라 이 UPDATE는 UNIQUE 충돌이 구조적으로 불가능하다(재시도 불필요).
  */
 async function reactivateAccountUser(
   db: D1Database,
@@ -271,30 +285,40 @@ async function reactivateAccountUser(
   googleName: string | undefined,
   now: number,
 ): Promise<UserRow> {
-  const base = sanitizeNickname(googleName);
-  let lastErr: unknown;
-  for (let attempt = 0; attempt < MAX_INSERT_ATTEMPTS; attempt += 1) {
-    const nickname = attempt === 0 && base ? base : `USER_${randomAccountSuffix()}`;
-    const norm = normalizeNickname(nickname);
-    try {
-      await db
-        .prepare(
-          `UPDATE users SET device_hash = ?2, nickname = ?3, nickname_norm = ?4, geo = ?5,
-                  passport_cover = 'basic-green', status = 'active', streak_daily = 0,
-                  streak_updated = NULL, updated_at = ?6
-             WHERE user_id = ?1`,
-        )
-        .bind(userId, deviceHash, nickname, norm, geo, now)
-        .run();
-      const updated = await selectUser(db, userId);
-      if (!updated) throw new Error("reactivateAccountUser: row vanished after UPDATE");
-      return updated;
-    } catch (err) {
-      lastErr = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      if (!/UNIQUE/i.test(msg)) throw err;
-      // nickname_norm 충돌 — 접미사를 바꿔 재시도.
-    }
-  }
-  throw lastErr instanceof Error ? lastErr : new Error("reactivateAccountUser: exhausted retries");
+  const nickname = sanitizeNickname(googleName);
+  const norm = accountNicknameNorm(userId);
+  await db
+    .prepare(
+      `UPDATE users SET device_hash = ?2, nickname = ?3, nickname_norm = ?4, geo = ?5,
+              passport_cover = 'basic-green', status = 'active', streak_daily = 0,
+              streak_updated = NULL, updated_at = ?6
+         WHERE user_id = ?1`,
+    )
+    .bind(userId, deviceHash, nickname, norm, geo, now)
+    .run();
+  const updated = await selectUser(db, userId);
+  if (!updated) throw new Error("reactivateAccountUser: row vanished after UPDATE");
+  return updated;
+}
+
+/**
+ * 기존 활성 계정 재로그인 시 닉네임 자동 재동기화(WT-FIX-GOOGLENAME). 정제된 Google 이름이 저장된
+ * nickname과 다를 때만 nickname·nickname_norm(u#userId)·updated_at을 UPDATE한다 — 과거 USER_xxxx
+ * 폴백으로 강등됐던 계정이 다음 로그인에 자동으로 치유된다. 클라는 서버 응답 nickname을 그대로
+ * 쓰므로 이 계층 위에 별도 반영 로직이 필요 없다. 같으면(대부분의 재로그인) DB 쓰기를 하지 않는다.
+ */
+async function resyncAccountNickname(
+  db: D1Database,
+  user: UserRow,
+  googleName: string | undefined,
+  now: number,
+): Promise<UserRow> {
+  const nickname = sanitizeNickname(googleName);
+  if (nickname === user.nickname) return user;
+  const norm = accountNicknameNorm(user.user_id);
+  await db
+    .prepare(`UPDATE users SET nickname = ?2, nickname_norm = ?3, updated_at = ?4 WHERE user_id = ?1`)
+    .bind(user.user_id, nickname, norm, now)
+    .run();
+  return { ...user, nickname, nickname_norm: norm, updated_at: now };
 }

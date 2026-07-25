@@ -96,8 +96,6 @@
   "multi.room.codeInput": "방 코드 입력",
   "multi.countdown": "{n}초 후 출발",
   "multi.rank.finish": "{rank}위로 도착!",
-  "multi.quickmatch.start": "퀵매치 시작",
-  "multi.quickmatch.eta": "예상 대기 ~{seconds}초 · 현재 접속 {online}명",
   "multi.publicRooms.title": "진행 중인 공개 방",
   "multi.publicRooms.entry": "{code} {current}/{max} 대기중 ({lang})",
 
@@ -146,9 +144,6 @@
   "multi.connection.retry": "다시 시도",
   "multi.connection.unstable": "연결이 불안정해요",
 
-  "multi.matching.title": "⚡ 퀵매치 매칭 중...",
-  "multi.quickmatch.hint": "예상 대기 ~10초",
-  "multi.quickmatch.cancel": "취소",
   "multi.create.maxPlayers": "최대 인원 {count}인",
   "multi.create.public": "공개 방으로 만들기",
   "multi.publicRooms.empty": "진행 중인 공개 방이 없어요",

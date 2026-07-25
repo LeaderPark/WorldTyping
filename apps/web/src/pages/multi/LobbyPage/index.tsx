@@ -8,21 +8,18 @@
 // 성공 직후) 소켓을 끊어버린다. 그래서 이 화면은 apiClient/ensureSession만 직접 쓰고, 받은 grant를
 // `navigate(path, {state:{grant}})`로 넘겨 RoomPage가 그 grant로 연결하게 한다.
 //
-// [WT-AUTH-05] 로비 재디자인 + 멀티 로그인 게이트(§11-D68). 방 만들기/입장/퀵매치/코드 참가는 모두
+// [WT-AUTH-05] 로비 재디자인 + 멀티 로그인 게이트(§11-D68). 방 만들기/입장/코드 참가는 모두
 // isLoggedIn을 먼저 검사하고, 비로그인이면 로그인 모달(reason=multi)을 띄운 뒤 성공 시 보류된 액션을
 // 재개한다(withLoginGate). VITE_WS_BASE(E2E mock)에서는 게이트를 제외한다(구현 지시). 방 목록은
 // GET /rooms/public이 주는 공개 방 상세(title/phase/hostCover)로 렌더한다(응답의 counts 필드는
 // [WT-TWEAK-LOBBY-SIMPLE]로 소비하지 않는다 — 전체/공개/비밀 카운트 세그먼트 UI 제거, 공개 방
 // 카드 목록만 그대로 전부 노출).
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type FormEvent,
-} from 'react';
+//
+// [WT-TWEAK-REMOVE-QUICKMATCH] 퀵매치 CTA(버튼·ETA/힌트 문구)·매칭 중 풀스크린·취소 배선을 로비에서
+// 제거(사용자 지시). useMultiplayer의 quickMatch 함수·서버 `/match/quick`·Matchmaker DO·프로토콜은
+// 후일 복원 대비로 무수정 존치 — 이 파일은 그 REST를 더 이상 호출하지 않을 뿐이다. BotOfferModal은
+// 퀵매치 전용이 아니라(대기실 60초 무상대 시 봇 제안은 방 생성/코드 참가 방에도 적용) 그대로 둔다.
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiClient, ensureSession, ApiError } from '../../../net/api-client';
@@ -30,7 +27,6 @@ import { useSettingsStore } from '../../../stores/settings';
 import { selectIsLoggedIn, useAuthStore, verifyAccountSession } from '../../../stores/auth';
 import { multiErrorKey } from '../../../features/multiplayer/error-keys';
 import type { WsGrant } from '../../../features/multiplayer/useMultiplayer';
-import { Mascot } from '../../../components/Mascot';
 import { PageHeader } from '../../../components/PageHeader';
 import { CreateRoomModal, type CreateRoomOptions } from './CreateRoomModal';
 
@@ -54,11 +50,6 @@ interface PublicListRes {
 /** v1 멀티 세트는 race-mixed 15개국 고정(docs/01 §8.1, docs/00 §11-D23) — 카드 메타 표시용 상수. */
 const RACE_SET_SIZE = 15;
 
-/** WT-DC-05(①): 퀵매치 매칭 화면 ETA 문구 값(디자인 S11 정본에서 추출) — 실시간 텔레메트리 소스가
- *  없어(v1 매칭은 REST 단발) 디자인 표기값을 상수로 고정한다. */
-const MATCH_ETA_SECONDS = 10;
-const MATCH_ONLINE_ESTIMATE = 132;
-
 /** 방 코드 정규화 — 하이픈/공백 제거 + 대문자화. 6자면 코드 참가, 아니면 제목 필터로 취급(§2.2). */
 function normalizeCode(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6);
@@ -81,8 +72,6 @@ export function LobbyPage() {
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const [busy, setBusy] = useState(false);
-  const [matching, setMatching] = useState(false);
-  const matchCancelledRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -105,7 +94,7 @@ export function LobbyPage() {
           setPublicRooms(res.rooms);
         })
         .catch(() => {
-          // 공개 방 목록 실패는 비치명적 — 퀵매치/코드 참가는 계속 가능.
+          // 공개 방 목록 실패는 비치명적 — 방 만들기/코드 참가는 계속 가능.
         });
     }
     load();
@@ -150,27 +139,6 @@ export function LobbyPage() {
   function reportError(err: unknown): void {
     if (err instanceof ApiError) setError(t(multiErrorKey(err.code)));
     else setError(t('multi.error.generic'));
-  }
-
-  async function runQuickMatch(): Promise<void> {
-    setError(null);
-    matchCancelledRef.current = false;
-    setMatching(true);
-    try {
-      await ensureSession(guestId);
-      const grant = await apiClient.post<WsGrant & { mode: string }>('/match/quick', { lang });
-      if (matchCancelledRef.current) return; // 취소 후 도착 — 로비 유지.
-      goToRoom(grant);
-    } catch (err) {
-      if (matchCancelledRef.current) return;
-      reportError(err);
-      setMatching(false);
-    }
-  }
-
-  function cancelMatch(): void {
-    matchCancelledRef.current = true;
-    setMatching(false);
   }
 
   async function createRoom(opts: CreateRoomOptions): Promise<void> {
@@ -230,34 +198,6 @@ export function LobbyPage() {
   // 문자열이면 CreateRoomModal이 빈 입력으로 시작하고, 서버는 빈 제목이면 키를 생략해 처리한다(무해).
   const defaultRoomTitle = (authNickname ?? '').slice(0, 24);
 
-  if (matching) {
-    // 퀵매치 매칭 화면(디자인 S11 정본) — 마스코트 bob + 타이틀 + ETA + 취소. 취소는 요청 결과를
-    // 무시하고 로비로 복귀한다.
-    return (
-      <main
-        className="wt-lobby-matching"
-        data-testid="lobby-matching"
-        role="status"
-        aria-live="polite"
-        style={{ '--wt-bob-dur': '1.4s' } as CSSProperties}
-      >
-        <Mascot width={64} tail="var(--continent-oceania)" bob />
-        <p className="wt-lobby-matching__title">{t('multi.matching.title')}</p>
-        <p className="wt-lobby-matching__eta">
-          {t('multi.quickmatch.eta', { seconds: MATCH_ETA_SECONDS, online: MATCH_ONLINE_ESTIMATE })}
-        </p>
-        <button
-          type="button"
-          className="wt-lobby-matching__cancel"
-          data-testid="lobby-matching-cancel"
-          onClick={cancelMatch}
-        >
-          {t('multi.quickmatch.cancel')}
-        </button>
-      </main>
-    );
-  }
-
   return (
     // [Tweak C] flex-1·min-h-0로 뷰포트를 채워(AppShell flex 레이아웃) 방 목록만 내부 스크롤하게
     // 한다 — 헤더 카드는 고정, footer는 뷰포트 하단 유지. [D74] 폭은 공유 .wt-page로.
@@ -309,20 +249,6 @@ export function LobbyPage() {
               {error}
             </p>
           )}
-
-          {/* 퀵매치 스트립. */}
-          <div className="wt-lobby__quickmatch">
-            <button
-              type="button"
-              className="wt-pill wt-pill--active wt-lobby__quickmatch-cta"
-              data-testid="lobby-quickmatch"
-              disabled={busy || matching}
-              onClick={() => withLoginGate(() => void runQuickMatch())}
-            >
-              {t('multi.quickmatch.start')}
-            </button>
-            <p className="wt-lobby__hint">{t('multi.quickmatch.hint')}</p>
-          </div>
 
           {/* 검색바: 6자 코드=Enter 코드 참가 / 그 외 입력=제목 클라 필터. */}
           <form className="wt-lobby__search" onSubmit={onSearchSubmit}>

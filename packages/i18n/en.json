@@ -96,8 +96,6 @@
   "multi.room.codeInput": "Enter room code",
   "multi.countdown": "Departing in {n}s",
   "multi.rank.finish": "Finished {rank}!",
-  "multi.quickmatch.start": "Start quick match",
-  "multi.quickmatch.eta": "Est. wait ~{seconds}s · {online} online",
   "multi.publicRooms.title": "Open public rooms",
   "multi.publicRooms.entry": "{code} {current}/{max} waiting ({lang})",
 
@@ -146,9 +144,6 @@
   "multi.connection.retry": "Retry",
   "multi.connection.unstable": "Connection is unstable",
 
-  "multi.matching.title": "⚡ Finding a match…",
-  "multi.quickmatch.hint": "Est. wait ~10s",
-  "multi.quickmatch.cancel": "Cancel",
   "multi.create.maxPlayers": "Max {count} players",
   "multi.create.public": "Make this room public",
   "multi.publicRooms.empty": "No public rooms right now",

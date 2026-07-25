@@ -74,13 +74,15 @@ describe('LobbyPage (WT-AUTH-05)', () => {
     vi.clearAllMocks();
   });
 
-  it('모드 선택 UI 없이 배너·퀵매치·방 만들기·검색·방 카드를 렌더한다(§11-D23)', async () => {
+  it('모드 선택 UI 없이 배너·방 만들기·검색·방 카드를 렌더한다(§11-D23)', async () => {
     renderLobby();
     expect(screen.getByTestId('lobby-banner')).toHaveAttribute('data-variant', 'guest');
-    expect(screen.getByTestId('lobby-quickmatch')).toBeInTheDocument();
     expect(screen.getByTestId('lobby-create-open')).toBeInTheDocument();
     expect(screen.getByTestId('lobby-search')).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /mode/i })).not.toBeInTheDocument();
+    // [WT-TWEAK-REMOVE-QUICKMATCH] 퀵매치 CTA/매칭 풀스크린은 로비에서 제거됐다(사용자 지시).
+    expect(screen.queryByTestId('lobby-quickmatch')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-matching')).not.toBeInTheDocument();
 
     await waitFor(() => expect(getMock).toHaveBeenCalledWith('/rooms/public'));
     expect(await screen.findByTestId('lobby-room-card-ABC123')).toBeInTheDocument();
@@ -113,16 +115,6 @@ describe('LobbyPage (WT-AUTH-05)', () => {
     expect(screen.queryByTestId('lobby-room-card-XYZ789')).not.toBeInTheDocument();
   });
 
-  it('비로그인 상태에서 퀵매치를 누르면 REST를 호출하지 않고 로그인(멀티)을 연다', async () => {
-    renderLobby();
-    fireEvent.click(screen.getByTestId('lobby-quickmatch'));
-
-    expect(useAuthStore.getState().loginReason).toBe('multi');
-    expect(postMock).not.toHaveBeenCalledWith('/match/quick', expect.anything());
-    // 매칭 풀스크린으로 전환되지 않는다(액션은 보류됨).
-    expect(screen.queryByTestId('lobby-matching')).not.toBeInTheDocument();
-  });
-
   it('비로그인 방 만들기 게이트 → 로그인 성공 시 보류 액션(모달 열기)이 재개된다', async () => {
     renderLobby();
     fireEvent.click(screen.getByTestId('lobby-create-open'));
@@ -132,14 +124,6 @@ describe('LobbyPage (WT-AUTH-05)', () => {
 
     logIn();
     expect(await screen.findByTestId('lobby-create-modal')).toBeInTheDocument();
-  });
-
-  it('로그인 상태에서 퀵매치는 즉시 /match/quick을 호출한다', async () => {
-    logIn();
-    renderLobby();
-    fireEvent.click(screen.getByTestId('lobby-quickmatch'));
-
-    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/match/quick', { lang: 'ko' }));
   });
 
   it('로그인 상태에서 6자 코드 검색 후 Enter는 코드 참가(/rooms/:code/join)를 호출한다', async () => {

@@ -211,10 +211,13 @@ function ChasePlaySession({ seed, runToken, graph, countries, lang, platform, re
       const container = pageRef.current?.querySelector<HTMLElement>('.wt-game-page__map');
       if (!container || !geoIndex) return;
       const handle = createGlobeChaseHandle({ core, container, index: geoIndex });
+      // 전 국가(un195) 노드 도트 레이어(§11-D108-B) — chase-graph의 ids가 곧 un195 정확 집합이라
+      // 별도 국가 목록 필터를 두지 않는다(심이 이동 가능하다고 보는 노드 = 화면에 보이는 노드).
+      handle.setCountryNodes(graph.ids);
       handle.setHome(homeId);
       setChaseHandle(handle);
     },
-    [geoIndex, homeId],
+    [geoIndex, homeId, graph],
   );
 
   // 경찰/위협 상태 추적용 ref(엔진이 policeUpdated 이벤트로만 라이브 유닛을 실어 보낸다 —

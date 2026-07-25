@@ -467,37 +467,46 @@
   }
 }
 
-/* 경찰 마커(§7.5) — 3종 아이덴티티. 2px halo(--surface)로 양 테마 판독성(§8.7). */
+/* 경찰 마커(§7.5 + §11-D108-D 배지형 개편) — 3종 아이덴티티. 원형 배지(대비 배경 --surface +
+   유닛색 테두리)에 순수 SVG path 실루엣을 얹어 "무슨 유닛인지"가 한눈에 읽히게 한다(이전의 색
+   도트만으로는 판독 불가라는 사용자 리포트). 색은 기존 --chase-siren-* 토큰만 사용. */
 .wt-chase__police {
   transform-box: fill-box;
   transform-origin: center;
 }
-.wt-chase__police-dot {
-  stroke: var(--surface);
+.wt-chase__police-badge {
+  fill: var(--surface);
+  fill-opacity: 0.95;
+  stroke: var(--chase-siren-blue);
   stroke-width: 2;
-  paint-order: stroke;
 }
-.wt-chase__police--chaser .wt-chase__police-dot {
-  fill: var(--chase-siren-red);
+.wt-chase__police-glyph {
+  fill: var(--chase-siren-blue);
+  stroke: none;
+}
+/* chaser: 적청 교대 점멸을 배지 테두리로 옮긴다(실루엣은 항상 또렷한 적색 유지 — 점멸 중에도
+   "경찰차"라는 정보가 사라지지 않는다). */
+.wt-chase__police--chaser .wt-chase__police-badge {
+  stroke: var(--chase-siren-red);
   animation: wt-chase-chaser-blink 0.8s step-end infinite;
+}
+.wt-chase__police-glyph--chaser {
+  fill: var(--chase-siren-red);
 }
 @keyframes wt-chase-chaser-blink {
   0%,
   49% {
-    fill: var(--chase-siren-red);
+    stroke: var(--chase-siren-red);
   }
   50%,
   100% {
-    fill: var(--chase-siren-blue);
+    stroke: var(--chase-siren-blue);
   }
-}
-.wt-chase__police--interceptor .wt-chase__police-dot,
-.wt-chase__police--heli .wt-chase__police-dot {
-  fill: var(--chase-siren-blue);
 }
 .wt-chase__police-rotor {
   stroke: var(--chase-siren-blue);
   stroke-width: 1.5;
+  stroke-linecap: round;
   transform-box: fill-box;
   transform-origin: center;
   animation: wt-chase-rotor-spin 0.5s linear infinite;
@@ -541,13 +550,67 @@
   }
 }
 
-/* 후보국 앵커 도트(§7.5 setCandidateAnchors) — CH-06 리더 라인 시작점(4px). */
-.wt-chase__candidate-anchor {
-  fill: var(--text);
+/* 전 국가(un195) 노드 도트(§11-D108-B) — 저채도·소형 기본 + 현재국/홈/후보만 강조. 색은 지도
+   테마 토큰(--map-*)과 --chase-gold만 사용해 라이트/다크 자동 대응. 반경(r)은 JS가 상태별로
+   설정한다(CSS geometry property 미지원 환경 대비 — jsdom 테스트도 속성으로 검증). */
+.wt-chase__node {
+  fill: var(--map-border);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.wt-chase__node[data-node-state='candidate'] {
+  fill: var(--chase-gold);
+  opacity: 0.95;
+}
+.wt-chase__node[data-node-state='home'] {
+  fill: var(--chase-gold);
+  opacity: 1;
   stroke: var(--surface);
   stroke-width: 1.5;
   paint-order: stroke;
-  opacity: 0.85;
+}
+.wt-chase__node[data-node-state='current'] {
+  fill: var(--map-station-fill);
+  opacity: 1;
+  stroke: var(--text);
+  stroke-width: 1.5;
+  paint-order: stroke;
+}
+
+/* 현재국 → 후보 3국 대권 연결선(§11-D108-C) — 직선이 아니라 지구본 위 great-circle 아크.
+   프리하이라이트(입력 중 선두 후보)만 굵게·발광해 "지금 어디로 가고 있는지"를 즉시 보여준다. */
+.wt-chase__link {
+  fill: none;
+  stroke: var(--chase-gold);
+  stroke-width: 1.5;
+  stroke-opacity: 0.5;
+  stroke-dasharray: 3 4;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.wt-chase__link--lead {
+  stroke-width: 3;
+  stroke-opacity: 1;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 4px var(--chase-gold));
+}
+
+/* 후보국 앵커 배지(§7.5 setCandidateAnchors + §11-D108-C) — CH-06 리더 라인 시작점이자 칩과 짝을
+   이루는 슬롯 번호(1~3) 배지. 번호 텍스트는 --surface-console(테마 무관 어두운 톤)로 금색 배경
+   위 판독성 확보(가방 배지와 동일 관례). */
+.wt-chase__candidate-anchor {
+  fill: var(--chase-gold);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  paint-order: stroke;
+  opacity: 0.95;
+}
+.wt-chase__candidate-index {
+  fill: var(--surface-console);
+  font-size: 8px;
+  font-weight: 800;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* matching 폴리곤 프리하이라이트(§7.5 setCandidatePrehighlight, §8.5) — canvas 재그리기 0 계약(D67)의
@@ -618,8 +681,8 @@
    경계로 통일했다)/reduced-motion: 경찰 블링크·로터 회전·금 시머·홈/체포링 펄스 애니메이션 정지
    + 서치라이트 콘·추적선 은닉(§11 "저사양: 추적선·파티클·서치라이트 off, 경찰 마커는 정적
    도트+화살표만"). */
-.wt-chase__overlay[data-juice='1'] .wt-chase__police--chaser .wt-chase__police-dot,
-.wt-chase__overlay[data-juice='2'] .wt-chase__police--chaser .wt-chase__police-dot,
+.wt-chase__overlay[data-juice='1'] .wt-chase__police--chaser .wt-chase__police-badge,
+.wt-chase__overlay[data-juice='2'] .wt-chase__police--chaser .wt-chase__police-badge,
 .wt-chase__overlay[data-juice='1'] .wt-chase__police-rotor,
 .wt-chase__overlay[data-juice='2'] .wt-chase__police-rotor,
 .wt-chase__overlay[data-juice='1'] .wt-chase__gold,
@@ -636,7 +699,7 @@
 .wt-chase__overlay[data-juice='2'] .wt-chase__trail {
   display: none;
 }
-:root[data-reduced] .wt-chase__overlay .wt-chase__police--chaser .wt-chase__police-dot,
+:root[data-reduced] .wt-chase__overlay .wt-chase__police--chaser .wt-chase__police-badge,
 :root[data-reduced] .wt-chase__overlay .wt-chase__police-rotor,
 :root[data-reduced] .wt-chase__overlay .wt-chase__gold,
 :root[data-reduced] .wt-chase__overlay .wt-chase__home-ring,
@@ -648,7 +711,7 @@
   display: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .wt-chase__overlay .wt-chase__police--chaser .wt-chase__police-dot,
+  .wt-chase__overlay .wt-chase__police--chaser .wt-chase__police-badge,
   .wt-chase__overlay .wt-chase__police-rotor,
   .wt-chase__overlay .wt-chase__gold,
   .wt-chase__overlay .wt-chase__home-ring,

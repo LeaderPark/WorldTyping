@@ -4273,3 +4273,57 @@ a.wt-brand:focus-visible {
     animation: none;
   }
 }
+
+/* ── WT-RACE-GLOBE: 멀티 레이스 지구본 무대 + 상대 비행기 오버레이 ─────────────
+   spec: docs/01 §8.2·§10.2(S11), docs/03 §3.7(지구본 무대)·§7.3(reduced-motion), docs/00 §11-D63·
+   D67·D73. 배선은 pages/multi/RoomPage/RaceGlobe.tsx + features/map/globe/globe-race.ts.
+   [배치] 기존 규칙은 하나도 수정하지 않고 신규 클래스만 파일 말미에 추가한다(CH-07/08 브랜치와의
+   병합 충돌 최소화). 지구본 자체(canvas/.wt-globe__overlay) 스타일은 tokens.css가 이미 소유하고,
+   여기서는 무대 배치와 레이스 전용 오버레이만 정의한다. */
+
+/* 무대: .wt-room은 48rem 중앙 컬럼이라 GamePage의 `.wt-game-page__map`(부모 relative + inset:0)
+   패턴을 그대로 쓸 수 없다 — 뷰포트 고정 배경으로 깐다(.wt-race-countdown이 이미 쓰는 어휘).
+   z0 = 지구본, z1 = 레이스 HUD(.wt-race-stage/.wt-race-above), z40 = 카운트다운 오버레이. */
+.wt-race-globe {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--bg);
+  pointer-events: none;
+}
+.wt-race-globe__map {
+  position: absolute;
+  inset: 0;
+}
+/* 지구본 위에 얹히는 레이스 콘텐츠. .wt-race-stage는 GameView 하나를 감싸는 래퍼(기존 .wt-room
+   flex 컬럼 자식 자리를 그대로 승계 — 폭/정렬 델타 0), .wt-race-above는 레이어링만 얹는 보조
+   클래스(관전 패널처럼 이미 자기 레이아웃을 가진 요소용). */
+.wt-race-stage,
+.wt-race-above {
+  position: relative;
+  z-index: 1;
+}
+
+/* 상대 비행기 오버레이(globe-race.ts가 코어 canvas+svg의 형제로 삽입) — 코어와 동일 viewBox
+   960×500·xMidYMid meet이라 좌표가 완전히 겹친다. 입력은 가로채지 않는다. */
+.wt-race__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+/* 상대 기체: 코어 제트(--globe-plane-fill 흰 기체, D73)와 같은 실루엣이되 플레이어색 fill +
+   반투명 + 작은 스케일(globe-race.ts RIVAL_GROUND_SCALE)로 내 비행기보다 시각 우선순위를 낮춘다.
+   색은 RaceGlobe.tsx가 --wt-race-plane-color로 인라인 주입한다(--continent-color 주입과 동일 패턴).
+   transform은 오버레이가 attribute로 직접 갱신한다(레이아웃 불변, §4.5). */
+.wt-race__plane {
+  opacity: 0.85;
+}
+.wt-race__plane-shape {
+  fill: var(--wt-race-plane-color, var(--grade-b));
+  stroke: var(--globe-plane-stroke);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1.5px 2.5px rgb(0 0 0 / 0.35));
+}

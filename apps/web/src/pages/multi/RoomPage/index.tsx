@@ -164,13 +164,16 @@ export function RoomPage() {
 
   return (
     <main className="wt-room" data-testid="room-page">
+      {/* [WT-RACE-GLOBE] 레이스 중에는 지구본이 뷰포트 고정 배경(z0)으로 깔린다 — 정적 흐름 요소는
+          positioned 배경보다 먼저 페인트되므로(CSS 2.1 Appendix E) 방 크롬(에러/재접속 배너)에도
+          같은 레이어 클래스를 얹어 항상 무대 위에 남게 한다. 레이스가 아닐 때는 시각 델타 0. */}
       {lastError && (
-        <p className="wt-lobby__error" data-testid="room-error">
+        <p className="wt-lobby__error wt-race-above" data-testid="room-error">
           {t(multiErrorKey(lastError.code))}
         </p>
       )}
       {connection === 'reconnecting' && (
-        <p className="wt-room__banner" data-testid="room-reconnecting">
+        <p className="wt-room__banner wt-race-above" data-testid="room-reconnecting">
           {t('multi.connection.reconnecting')}
         </p>
       )}

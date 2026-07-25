@@ -75,6 +75,17 @@ web 113파일/**780 테스트** · i18n 7 · typecheck 8워크스페이스 · li
 ### 알려진 이슈 (후속)
 ① `packages/data pipeline.test.ts`가 Windows `autocrlf=true` 환경에서 CRLF/LF 차이로 실패(바이트 동일 확인됨) — `.gitattributes`(generated 경로 `eol=lf`) 후속. ② `vitest.workers.config` 연속 실행 시 og.test `initWasm` 재초기화 행업(테스트 인프라, 프로덕션 무관). ③ CH-07 검증에서 확인된 스펙 축소 2건: 수배 점등 시각 레이더 스윕 생략, SFX는 합성 WAV 스프라이트(정식 ogg는 CH-11로 이관).
 
+### 1.6b 저녁 배치 (2026-07-25 오후~저녁 — 이 절이 최신, `main`=`81b7ec2`)
+- **로그인 사가 종결**: D105(redirect 기본 로그인+복귀 경로, Google Console 리디렉션 URI 등록 완료) → **D109(크로스탭 로그인 자가 파괴 봉인 — 진짜 근본 원인, 실물 2탭 프로브 0/3→3/3)**. D101(FedCM)은 D105로 대체.
+- **IME '도대' 완전 봉인**: D104(비조합 flush 무장+silentClear) + D106(keydown 상관 — 점진 재조합 에코, e2e 헬퍼 keydown 정비 포함). 진단 채널 localStorage 'wt:imeTrace'.
+- **전체 e2e 게이트 그린**: Playwright **35/35**(4.9m) · 웹 797+ · 엔진 158 · DO 103 · size-limit 102.86KB/170KB — 회귀 0 (91abd6e).
+- **티어 난이도 실질화(D107)**: TIER_TIME_FACTOR 1.2~0.7 + T4·T5 자모 길이 가중 출제(lang별 세트 분화 — §D5 개정 해석). 배포 전환 시 진행 중 T4·T5 런 set_mismatch 주의.
+- **UI/기능**: 여권 로그인 전용 v3(진입 차단·홈 모달·로그인 후 자동 재개) · ✈ TypeTrip 전 페이지 홈 링크 · 결과/데일리 시인성 패널 · 홈 지구본 뷰포트 중앙 · 결과창 공유 제거 · 골드 러너 카드 '준비중'(dd04141 — 라우트·구현 존치, revert로 복원).
+- **chase 디벨롭 1차(D108, 준비중 상태에서 개발)**: 앵커=심 동일 좌표 단일화·후보 앵커 홉 재투영 버그 수정(연결선 부정확 실원인)·전 노드 도트·대권 연결선+번호 일치·경찰 배지 3종. 잔여: idle/finished 자전 중 오버레이 미추적(별도 결정)·CH-10 E2E·CH-11 튜닝.
+- **운영 도구**: 원클릭 배포 deploy.cmd(§8.8) + **DB 초기화 reset-db.cmd**(RESET 확인·자동 백업·재기동 헬스체크 — KV config:*도 함께 초기화됨 주의). DB 초기화 후 데일리는 /daily/today 1회 호출로 즉석 재발행(멱등).
+- **push 403 지속**: 이 PC 계정(fitfunsJinWoo) 권한 부재 — collaborator 초대 필요. GitHub 우회는 `C:\modakGames\wt-deploy-bundle.bundle`.
+- **검증 방식 메모**: 마감·긴급 구간(D102~D109)은 개별 독립 검증 대신 리드 diff 검토+구현 acceptance+전체 e2e 게이트(35/35)로 갈음했고, D109는 실물 프로브 재현까지 수행.
+
 ---
 
 ## 2. 새 PC 셋업 절차

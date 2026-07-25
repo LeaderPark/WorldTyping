@@ -24,6 +24,14 @@
 // (현행 fast-path)·밖=의미 중재(전체 MISS)로만 삼킨다. staleEcho가 "첫 비어있지 않은 입력에서
 // one-shot 소거"라 노출은 국가당 1스냅샷으로 유계이고, fail-open은 시간이 아닌 예산이 담당한다.
 // ④ getValue()는 기저 접두(basePrefix)를 제외한 실입력을 노출한다(additive).
+// ⑤(D104) D98 이후에도 라이브 재현이 남았던 잔여 구멍 2개를 봉인한다.
+//   (A) **비조합 flush도 무장한다** — EXACT는 조기 compositionend/Safari 순서 역전에서 microtask
+//       재평가(ev=undefined·composing=false)로 확정되고, 스킵 clear()도 비조합이다. 기존 else 분기는
+//       거기서 staleEcho를 지워 방어가 아예 무장되지 않았다(이후 어떤 재삽입도 genuine 통과).
+//       이제 lang==='ko' ∧ 비우기 전 버퍼가 비어있지 않으면 무장한다(en·빈 버퍼는 기존대로 해제).
+//   (B) **삼킴 정리는 조합을 실제로 추적 중일 때만(this.composing) flushIme** — 아니면 신설
+//       silentClear(epoch·blur·focus 미유발). 기존엔 이벤트의 isComposing 비트만 보고 삼킴마다
+//       blur→focus를 돌려, 그 focus 복귀가 같은 재삽입을 다시 불러 예산(3)만 태우고 fail-open했다.
 import {
   matchInputDetail,
   compileTargets,
@@ -90,6 +98,10 @@ export class TypingInputController {
   private reinsertFlushes = 0;
   /** flushIme 실행 중 blur/focus가 유발할 수 있는 동기 input 재진입 방어 플래그. */
   private flushing = false;
+  /** D104 진단 채널: localStorage 'wt:imeTrace'==='1'일 때만 resolveRaw 분기 결정을 로그한다.
+   *  생성 시 1회만 읽어 캐시하고 호출측에서 이 불리언으로 먼저 게이트한다 — 꺼져 있으면 핫패스
+   *  비용은 불리언 검사 1회(문자열 포맷·객체 할당 없음). */
+  private readonly trace = readTraceFlag();
 
   constructor(
     private input: HTMLInputElement,
@@ -232,7 +244,8 @@ export class TypingInputController {
         this.basePrefix = '';
         return v;
       }
-      this.flushIme(readIsComposing(ev) || this.composing); // 기저 붕괴 → 조용한 리셋
+      if (this.trace) this.traceBranch('base-collapse', { v, base: this.basePrefix });
+      this.settleSwallow(); // 기저 붕괴 → 조용한 리셋
       return null;
     }
     if (!this.staleEchoJamo) return v;
@@ -244,6 +257,13 @@ export class TypingInputController {
     const vJamo = this.jamoOf(v);
     const inWindow = this.now() - this.flushAt <= REINSERT_WINDOW_MS;
     const hasBudget = this.reinsertFlushes < MAX_REINSERT_FLUSHES;
+    if (this.trace) {
+      // evComposing(이벤트 비트) vs composing(우리가 추적 중인 조합)의 괴리가 구멍 B의 기기 신호다.
+      const budget = this.reinsertFlushes;
+      const evComposing = readIsComposing(ev);
+      const composing = this.composing;
+      this.traceBranch('armed', { v, vJamo, stale, inWindow, budget, evComposing, composing });
+    }
     // (1) 전량 에코 삼킴(D70-③): ≥2자모 조건이 핵심 — 실키스트로크 1타 = 자모 1개 → 확정 직후 0ms
     //     첫 타(§2.10 #4)는 절대 안 삼켜짐. 윈도우 안은 무중재 fast-path(현행 불변).
     if (vJamo.length >= 2 && stale.endsWith(vJamo) && hasBudget) {
@@ -251,13 +271,15 @@ export class TypingInputController {
       // PREFIX/EXACT면 genuine 우선. 알려진 한계: 인도→도미니카처럼 새 타깃이 옛 꼬리로 시작하면
       // 늦은 단독 에코 '도'는 값 층에서 genuine과 구별 불가라 구조적으로 못 잡는다(누수 수용).
       if (inWindow || matchInputDetail(v, this.targets, this.lang).state === 'MISS') {
+        if (this.trace) this.traceBranch('swallow', { v, vJamo, stale, inWindow });
         this.reinsertFlushes++;
-        this.flushIme(readIsComposing(ev) || this.composing); // 재삽입 삼킴 + 재플러시
+        this.settleSwallow(); // 재삽입 삼킴 + 정리(예산 소비 규칙은 D70/D84 그대로)
         return null;
       }
     }
     // (2) Gboard 옛 전체값 접두 스트립(D70-③) — 무게이트 현행 유지(테스트 ④는 윈도우 밖).
     if (v.startsWith(staleRaw) && v.length > staleRaw.length && staleRaw.length > 0) {
+      if (this.trace) this.traceBranch('gboard-prefix', { v, staleRaw });
       this.basePrefix = staleRaw; // Gboard 접두 스트립 — 이후 basePrefix 분기가 연장분만 넘긴다
       return v.slice(staleRaw.length);
     }
@@ -276,6 +298,7 @@ export class TypingInputController {
         const full = matchInputDetail(v, this.targets, this.lang);
         const stripped = matchInputDetail(rest, this.targets, this.lang);
         if (full.state === 'MISS' && stripped.state !== 'MISS') {
+          if (this.trace) this.traceBranch('strip', { v, r, rest });
           this.reinsertFlushes++; // 삼킴과 공용 예산 소비(fail-open 일관성)
           this.basePrefix = r;
           return rest;
@@ -283,7 +306,47 @@ export class TypingInputController {
         break; // 최장 raw 일치 1회만 중재(결정성) — 실패 시 genuine
       }
     }
+    if (this.trace) this.traceBranch('genuine', { v, vJamo, stale, hasBudget });
     return v; // genuine 신규 입력
+  }
+
+  /**
+   * 재삽입 삼킴·기저붕괴 정리(D104-B). **실제로 조합 중일 때만**(= 우리가 compositionstart를 보고
+   * 추적 중인 this.composing) 기존 flushIme(blur→epoch++→clear→동기 focus)를 쓰고, 그 외에는
+   * silentClear로 조용히 정리한다. 판정을 `readIsComposing(ev) || this.composing`에서 this.composing
+   * 단독으로 좁힌 것이 이 수정의 핵심이다: IME 재삽입 이벤트 자체가 isComposing=true로 오는 기기
+   * (flushIme의 focus() 중에 시작된 조합이라 우리 compositionstart 추적은 이미 false로 덮인다)에서
+   * blur→focus를 다시 돌리면 그 focus 복귀가 같은 에코를 한 번 더 부르는 루프가 되어 국가당 예산
+   * 3회를 태우고, 4번째부터 fail-open으로 에코가 새 버퍼에 눌러앉는다(라이브 잔여 증상).
+   * 조합을 실제로 추적 중일 때는 blur가 조합을 끝내는 유일한 수단이므로 flushIme를 유지한다(§2.5).
+   */
+  private settleSwallow(): void {
+    if (this.composing) this.flushIme(true);
+    else this.silentClear();
+  }
+
+  /**
+   * 조합이 없는 상태의 버퍼 정리(D104-B). flushIme와 달리 epoch를 올리지 않고 blur()/focus()도
+   * 부르지 않는다 — 정리 후에도 방어는 계속 무장 상태로 남는다(연속 에코 대응).
+   * - blur/focus 미유발: 삼킨 값 자체가 직전 blur→focus가 유발한 재삽입이다. 여기서 또 돌리면
+   *   같은 에코를 재유발하는 루프가 되고, 소프트키보드가 깜빡이는 부작용만 남는다.
+   * - epoch 미증가: 조합이 없으니 구세대화할 자기유발 compositionend가 없고, 오히려 진행 중인
+   *   유효한 compositionend microtask 재평가까지 죽여 정상 입력을 잃는다(§2.5 epoch 계약 보존).
+   * 호출 두 지점 모두 v.length>0를 이미 통과했으므로 버퍼는 항상 비어있지 않다 → 무조건 재무장.
+   */
+  private silentClear(): void {
+    const staleRaw = this.input.value;
+    this.basePrefix = '';
+    this.input.value = '';
+    this.staleEchoJamo = this.jamoOf(staleRaw); // 다음 에코 탐지 기준으로 재무장
+    this.staleEchoRaw = staleRaw;
+    this.flushAt = this.now();
+    this.accountant.reset();
+  }
+
+  /** 진단 로그 1행(this.trace로 게이트된 호출만 도달한다). */
+  private traceBranch(branch: string, fields: Record<string, string | number | boolean>): void {
+    console.debug('[wt:ime]', branch, fields);
   }
 
   private flushIme(isComposing = this.composing): void {
@@ -305,8 +368,20 @@ export class TypingInputController {
     } else {
       this.epoch++;
       this.input.value = '';
-      this.staleEchoJamo = '';
-      this.staleEchoRaw = '';
+      // ★D104-A: 비조합 flush도 재삽입 방어를 무장한다. EXACT는 조기 compositionend/Safari 순서
+      // 역전에서 compositionend가 예약한 microtask 재평가(ev=undefined·composing=false)로 확정될 수
+      // 있고 스킵 clear()도 비조합인데, 여기서 staleEcho를 지우면 그 국가 전환에서는 재삽입 방어가
+      // 아예 무장되지 않아 이후 어떤 에코도 genuine으로 통과했다(라이브 '도대' 재현의 잔여 구멍).
+      // 무장 조건은 [lang==='ko' ∧ 비우기 전 버퍼 비어있지 않음]: en 라틴 경로는 IME 재삽입이
+      // 없으므로 기존 계약대로 해제하고(§2.9), 빈 버퍼 clear()도 무장할 대상 자체가 없다.
+      if (this.lang === 'ko' && staleRaw.length > 0) {
+        this.staleEchoJamo = this.jamoOf(staleRaw);
+        this.staleEchoRaw = staleRaw;
+        this.flushAt = this.now();
+      } else {
+        this.staleEchoJamo = '';
+        this.staleEchoRaw = '';
+      }
     }
     this.accountant.reset();
     this.flushing = false;
@@ -337,6 +412,18 @@ export class TypingInputController {
   subscribe(f: (e: TypingEvent) => void): () => void {
     this.listeners.add(f);
     return () => this.listeners.delete(f);
+  }
+}
+
+/**
+ * D104 진단 채널 플래그. 컨트롤러 생성 시 1회만 호출된다(핫패스 아님). SSR/node 테스트에는
+ * localStorage가 없고, 프라이버시 모드·샌드박스 iframe에서는 접근 자체가 throw할 수 있다.
+ */
+function readTraceFlag(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('wt:imeTrace') === '1';
+  } catch {
+    return false;
   }
 }
 

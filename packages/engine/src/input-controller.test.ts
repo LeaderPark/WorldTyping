@@ -106,6 +106,23 @@ function reachIndiaExact(h: Harness): void {
   h.type('인도', true); // EXACT → 조합 중 flushIme, staleEcho='ㅇㅣㄴㄷㅗ' / staleRaw='인도'
 }
 
+/**
+ * INDIA(인도)를 **비조합 경로**로 EXACT 확정한다(D104 구멍 A). 마지막 input 이벤트보다
+ * compositionend가 먼저 오는 순서(조기 compositionend·Safari 역전)에서는 EXACT가 compositionend가
+ * 예약한 microtask 재평가(ev=undefined · composing=false)로 확정되어 flushIme의 else(비조합)
+ * 분기를 탄다 — 재삽입 방어가 무장되는지가 이 헬퍼로 여는 시나리오의 핵심이다.
+ */
+async function reachIndiaExactViaMicrotask(h: Harness): Promise<void> {
+  h.ctrl.setCountry(INDIA);
+  h.compositionStart();
+  h.type('ㅇ', true);
+  h.type('인', true);
+  h.type('인ㄷ', true);
+  h.input.value = '인도'; // 최종 input 이벤트 없이 값만 확정(IME가 compositionend를 먼저 낸 상태)
+  h.compositionEnd(); // composing=false + microtask 재평가 예약
+  await Promise.resolve(); // microtask: EXACT → flushIme(false) — 비조합 플러시
+}
+
 let nowMs = 0;
 
 interface Harness {
@@ -905,6 +922,184 @@ describe('TypingInputController', () => {
       expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
       expect(h.input.value).toBe('chad'); // 재플러시 없음
       expect(h.ctrl.getValue()).toBe('chad');
+    });
+  });
+
+  // ── docs/00 §11-D104(D98 개정): 라이브 재현이 남아 있던 잔여 구멍 2개 ────────────────────
+  //  A) 비조합 flush가 재삽입 방어를 아예 무장하지 않았다 — EXACT는 compositionend 이후
+  //     microtask 재평가(ev=undefined·composing=false)로 확정될 수 있고(조기 compositionend·
+  //     Safari 순서 역전), 그 경로/스킵 clear() 경로에선 flushIme의 else 분기가 staleEcho를
+  //     지워버려 이후 어떤 재삽입도 genuine으로 통과했다. → ko + 비어있지 않은 사전 버퍼면 무장.
+  //  B) 삼킴 재플러시의 blur→focus가 같은 에코를 재유발해 국가당 예산(3)만 태우고 fail-open으로
+  //     새 버퍼에 눌러앉았다. → 실제 조합 중일 때만 flushIme, 아니면 silentClear(무-blur·무-epoch).
+  describe('D104 non-composing flush arming (A) / silent swallow cleanup (B)', () => {
+    // N7(구멍 A 재현 ★): 비조합(microtask) EXACT 플러시 후 늦은 병합 '도대' — 무장이 됐으므로
+    //   D98 부분 꼬리 스트립이 그대로 동작한다. 현행 코드에선 staleEcho 미장전 → genuine MISS로 실패.
+    it('N7: after a non-composing (microtask) EXACT flush, a late merged "도대" is still stripped', async () => {
+      const h = harness('ko');
+      h.setNow(0);
+      await reachIndiaExactViaMicrotask(h);
+      expect(eventsOf(h.events, 'exact')).toHaveLength(1); // 비조합 경로로 확정됐음을 잠근다
+      const before = contentCount(h.events);
+      h.setNow(500); // 일반적인 플레이 호흡
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('도대', true); // 재삽입 '도' + genuine '대'
+      expect(contentCount(h.events)).toBe(before + 1);
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('대');
+      expect(h.ctrl.getValue()).toBe('대'); // 화면에 '도대'가 남지 않는다(라이브 증상)
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+    });
+
+    // N8(구멍 A): 같은 비조합 flush 후 단독 늦은 에코 '도' — 전량 삼킴 분기가 의미 중재를 통과해 삼킨다.
+    it('N8: after a non-composing flush, a lone late echo "도" is swallowed', async () => {
+      const h = harness('ko');
+      h.setNow(0);
+      await reachIndiaExactViaMicrotask(h);
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.ctrl.setCountry(KOREA);
+      h.type('도'); // 조합 이벤트 없이 도착한 늦은 에코 → 삼킴 + silentClear
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe(''); // 조용히 비워짐
+    });
+
+    // N9(구멍 B ★): isComposing=false 에코가 연속 도착해도 blur→focus를 유발하지 않고(에코 재유발
+    //   루프 차단) 삼킬 때마다 staleEcho가 재무장돼 3회까지 잡힌다. 4번째는 예산 소진 → fail-open.
+    it('N9: consecutive non-composing echoes are swallowed via silentClear — no blur, staleEcho re-armed', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // 무장(조합 EXACT) — 구멍 B는 무장 경로와 독립이다
+      h.ctrl.setCountry(KOREA); // reinsertFlushes=0
+      const blurSpy = vi.spyOn(h.input, 'blur');
+      const before = contentCount(h.events);
+      for (const t of [500, 700, 900]) {
+        h.setNow(t); // 매번 직전 정리 시각 + 200ms → 항상 윈도우 밖(의미 중재 경로)
+        h.type('도'); // isComposing=false
+        expect(h.input.value).toBe('');
+      }
+      expect(contentCount(h.events)).toBe(before); // 3연속 삼킴(재무장이 없으면 2번째부터 genuine)
+      expect(blurSpy).not.toHaveBeenCalled(); // silentClear는 blur/focus를 유발하지 않는다
+      h.setNow(1100);
+      h.type('도'); // 4번째 — 예산(3) 소진 → fail-open(입력 잠금 방지)
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // N9b(구멍 B의 실기기 형태 ★): 재삽입 이벤트가 isComposing=true로 오는 기기 — flushIme의
+    //   focus() 도중 시작된 조합이라 컨트롤러의 compositionstart 추적(this.composing)은 이미
+    //   false로 덮여 있다. 여기서 이벤트 비트만 보고 blur→focus를 다시 돌리면 같은 에코를 재유발해
+    //   예산만 태웠다(라이브 잔여 증상). 이제 추적 중인 조합이 없으면 blur 없이 정리한다.
+    it('N9b: an echo arriving with isComposing=true but no tracked composition never re-blurs', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // flushIme가 this.composing을 false로 되돌린 상태
+      h.ctrl.setCountry(KOREA);
+      const blurSpy = vi.spyOn(h.input, 'blur');
+      const before = contentCount(h.events);
+      for (const t of [500, 700, 900]) {
+        h.setNow(t);
+        h.type('도', true); // compositionstart 없이 isComposing=true로만 도착하는 재삽입
+        expect(h.input.value).toBe('');
+      }
+      expect(contentCount(h.events)).toBe(before);
+      expect(blurSpy).not.toHaveBeenCalled(); // 에코 재유발 루프 차단
+    });
+
+    // N9c(대조): 사용자가 실제로 조합 중이면(compositionstart 추적됨) 삼킴 정리는 기존 flushIme
+    //   프로토콜(blur→clear→동기 focus)을 그대로 쓴다 — blur만이 살아있는 조합을 끝낼 수 있다(§2.5).
+    it('N9c: while a composition is actually tracked, swallow cleanup still uses the flush protocol', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.ctrl.setCountry(KOREA);
+      const blurSpy = vi.spyOn(h.input, 'blur');
+      h.compositionStart(); // 실제 조합 시작(추적됨)
+      h.setNow(500);
+      h.type('도', true); // 삼킴 → 조합 중이므로 flushIme
+      expect(blurSpy).toHaveBeenCalledTimes(1);
+      expect(h.input.value).toBe('');
+    });
+
+    // N10(구멍 A — 스킵 잔여): clear()가 비조합 잔여를 비울 때도 방어를 무장한다. 스킵 직후
+    //   IME가 되돌린 잔여가 다음 국가 첫 입력으로 채택되던 D70 진단 (1)의 잔여 경로.
+    it('N10: residual cleared by clear() (skip) still arms the defense — a later reinsertion is swallowed', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      h.ctrl.setCountry(KOREA);
+      h.type('한'); // 조합 이벤트 없는 잔여(PREFIX)
+      h.ctrl.clear(); // 스킵/게임오버 등 외부 클리어 → 비조합 flush
+      expect(h.input.value).toBe('');
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.ctrl.setCountry(GHANA);
+      h.type('한'); // IME가 되돌린 잔여 재삽입 → 삼킴
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe('');
+    });
+
+    // N11(대조 ★): 무장 조건은 "ko ∧ 비어있지 않은 사전 버퍼"다. (a) en 라틴 경로는 IME 재삽입이
+    //   없으므로 비조합 flush여도 무장하지 않고(N6 계약 유지 — 근거가 "비조합"에서 "lang==='en'"으로
+    //   바뀔 뿐), (b) 빈 버퍼 clear()는 무장이 아니라 해제다(기존 무입력 clear 계약).
+    it('N11: en EXACT and an empty-buffer clear() never arm staleEcho (contrast)', () => {
+      // (a) en 경로
+      const en = harness('en');
+      en.setNow(0);
+      en.ctrl.setCountry(CHAD);
+      en.type('chad'); // EXACT → 비조합 flush(사전 버퍼 'chad'는 비어있지 않지만 en)
+      const beforeEn = contentCount(en.events);
+      en.setNow(500);
+      en.ctrl.setCountry(CUBA);
+      en.type('chad'); // 옛 값과 동일해도 삼키지 않는다
+      expect(contentCount(en.events)).toBe(beforeEn + 1);
+      expect(en.input.value).toBe('chad');
+
+      // (b) 빈 버퍼 clear() — 해제
+      const ko = harness('ko');
+      ko.setNow(0);
+      reachGhanaExact(ko); // staleEcho='ㄱㅏㄴㅏ'
+      ko.ctrl.clear(); // value==='' → 사전 버퍼 비어있음 → 기존대로 해제
+      const beforeKo = contentCount(ko.events);
+      ko.setNow(20);
+      ko.ctrl.setCountry(KOREA);
+      ko.type('가나', true); // 방어 해제 상태 → genuine MISS
+      expect(contentCount(ko.events)).toBe(beforeKo + 1);
+      expect(eventsOf(ko.events, 'miss').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // N12(진단 채널): localStorage 'wt:imeTrace'==='1'일 때만 분기 결정을 console.debug로 남긴다.
+    it('N12: the wt:imeTrace flag logs resolveRaw branch decisions', () => {
+      localStorage.setItem('wt:imeTrace', '1');
+      const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+      try {
+        const h = harness('ko'); // 플래그는 생성 시 1회 캐시된다
+        h.setNow(0);
+        reachIndiaExact(h);
+        h.setNow(500);
+        h.ctrl.setCountry(KOREA);
+        h.compositionStart();
+        h.type('도대', true); // strip 분기 → basePrefix='도'
+        h.type('대', true); // 더는 '도'로 시작하지 않음 → base-collapse 분기
+        const branches = debugSpy.mock.calls.map((c) => c[1]);
+        expect(branches).toContain('armed');
+        expect(branches).toContain('strip');
+        expect(branches).toContain('base-collapse');
+      } finally {
+        localStorage.removeItem('wt:imeTrace');
+      }
+    });
+
+    // N12b: 프라이버시 모드/샌드박스에서 localStorage 접근이 throw해도 생성이 깨지지 않는다.
+    it('N12b: a throwing localStorage disables the trace instead of breaking construction', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('access denied');
+      });
+      const h = harness('ko');
+      h.ctrl.setCountry(GHANA);
+      h.type('가', true);
+      expect(eventsOf(h.events, 'progress')).toHaveLength(1);
     });
   });
 });

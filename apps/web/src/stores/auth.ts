@@ -88,6 +88,17 @@ const LOGGED_OUT = {
   expiresAt: null,
 } as const;
 
+// [WT-FIX-CROSSTAB-TOKEN, §11-D109 예정] 크로스탭 rehydrate 고아 토큰 스윕을 "최초 부팅 하이드레이션
+// 1회"로 게이트하는 모듈 지역 플래그. onRehydrateStorage는 최초 부팅(모듈 로드 시 자동 1회)뿐 아니라
+// reconcileAuthWithStorage()가 크로스탭 정합화를 위해 거는 persist.rehydrate()에서도 재호출된다. 이
+// 재호출 시점엔 wt:authtoken/wt:auth가 각각 별개 storage 이벤트로 비동기 기록되는 도중이라 "토큰만
+// 신값, 프로필(wt:auth)은 아직 구값" 순간이 정상적으로 존재한다 — 뒤이어 도착하는 wt:auth 이벤트의
+// reconcile이 프로필을 자연 수화하므로 이 창에서 지우면 안 된다. 게이트 없이 무조건 스윕하면 로그인
+// 탭이 방금 발급한 토큰을 관전 탭이 지우고, 그 삭제가 storage 이벤트로 로그인 탭까지 전파돼 연쇄
+// 로그아웃된다(2026-07-25 라이브 장애 RCA, 3/3 재현). 최초 부팅의 진짜 고아(프로필 persist 실패 등
+// 잔재)만 1회 소거하면 되므로, "최초 호출 여부"만 이 플래그로 기억한다.
+let initialHydrationDone = false;
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
@@ -130,13 +141,26 @@ export const useAuthStore = create<AuthState>()(
         expiresAt: s.expiresAt,
       }),
       onRehydrateStorage: () => (state) => {
-        // 재방문 시 만료됐거나(30일 경과) 원시 토큰이 사라졌으면(수동 정리 등) 로그아웃으로 정합화.
+        // 이 호출이 최초 부팅 하이드레이션인지 먼저 캡처하고 즉시 플래그를 소비한다 — 이후의 모든
+        // 호출(크로스탭 rehydrate 등)은 "최초 아님"으로 취급되어 아래 고아 스윕이 다시 열리지 않는다.
+        // state가 undefined(역직렬화 실패 등)여도 "호출은 발생했다"는 사실 자체를 기억해야 하므로 이른
+        // return보다 먼저 소비한다.
+        const isInitialHydration = !initialHydrationDone;
+        initialHydrationDone = true;
         if (!state) return;
+        // 재방문 시 만료됐거나(30일 경과) 원시 토큰이 사라졌으면(수동 정리 등) 로그아웃으로 정합화.
+        // 크로스탭 로그아웃 전파(§11-D86 F1b)가 걸어오는 rehydrate에서도 항상 유지돼야 하므로 최초
+        // 호출 여부와 무관하게 게이트하지 않는다.
         const expired = state.expiresAt !== null && state.expiresAt <= Date.now();
-        if (expired || getAuthToken() === null) state.logout();
-        // [§11-D86] 역방향 고아 토큰: 프로필 없이 토큰만 남은 부팅(프로필 persist 실패 등)은 토큰을
-        // 소거해 "UI 비로그인인데 계정 토큰 전송" 불일치도 봉인한다(게스트는 토큰 자체가 없어 무관).
-        else if (state.playerId === null) setAuthToken(null);
+        if (expired || getAuthToken() === null) {
+          state.logout();
+        } else if (state.playerId === null && isInitialHydration) {
+          // [§11-D86, WT-FIX-CROSSTAB-TOKEN] 역방향 고아 토큰 스윕은 최초 부팅 1회만 수행한다. 크로스탭
+          // rehydrate 도중의 "토큰만 신값, 프로필은 구값" 과도기는 정상이며 지우면 안 된다(위
+          // initialHydrationDone 선언부 주석에 RCA 상세). 최초 부팅의 진짜 고아(프로필 persist 실패 등
+          // 잔재)만 여기서 소거해 "UI 비로그인인데 계정 토큰 전송" 불일치를 봉인한다.
+          setAuthToken(null);
+        }
       },
     },
   ),
@@ -195,6 +219,12 @@ export async function verifyAccountSession(): Promise<void> {
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) useAuthStore.getState().logout();
   }
+}
+
+/** 테스트 전용(WT-FIX-CROSSTAB-TOKEN): 최초 부팅 하이드레이션 플래그 리셋 — "최초 부팅" 시나리오를
+ *  명시적으로 재현할 때 호출한다(크로스탭 rehydrate 시나리오는 리셋 없이 그대로 둔다). */
+export function __resetAuthHydrationForTests(): void {
+  initialHydrationDone = false;
 }
 
 /** 테스트 전용: 60s 메모 리셋. */

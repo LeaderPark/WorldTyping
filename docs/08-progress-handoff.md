@@ -50,6 +50,33 @@ pnpm e2e                            # 웹 빌드 + wrangler dev 자동 기동, �
 
 ---
 
+## 1.6 진행 갱신 (2026-07-25 오후, 게임잼 마감 배치) — 이 절이 최신
+
+> `main`(로컬) = **`8b15ba3`**. **⚠ origin push 블로킹**: 이 PC의 GitHub 계정(fitfunsJinWoo)이 LeaderPark/WorldTyping에 권한 없음(403) — 해결책: LeaderPark가 Collaborators에 fitfunsJinWoo 초대, 또는 GitHub 우회 번들 `C:\modakGames\wt-deploy-bundle.bundle`을 배포 PC로 옮겨 `git pull <번들> main`.
+
+### 라이브 버그픽스 배치 (§11 D98~D103, 전부 main 커밋 완료)
+| 커밋 | 내용 |
+|---|---|
+| `c940793` | D98 — IME 끝음절 잔류("도대") 재발 봉인: 재삽입 윈도우 게이트 제거+의미 중재 |
+| `e842c23` | D99 — RankPage 필터 축소(기간·기기·지역 삭제, 모드·언어만) |
+| `612d37f` | D100 — 멀티 빈 방 로비 즉시 숨김(updatePublicRoom 0명 가드) |
+| `c7631c1` | D101 — 구글 로그인 COOP 실패: GIS FedCM(use_fedcm_for_button 등 3옵션) |
+| `92e4147` | 원클릭 배포툴 `tooling/selfhost/deploy.cmd`(+§8.8) |
+| `5063ac9` | D102 — 계정 표시명=구글 이름 그대로(norm=`u#user_id`, 재로그인 자동 치유) |
+| `b0523e2` | D103 — 전원 완주 결과창 미전환: finishRace room-state 브로드캐스트+클라 폴백 |
+
+### 기능 병합 (main)
+- **chase 골드 러너 CH-01~09 전부 병합**: `6c0efd7`(CH-08 머지 — 내부에 CH-07 `6622451`·CH-08 `774e09d`). /play/chase 라우팅·브리핑·결과·모드카드·연출 4종·SFX·useChaseJuice 배선 완료 — **다음 배포부터 chase가 라이브에 노출된다.** 잔여: CH-10(E2E 3종+성능 계약+i18n 키 CI)·CH-11(밸런스 튜닝, 리드+Fable).
+- **멀티 레이스 지구본**: `8b15ba3` — RaceView에 지구본 배경+전 플레이어 비행기 홉(base 무접촉 `globe-race.ts` 오버레이, entry 델타 0). 알려진 한계: 전역 BannerBar가 레이스 중 지구본에 시각적으로 가림(a11y는 유지).
+
+### 통합 게이트 실측 (8b15ba3, 2026-07-25)
+web 113파일/**780 테스트** · i18n 7 · typecheck 8워크스페이스 · lint 0경고 · DO 스위트 그린 · build+size-limit **entry 102.16KB/170KB**. (마감 특례: D102·D103·CH-08·지구본 병합은 개별 독립 검증 대신 이 통합 게이트로 갈음 — CH-10 시점 전체 e2e로 재확인 예정.)
+
+### 알려진 이슈 (후속)
+① `packages/data pipeline.test.ts`가 Windows `autocrlf=true` 환경에서 CRLF/LF 차이로 실패(바이트 동일 확인됨) — `.gitattributes`(generated 경로 `eol=lf`) 후속. ② `vitest.workers.config` 연속 실행 시 og.test `initWasm` 재초기화 행업(테스트 인프라, 프로덕션 무관). ③ CH-07 검증에서 확인된 스펙 축소 2건: 수배 점등 시각 레이더 스윕 생략, SFX는 합성 WAV 스프라이트(정식 ogg는 CH-11로 이관).
+
+---
+
 ## 2. 새 PC 셋업 절차
 
 저장소 이동은 **git 히스토리 포함 전체**여야 한다(GitHub 원격 push 후 clone, 또는 폴더 통째 복사 — `.git` 포함).

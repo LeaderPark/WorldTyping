@@ -1,0 +1,97 @@
+{
+  "_license": "자체 생성(WT-CH-07, tooling/scripts/generate-sound-sprite.mjs 재사용) — 사인/삼각/사각파 신디사이저로 합성한 플레이스홀더 톤, 외부 라이선스 에셋 아님. docs/09 §7.8은 ogg 포맷·개별 파일을 전제하지만 이 저장소의 실제 오디오 파이프라인(WT-M2-07)은 자체 합성 WAV 단일 스프라이트다 — 그 관례를 그대로 승계하되, chase SFX는 논-chase 플레이어에게 불필요한 다운로드를 주지 않도록 sprite-layout.json(기존 5모드 공용)과 별도 시트로 분리했다(최종 보고 '설계 결정' 참조). 실 ogg 에셋 교체는 WT-CH-11 소관.",
+  "sampleRate": 48000,
+  "gapSec": 0.05,
+  "regions": [
+    {
+      "name": "chaseAlarmBeep",
+      "durationSec": 0.09,
+      "freqStart": 950,
+      "freqEnd": 950,
+      "wave": "square",
+      "attackSec": 0.003,
+      "releaseSec": 0.02,
+      "gain": 0.5
+    },
+    {
+      "name": "chaseGlassShatter",
+      "durationSec": 0.15,
+      "freqStart": 2200,
+      "freqEnd": 600,
+      "wave": "triangle",
+      "attackSec": 0.001,
+      "releaseSec": 0.13,
+      "gain": 0.5
+    },
+    {
+      "name": "chaseSirenDoppler",
+      "durationSec": 0.6,
+      "freqStart": 400,
+      "freqEnd": 900,
+      "wave": "sine",
+      "attackSec": 0.05,
+      "releaseSec": 0.2,
+      "gain": 0.5
+    },
+    {
+      "name": "chaseRadioStatic",
+      "durationSec": 0.12,
+      "freqStart": 180,
+      "freqEnd": 90,
+      "wave": "square",
+      "attackSec": 0.002,
+      "releaseSec": 0.08,
+      "gain": 0.35
+    },
+    {
+      "name": "chaseHeartbeat",
+      "durationSec": 0.12,
+      "freqStart": 90,
+      "freqEnd": 55,
+      "wave": "sine",
+      "attackSec": 0.005,
+      "releaseSec": 0.09,
+      "gain": 0.55
+    },
+    {
+      "name": "chaseGoldCoin",
+      "durationSec": 0.08,
+      "freqStart": 1800,
+      "freqEnd": 2400,
+      "wave": "triangle",
+      "attackSec": 0.002,
+      "releaseSec": 0.06,
+      "gain": 0.4
+    },
+    {
+      "name": "chaseVaultClunk",
+      "durationSec": 0.22,
+      "freqStart": 160,
+      "freqEnd": 70,
+      "wave": "square",
+      "attackSec": 0.003,
+      "releaseSec": 0.18,
+      "gain": 0.55
+    },
+    {
+      "name": "chaseCaperFanfare",
+      "durationSec": 0.6,
+      "freqStart": 500,
+      "freqEnd": 1200,
+      "wave": "triangle",
+      "attackSec": 0.01,
+      "releaseSec": 0.45,
+      "gain": 0.55
+    },
+    {
+      "name": "chaseHandcuffs",
+      "durationSec": 0.07,
+      "freqStart": 2600,
+      "freqEnd": 1800,
+      "wave": "square",
+      "attackSec": 0.001,
+      "releaseSec": 0.05,
+      "gain": 0.45
+    }
+  ]
+}

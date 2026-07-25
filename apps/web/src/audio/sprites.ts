@@ -27,11 +27,20 @@ export const SPRITE_URL = '/sounds/sprite.wav';
  *  방식으로 처리, §8.2 "실패 무음 폴백"). 향후 명시적 무음 프리로드가 필요해지면 이 URL을 쓴다. */
 export const SILENT_FALLBACK_URL = '/sounds/silence.wav';
 
-function buildSpriteMap(): Record<SpriteName, SpriteRegion> {
+/** 레이아웃 JSON(이 파일 · chase-sprites.ts 등 시트별 모듈)의 최소 형태 — 이 스키마 하나로
+ *  누적 오프셋 계산이 시트 무관하게 동작한다(WT-CH-07: chase-sprites.ts가 재사용). */
+export interface SpriteLayout {
+  regions: readonly { name: string; durationSec: number }[];
+  gapSec: number;
+}
+
+/** 시트 1개(JSON)의 region[] → 누적 {offset,duration} 맵. 시트마다 독립 커서(0부터) — 시트 간
+ *  이름이 겹쳐도 서로 다른 Record 타입(N)이라 혼용되지 않는다. */
+export function buildSpriteMap<N extends string>(layout: SpriteLayout): Record<N, SpriteRegion> {
   let cursor = 0;
-  const map = {} as Record<SpriteName, SpriteRegion>;
+  const map = {} as Record<N, SpriteRegion>;
   for (const region of layout.regions) {
-    const name = region.name as SpriteName;
+    const name = region.name as N;
     map[name] = { offset: cursor, duration: region.durationSec };
     cursor += region.durationSec + layout.gapSec;
   }
@@ -40,7 +49,7 @@ function buildSpriteMap(): Record<SpriteName, SpriteRegion> {
 
 /** 스프라이트명 → {offset, duration}(초). sound-manager.play()가 조회한다. */
 export const SPRITE_MAP: Readonly<Record<SpriteName, SpriteRegion>> = Object.freeze(
-  buildSpriteMap(),
+  buildSpriteMap<SpriteName>(layout),
 );
 
 /** 스프라이트 시트 전체 길이(초) — 테스트/디버그용. */

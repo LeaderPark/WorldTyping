@@ -4273,3 +4273,98 @@ a.wt-brand:focus-visible {
     animation: none;
   }
 }
+
+/* ── WT-CH-07: 이벤트 시퀀스 플로팅 피드백 + 체포 풀스크린 연출(§7.6, D96) ──
+   .wt-chase-fx는 CandidateCallouts의 .wt-candidate-overlay와 동일한 스테이지 형제 레이어(CH-08이
+   삽입) — 좌표는 sequences.ts가 GlobeChaseHandle.projectAnchor + fitViewBoxToContainer로 계산한다. */
+.wt-chase-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 1; /* 콜아웃 칩 위·HUD 아래(§8.3 z-순서: … < 콜아웃 칩 < 플로팅 텍스트 < HUD < …) */
+}
+
+/* 이벤트 플로팅 텍스트("+1"·"배송 완료 +n"·"검거" 등) — 발생 국가 투영 좌표 위(§7.6 개정). */
+.wt-chase-fx__text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: center;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+}
+.wt-chase-fx__text--gold {
+  color: var(--chase-gold-text, var(--chase-gold));
+}
+.wt-chase-fx__text--siren {
+  color: var(--chase-siren-red-text, var(--chase-siren-red));
+}
+
+/* 체포 풀스크린 연출(D96 유일 블로킹 예외) — 단일 노드 고정 생성 후 클래스 토글만(GlobeMap/HUD
+   관례와 동일). is-hitstop 구간은 배경을 그대로 얼린 듯 반투명 스크림만 씌운다(실제 프리즈는
+   이 시점 엔진이 이미 finished라 발생할 애니메이션 자체가 없다 — 시각적 신호일 뿐). */
+.wt-chase-arrest-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: 0.05em;
+  color: var(--chase-siren-red-text, var(--chase-siren-red));
+  opacity: 0;
+  background: transparent;
+}
+.wt-chase-arrest-overlay.is-hitstop {
+  opacity: 1;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.wt-chase-arrest-overlay.is-flash {
+  opacity: 1;
+  animation: wt-chase-arrest-flash 90ms steps(1) 3;
+}
+@keyframes wt-chase-arrest-flash {
+  0%, 49% {
+    background: color-mix(in srgb, var(--chase-siren-red) 55%, transparent);
+  }
+  50%, 100% {
+    background: color-mix(in srgb, var(--chase-siren-blue) 55%, transparent);
+  }
+}
+.wt-chase-arrest-overlay.is-shake {
+  opacity: 1;
+  animation: wt-chase-arrest-shake 400ms ease-out;
+}
+@keyframes wt-chase-arrest-shake {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(0.8deg); }
+  50% { transform: rotate(-0.6deg); }
+  75% { transform: rotate(0.3deg); }
+  100% { transform: rotate(0deg); }
+}
+.wt-chase-arrest-overlay.is-tonedown,
+.wt-chase-arrest-overlay.is-wanted-redo {
+  opacity: 1;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  filter: saturate(0.6);
+}
+.wt-chase-arrest-overlay.is-static-arrested {
+  /* reduced-motion(§7.6): 히트스톱·플래시·셰이크 생략 — 정적 표시만. */
+  opacity: 1;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+:root[data-reduced] .wt-chase-arrest-overlay.is-flash,
+:root[data-reduced] .wt-chase-arrest-overlay.is-shake {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-chase-arrest-overlay.is-flash,
+  .wt-chase-arrest-overlay.is-shake {
+    animation: none;
+  }
+}

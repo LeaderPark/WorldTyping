@@ -1,7 +1,7 @@
 // spec: docs/09-chase-mode-goldrunner.md §7.6(이벤트 시퀀스 연출 타임라인 전문 — globe-centric
 //       개정: 플로팅 피드백은 발생 국가 투영 좌표 위)·§7.4(수배 발령 특별 연출, 1회성)·§8.3(z-순서:
 //       플로팅 텍스트 < HUD)·§8.9, docs/00 §11-D96(체포 히트스톱 250ms — 유일 블로킹 예외)·
-//       D67(비블로킹·강등 계약), WT-CH-07.
+//       D67(비블로킹·강등 계약)·D111 ②-b(수배 발령 레이더 스윕 시각 복원), WT-CH-07 → WT-CH-DEV-2.
 //
 // 이 파일은 4종 이벤트 시퀀스(금 획득 900ms / 배송 1,600ms / 체포 2,800ms / 수배발령 최초 1회
 // 600ms)의 **ms 오프셋 상수 테이블**과, `ChaseSessionEngine.subscribe`를 구독해 그 오프셋대로
@@ -309,13 +309,14 @@ export function createChaseSequences(deps: ChaseSequencesDeps): ChaseSequencesCo
     }
     if (!hasIssuedWanted) {
       hasIssuedWanted = true;
-      // §7.6 "수배 발령(최초 ★1)" — 600ms 1회성. 레이더 스윕 시각은 globe-chase.ts(CH-05)가 이미
-      // 그리는 레이더 화살표 레이어와 별개 부채꼴 스윕이 필요하나, CH-05 재작성 금지 제약상 이
-      // 파일은 스윕을 위한 신규 SVG를 추가하지 않고(캔버스/CH-05 오버레이 무변경) 음성풍 SFX +
-      // 사이렌 도플러만으로 "이제 쫓긴다" 전환을 알린다(시각적 스윕 생략은 설계 축소 — 최종 보고
-      // 기재. reduced 여부와 무관하게 항상 재생 — 사운드는 모션 설정이 아니라 사운드 설정 3단
-      // 소관, §8.10).
+      // §7.6 "수배 발령(최초 ★1)" — 600ms 1회성. 사운드는 reduced 여부와 무관하게 항상 재생한다
+      // (사운드는 모션 설정이 아니라 사운드 설정 3단 소관, §8.10).
       audio.radioStatic();
+      // §11-D111 ②-b: CH-07에서 축소했던 **시각 레이더 스윕을 복원**한다. 부채꼴 SVG 1회전(600ms)
+      // 자체는 globe-chase.ts(표시 계층)가 소유하고 이 파일은 타임라인 0ms 오프셋에서 호출만 한다
+      // — 오디오 로직·오프셋 상수·이벤트 배선은 무변경(시각 레이어 1줄 추가). reduced-motion은
+      // 이중 게이트(여기 isReduced + 핸들 내부 immediate())로 생략된다.
+      if (!deps.isReduced()) globe.playRadarSweep();
     }
     audio.sirenDoppler();
   }

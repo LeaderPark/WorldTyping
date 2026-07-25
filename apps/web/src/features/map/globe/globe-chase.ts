@@ -56,6 +56,23 @@
 // D. **경찰 배지 아이콘.** 3종 전부 원형 배지(대비 배경 + 테두리) + 순수 SVG path 실루엣으로 개편
 //    (chaser=경광등 경찰차 / interceptor=방패 / heli=헬기+로터+서치라이트). 점멸·회전은 배지 테두리·
 //    로터 CSS 애니메이션으로 유지하고 기존 juice/reduced-motion 강등 표를 그대로 따른다.
+//
+// ── WT-CH-DEV-2(§11-D111) 시인성 잔여 2건 + 목표 강조 — 역시 전부 이 표시 계층 ────────────────
+// E. **phase 오버레이 은닉(D108 "알려진 잔여" 해소).** idle(브리핑)·finished(결과) 구간의 코어
+//    idle spin(0.55°/s)은 canvas만 돌리고 이 파일의 미러 카메라는 따라가지 않으므로(미러는 홉
+//    카메라 접점 3메서드로만 갱신 — 파일 헤더 설계 결정 1·2), 그 구간에서는 마커·노드·연결선이
+//    돌아가는 지구본 위에 고정된 채 남아 좌표가 어긋난다. **미러를 상시 rAF로 spin에 물리는 것은
+//    D67 "playing 중 canvas 재그리기 0 / 상시 rAF 신설 금지" 계약과 정면 충돌**하므로, 리드 결정에
+//    따라 해당 phase에서는 오버레이 자체를 은닉한다(브리핑·결과에 마커 정보는 불필요 — 필요한
+//    정보는 브리핑 카드·결과 카드가 이미 전달한다). 은닉/표시는 opacity 트랜지션(tokens.css,
+//    reduced-motion이면 즉시)으로만 처리하고 DOM은 유지한다 — 재표시 시 재구축 비용 0.
+// F. **수배 발령 레이더 스윕 복원(CH-07 축소분, §7.6 "레이더 스윕 라인 1회전 600ms").** SVG 부채꼴
+//    1회전을 이 오버레이(gRadar 레이어)에 그린다 — 사운드 로직(sequences.ts)은 무접점이며 그쪽은
+//    playRadarSweep() 호출 1줄만 추가한다. reduced-motion/juice 강등이면 생략(immediate() 게이트).
+// G. **배송 목표 강조.** 금 소지 중(setCarriedCount > 0)에는 홈 비컨과 홈 레이더 화살표에 강조
+//    클래스를 건다 — "지금 어디로 가야 하는가"를 지구본에서 직접 읽히게 한다(HUD 목표 라벨과
+//    동일 상태의 이중 부호화). 신규 메서드 없이 **기존 setCarriedCount 경로**에 얹었다: 그 메서드는
+//    이미 ChaseGameRoot가 goldPicked/delivered마다 호출하고 있어 별도 배선이 불필요하다.
 import {
   geoCentroid,
   geoDistance,
@@ -94,6 +111,12 @@ const NODE_R: Record<NodeState, number> = {
 };
 /** 경찰 배지 반경(D108-D "r 8~9"). */
 const POLICE_BADGE_R = 8.5;
+/** 수배 발령 레이더 스윕 1회전(§7.6 "600ms" — sequences.ts WANTED_ISSUANCE_TIMELINE_MS.total과 동일
+ *  값이나, 그 상수는 시퀀스 오프셋 테이블 소유라 이 파일이 import하지 않는다: 표시 계층 → 시퀀스
+ *  계층 역참조를 만들지 않기 위함. 값 변경 시 양쪽을 함께 고쳐야 한다). */
+const RADAR_SWEEP_MS = 600;
+/** 스윕 부채꼴이 덮는 각도(도) — 좁으면 레이더 바늘, 넓으면 화면을 가린다. */
+const RADAR_SWEEP_DEG = 42;
 
 /** 노드 도트 강조 상태(D108-B). 우선순위: current > home > candidate > idle. */
 type NodeState = 'idle' | 'candidate' | 'home' | 'current';
@@ -182,6 +205,14 @@ export interface GlobeChaseHandle extends GlobeMapHandle {
   /** 전 국가(un195) 노드 도트 레이어 구축(§11-D108-B). 세션당 1회 호출(ChaseGameRoot가 chase-graph의
    *  `ids`를 그대로 전달 — un195 정확 일치). 강조 상태(현재국/홈/후보)는 이 핸들이 자체 추적한다. */
   setCountryNodes(ids: readonly CountryId[]): void;
+  /** chase 오버레이 전체(마커·노드·연결선·비네트) 표시/은닉(§11-D111 ②-a — 위 헤더 E). idle(브리핑)·
+   *  finished(결과)의 코어 idle spin 구간에서 좌표가 어긋난 채 남는 문제를 은닉으로 해소한다.
+   *  DOM은 유지하고 CSS 클래스만 토글하므로 재표시 비용은 0이며, 은닉 중 호출된 갱신도 그대로
+   *  반영돼(계산은 계속 정상) 복귀 즉시 최신 상태가 보인다. */
+  setOverlayVisible(visible: boolean): void;
+  /** 수배 발령(최초 ★1) 레이더 스윕 1회전(§7.6 "600ms" — §11-D111 ②-b, 위 헤더 F). reduced-motion·
+   *  juice 강등이면 아무 것도 그리지 않는다. sequences.ts의 WANTED 타임라인이 0ms 오프셋에 호출한다. */
+  playRadarSweep(): void;
 }
 
 /**
@@ -326,6 +357,8 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
   gRadar.setAttribute('data-layer', 'chase-radar');
   const gHome = document.createElementNS(SVG_NS, 'g');
   gHome.setAttribute('data-layer', 'chase-home');
+  // 클래스는 §11-D111 ③ 배송 강조(.is-delivering)의 CSS 앵커 — 레이어 자체의 시각 규칙은 없다.
+  gHome.setAttribute('class', 'wt-chase__home');
   gHome.style.display = 'none';
   const gGold = document.createElementNS(SVG_NS, 'g');
   gGold.setAttribute('data-layer', 'chase-gold');
@@ -361,6 +394,11 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
   let prehighlightId: CountryId | null = null;
   let carriedBadge: SVGGElement | null = null;
   let carriedCount = 0;
+  /** §11-D111 ②-a 오버레이 표시 상태. 기본 true(기존 소비자 무영향) — ChaseGameRoot가 phase에 따라
+   *  토글한다. */
+  let overlayVisible = true;
+  /** 진행 중인 레이더 스윕 노드(재발령 시 중복 방지 — 항상 1개만 존재). */
+  let sweepEl: SVGGElement | null = null;
 
   let mirrorHop: { interp: (t: number) => [number, number]; start: number; duration: number } | null =
     null;
@@ -454,6 +492,15 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     radarArrows.delete(key);
   }
 
+  /** §11-D111 ③(위 헤더 G): 금 소지 중이면 홈 비컨·홈 레이더 화살표를 강조 상태로 전환한다 —
+   *  HUD 목표 라벨("🏠 홈으로 배송하세요")과 같은 상태를 지구본에서도 읽히게 하는 이중 부호화.
+   *  클래스 토글뿐이라 좌표 계산·재투영 비용은 0. */
+  function applyHomeEmphasis(): void {
+    const on = carriedCount > 0;
+    gHome.classList.toggle('is-delivering', on);
+    radarArrows.get('home')?.classList.toggle('is-emphasis', on);
+  }
+
   function reprojectHome(): void {
     if (!homeId) return;
     const r = project(homeId);
@@ -467,6 +514,7 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
       const a = chaseAnchor(homeId);
       if (a) upsertRadarArrow('home', 'wt-chase__radar-arrow--home', a, geoDistance(a, [camera.lng, camera.lat]));
     }
+    applyHomeEmphasis();
   }
 
   function reprojectPolice(): void {
@@ -729,7 +777,10 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     nodeEls.clear();
     for (const el of radarArrows.values()) el.remove();
     radarArrows.clear();
+    sweepEl?.remove();
+    sweepEl = null;
     gHome.replaceChildren();
+    gHome.classList.remove('is-delivering');
     gHome.style.display = 'none';
     gPrehighlight.replaceChildren();
     gLinks.replaceChildren();
@@ -889,6 +940,7 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     const text = carriedBadge.querySelector('text');
     if (text) text.textContent = `×${n}`;
     reprojectCarriedBadge();
+    applyHomeEmphasis(); // §11-D111 ③ — 소지 상태 전환 시 홈 비컨/레이더 화살표 강조 토글.
   }
 
   /** 마커 레벨 1회성 팝(§7.6 "타임라인 본체는 CH-07 — 여기서는 훅 시그니처와 마커 레벨 효과만").
@@ -1034,6 +1086,57 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     reprojectLinks();
   }
 
+  /** §11-D111 ②-a — 오버레이 표시/은닉. DOM은 그대로 두고 클래스만 토글한다(재표시 비용 0).
+   *  트랜지션·reduced-motion 즉시 전환은 tokens.css `.wt-chase__overlay.is-hidden` 규칙 소관. */
+  function setOverlayVisible(visible: boolean): void {
+    if (overlayVisible === visible) return;
+    overlayVisible = visible;
+    svg.classList.toggle('is-hidden', !visible);
+    vignette.classList.toggle('is-hidden', !visible);
+  }
+
+  /** 부채꼴 path(원점 기준, +x축에서 시계방향으로 RADAR_SWEEP_DEG). r은 지구본 원판 반경. */
+  function sweepWedgePath(r: number): string {
+    const rad = (RADAR_SWEEP_DEG * Math.PI) / 180;
+    const x = round(r * Math.cos(rad));
+    const y = round(r * Math.sin(rad));
+    return `M0 0 L${round(r)} 0 A${round(r)} ${round(r)} 0 0 1 ${x} ${y} Z`;
+  }
+
+  /** §11-D111 ②-b — 수배 발령 레이더 스윕 1회전(§7.6, 600ms). 지구본 중심을 축으로 부채꼴이 한 바퀴
+   *  돌고 사라진다. 회전은 WAAPI transform(리플로우 0), 미지원 환경(jsdom 등)에서는 동일 시간 뒤
+   *  제거하는 폴백만 건다 — 어느 쪽이든 노드는 즉시 삽입되므로 "스윕이 그려졌다"는 관찰 가능하다. */
+  function playRadarSweep(): void {
+    if (immediate()) return; // reduced-motion/juice 강등 시 생략(§7 헤더 강등표).
+    sweepEl?.remove();
+    const c = center();
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'wt-chase__sweep');
+    g.setAttribute('transform', `translate(${round(c[0])} ${round(c[1])})`);
+    const wedge = document.createElementNS(SVG_NS, 'path');
+    wedge.setAttribute('class', 'wt-chase__sweep-wedge');
+    wedge.setAttribute('d', sweepWedgePath(projection.scale()));
+    g.appendChild(wedge);
+    gRadar.appendChild(g);
+    sweepEl = g;
+
+    const cleanup = (): void => {
+      g.remove();
+      if (sweepEl === g) sweepEl = null;
+    };
+    if (typeof wedge.animate !== 'function') {
+      setTimeout(cleanup, RADAR_SWEEP_MS);
+      return;
+    }
+    const anim = wedge.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], {
+      duration: RADAR_SWEEP_MS,
+      easing: 'linear',
+      fill: 'none',
+    });
+    anim.onfinish = cleanup;
+    anim.oncancel = cleanup;
+  }
+
   function setCandidatePrehighlight(id: CountryId | null): void {
     prehighlightId = id;
     applyLinkLead();
@@ -1082,6 +1185,8 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     setCandidateAnchors,
     setCandidatePrehighlight,
     setCountryNodes,
+    setOverlayVisible,
+    playRadarSweep,
   };
 
   return handle;

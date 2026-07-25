@@ -187,6 +187,43 @@ describe('ChaseGameRoot — 로딩→브리핑→카운트다운→플레이→�
     expect(document.querySelectorAll('[data-candidate]').length).toBe(3);
   });
 
+  it('chase 오버레이는 브리핑(idle)에서 은닉, playing에서 표시, 결과(finished)에서 다시 은닉된다(§11-D111 ②-a)', async () => {
+    renderChase();
+    await flushAsync();
+
+    const overlay = (): Element => document.querySelector('svg.wt-chase__overlay')!;
+    // idle(브리핑) — 코어 idle spin 구간이라 은닉(마커 좌표가 회전을 따라가지 않는다).
+    expect(overlay().classList.contains('is-hidden')).toBe(true);
+
+    fireEvent.click(screen.getByTestId('chase-briefing-card'));
+    act(() => vi.advanceTimersByTime(3300)); // 스탬프 낙하 + COUNTDOWN_MS
+    await flushAsync();
+    expect(overlay().classList.contains('is-hidden')).toBe(false);
+
+    vi.useRealTimers(); // findBy*/waitFor는 real timers 필요(위 테스트들과 동일 사유)
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.click(screen.getByTestId('chase-resign-confirm-btn'));
+    await screen.findByTestId('chase-result-card');
+    expect(overlay().classList.contains('is-hidden')).toBe(true);
+  });
+
+  it('첫 런 코치마크는 playing에서만 뜬다(브리핑·카운트다운엔 없음, §11-D111 ①)', async () => {
+    localStorage.removeItem('wt:chase:tipsSeen');
+    renderChase();
+    await flushAsync();
+    expect(screen.queryByTestId('chase-first-run-tips')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('chase-briefing-card'));
+    act(() => vi.advanceTimersByTime(300)); // 카운트다운 진입
+    expect(screen.queryByTestId('chase-first-run-tips')).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(3000)); // playing 진입
+    await flushAsync();
+    expect(screen.getByTestId('chase-first-run-tips')).toBeInTheDocument();
+    // 비블로킹 — 코치마크는 포커스 가능 요소를 두지 않는다(입력을 가로채지 않는다, D96).
+    expect(screen.getByTestId('chase-first-run-tips').querySelector('button, input')).toBeNull();
+  });
+
   it('ESC(playing 중) → 자수 확인 모달 → 확인 시 심이 종료되고 결과 화면(비로그인=로그인 CTA)을 보여준다', async () => {
     renderChase();
     await flushAsync();

@@ -181,8 +181,27 @@ export interface TypeHangulOptions {
 const wait = (ms: number): Promise<void> =>
   ms <= 0 ? Promise.resolve() : new Promise((r) => setTimeout(r, ms));
 
+/**
+ * D106 후속: CDP `Input.imeSetComposition`/`Input.insertText`는 keydown을 전혀 발행하지 않는다.
+ * 반면 input-controller.ts의 D106 keydown-상관 판정(§attach 'keydown' 리스너, lastKeydownAt)은
+ * "input 직전 물리 keydown 유무"로 사용자 타/기계 재삽입 스냅샷을 가른다 — 실제 IME 조합 중에도
+ * 브라우저는 keyCode 229(key='Process')로 keydown을 먼저 보내므로, 이 갭을 메우지 않으면 CDP로
+ * 재현한 모든 e2e 조합 입력이 "기계 스냅샷"으로 오분류된다. packages/engine/src/input-controller
+ * .test.ts의 harness.type()이 같은 처방(keydown 디스패치 후 값 설정)을 쓴다 — 단 그 harness도
+ * keyup은 보내지 않는다: input-controller.ts의 attach()는 'keydown' 리스너만 등록하고 keyup을
+ * 전혀 구독하지 않으므로(값은 시각만 기록), 대응 keyUp 디스패치는 불필요하다.
+ */
+async function dispatchImeKeydown(cdp: CDPSession): Promise<void> {
+  await cdp.send('Input.dispatchKeyEvent', {
+    type: 'rawKeyDown',
+    windowsVirtualKeyCode: 229,
+    key: 'Process',
+  });
+}
+
 /** CDP로 현재 조합을 text로 설정(조합 시작/갱신). 커서는 항상 끝. */
 export async function setComposition(cdp: CDPSession, text: string): Promise<void> {
+  await dispatchImeKeydown(cdp);
   await cdp.send('Input.imeSetComposition', {
     text,
     selectionStart: text.length,
@@ -192,6 +211,7 @@ export async function setComposition(cdp: CDPSession, text: string): Promise<voi
 
 /** CDP로 확정 텍스트 삽입(음절/단어 커밋 — compositionend 유발). */
 export async function commitComposition(cdp: CDPSession, text: string): Promise<void> {
+  await dispatchImeKeydown(cdp);
   await cdp.send('Input.insertText', { text });
 }
 

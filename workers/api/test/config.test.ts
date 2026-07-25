@@ -51,7 +51,8 @@ describe("GET /api/v1/config", () => {
     const res = await SELF.fetch(`${BASE}/config`);
     const body = (await res.json()) as ConfigRes;
     // apps/web/dist/data/manifest.json(빌드 산출물)의 실제 sha256 접두 8자.
-    expect(body.dataUrl).toBe("/data/countries.json?v=4b494daa");
+    // (Tweak Y 별칭 제거로 countries.json 재생성됨 → sha256 갱신, 2026-07-25.)
+    expect(body.dataUrl).toBe("/data/countries.json?v=79897ac6");
   });
 
   it("overrides with KV config:client when present and it passes schema validation", async () => {
@@ -71,7 +72,7 @@ describe("GET /api/v1/config", () => {
     expect(body.anticheat).toEqual(custom.anticheat);
     expect(body.featureFlags).toEqual({ ghostMode: true });
     // dataUrl은 KV 저장값이 아니라 이 라우트가 항상 재계산한다(override 여부 판단 로직 단일화).
-    expect(body.dataUrl).toBe("/data/countries.json?v=4b494daa");
+    expect(body.dataUrl).toBe("/data/countries.json?v=79897ac6");
   });
 
   it("falls back to defaults when KV config:client is present but fails schema validation", async () => {

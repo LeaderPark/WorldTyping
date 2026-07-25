@@ -56,6 +56,15 @@
 //   재현). 원칙 확정: **유효 진행(PREFIX/EXACT)은 어떤 판별 실패에도 불가침** — 전 분기가 동일한
 //   MISS-전용 중재를 쓴다. 트레이드: 점진 에코 1조각이 유효 접두면 순간 표시되나 다음 조각(MISS)에서
 //   즉시 자가 정리된다.
+// ⑨(D116) **기저 붕괴에도 동일 중재 — D113 원칙의 마지막 누락 분기**. IME는 분기 (2)(3)이 가상
+//   스트립한 반삽입 접두를 다음 스냅샷에서 스스로 걷어내고 value를 자기 조합 상태 기준으로
+//   재작성할 수 있다(북한→중국: '한ㅈ' 스트립 후 v='주' — 접두 '한' 증발). 구 base-collapse는
+//   붕괴 잔여의 판정 상태를 보지 않고 settleSwallow해, 조합 중 blur가 유효 진행('주'→'중')을
+//   파괴하고 데싱크된 IME가 다음 자모만으로 새 조합을 시작했다("ㅈㅜ 소실 후 ㅇ만 잔존" 라이브
+//   재현). 이제 붕괴 잔여가 유효 진행(PREFIX/EXACT)이면 접두만 해제하고 그대로 평가한다 — MISS면
+//   종전 기구(조용한 리셋·재무장) 불변. 트레이드(D113과 동형): 옛 꼬리가 새 타깃의 유효 접두인
+//   전환에서 순수 에코 붕괴 잔여가 보존될 수 있으나(D98-④ 기수용 누수 클래스), 같은 값이 사용자
+//   진행일 가능성과 값 층에서 구별 불가하므로 불가침 원칙상 보존이 우선한다.
 import {
   matchInputDetail,
   compileTargets,
@@ -268,9 +277,10 @@ export class TypingInputController {
    * focus-복귀가 유발한 옛-꼬리 재삽입(input 핸들러 · compositionend microtask 두 벡터)을 이 한
    * 지점에서 차단하고 Gboard가 남긴 옛 값 접두를 가상으로 스트립한다.
    *  - `null` 반환 = 이 입력을 삼킴(무이벤트·무계상). `string` 반환 = 그 값으로 평가.
-   * 분기 순서는 계약(§2.10 #4 보존)이라 바꾸지 않는다: 기저접두 → 무-staleEcho → 빈값 →
-   * [D106 keydown-무상관 꼬리 에코] → 전량삼킴(≥2자모·꼬리일치·상한·[윈도우 밖이면 의미 중재]) →
-   * Gboard 전체접두 → 부분꼬리 스트립(D84·의미 중재, 시간 무관 — D98) → genuine.
+   * 분기 순서는 계약(§2.10 #4 보존)이라 바꾸지 않는다: 기저접두[붕괴 시 D116 의미 중재] →
+   * 무-staleEcho → 빈값 → [D106 keydown-무상관 꼬리 에코] → 전량삼킴(≥2자모·꼬리일치·상한·
+   * [윈도우 밖이면 의미 중재]) → Gboard 전체접두 → 부분꼬리 스트립(D84·의미 중재, 시간 무관 —
+   * D98) → genuine.
    * D106 분기만 신설이고 뒤 분기들의 조건·순서는 불변이다 — keydown 상관이 있는 입력(사용자 타)은
    * D106 분기를 무조건 건너뛰므로 기존 경로가 그대로 적용된다.
    */
@@ -282,8 +292,19 @@ export class TypingInputController {
         this.basePrefix = '';
         return v;
       }
+      // ★D116: 기저 붕괴에도 의미 중재(MISS-전용) — IME는 자신이 소유하지 않은 반삽입 접두를
+      // 다음 스냅샷에서 걷어내며 value를 자기 조합 상태 기준으로 재작성할 수 있다(북한→중국:
+      // '한ㅈ' 스트립 후 v='주'). 붕괴 잔여가 유효 진행(PREFIX/EXACT)이면 사용자 입력이다 —
+      // 접두만 해제하고 그대로 평가한다(파일 헤더 ⑨). 구 무중재 settleSwallow는 조합 중 blur로
+      // 진행을 파괴해 "ㅈㅜ 소실 후 ㅇ만 잔존"을 만들었다. staleEcho·예산은 불변(보존은 삼킴이
+      // 아니고, 무장 유지가 후속 병합 스냅샷의 자가 치유를 보존한다 — D112).
+      if (matchInputDetail(v, this.targets, this.lang).state !== 'MISS') {
+        if (this.trace) this.traceBranch('base-collapse-genuine', { v, base: this.basePrefix });
+        this.basePrefix = '';
+        return v;
+      }
       if (this.trace) this.traceBranch('base-collapse', { v, base: this.basePrefix });
-      this.settleSwallow(); // 기저 붕괴 → 조용한 리셋
+      this.settleSwallow(); // 기저 붕괴(잔여 MISS) → 조용한 리셋
       return null;
     }
     if (!this.staleEchoJamo) return v;

@@ -61,6 +61,11 @@ const INDIA = makeCountry({ id: 'IN', nameKo: '인도', acceptedInputsKo: ['인�
 // D112 P9: 새 국가명이 옛 국가명(staleRaw '인도')으로 시작하는 실존 전환 — 분기 (2) 의미 중재 가드.
 const INDONESIA = makeCountry({ id: 'ID', nameKo: '인도네시아', acceptedInputsKo: ['인도네시아'] });
 const DOMINICA = makeCountry({ id: 'DM', nameKo: '도미니카', acceptedInputsKo: ['도미니카'] });
+// D116 기저 붕괴 중재용(라이브 재현: 북한→중국). 끝 음절 '한'(ㅎㅏㄴ, ≥2자모)이 분기 (3) 부분
+// 꼬리 스트립 대상이고, 중국(ㅈㅜㅇㄱㅜㄱ)은 사용자 진행의 전 구간이 유효 PREFIX인 새 타깃 —
+// 스트립으로 세워진 basePrefix('한')를 IME가 재작성으로 증발시키면 기저 붕괴가 유효 진행과 만난다.
+const NORTH_KOREA = makeCountry({ id: 'KP', nameKo: '북한', acceptedInputsKo: ['북한'] });
+const CHINA = makeCountry({ id: 'CN', nameKo: '중국', acceptedInputsKo: ['중국'] });
 // D106(P3) 프로브: "keydown 없는 스냅샷이라도 전체 판정이 EXACT면 절대 삼키지 않는다"는 최후
 // 게이트를 재현하려면 옛 끝음절('도')과 문자열이 완전히 같은 값이 새 타깃의 EXACT여야 한다 —
 // 즉 1음절 타깃이 필요하다(실 데이터엔 없어 합성). 최악의 충돌 상황에서도 정답이 통과해야 한다.
@@ -110,6 +115,18 @@ function reachIndiaExact(h: Harness): void {
   h.type('인', true);
   h.type('인ㄷ', true);
   h.type('인도', true); // EXACT → 조합 중 flushIme, staleEcho='ㅇㅣㄴㄷㅗ' / staleRaw='인도'
+}
+
+/** 북한을 조합 중 EXACT로 확정해 staleEcho(='ㅂㅜㄱㅎㅏㄴ', 끝 음절 '한')를 세팅한다(D116). */
+function reachNorthKoreaExact(h: Harness): void {
+  h.ctrl.setCountry(NORTH_KOREA);
+  h.compositionStart();
+  h.type('ㅂ', true);
+  h.type('부', true);
+  h.type('북', true);
+  h.type('북ㅎ', true);
+  h.type('북하', true);
+  h.type('북한', true); // EXACT → 조합 중 flushIme, staleEcho='ㅂㅜㄱㅎㅏㄴ' / staleRaw='북한'
 }
 
 /**
@@ -571,9 +588,10 @@ describe('TypingInputController', () => {
       expect(h.ctrl.getValue()).toBe(''); // EXACT flush로 basePrefix·버퍼 리셋
     });
 
-    // ⑤ 기저 붕괴 조용 flush: basePrefix가 세워진 뒤 value가 더 이상 접두로 시작하지 않으면
-    //   (IME가 접두를 삼킴) 조용히 재플러시하고 리셋한다(내용 이벤트 없음).
-    it('base-prefix collapse silently flushes and resets (no content event)', () => {
+    // ⑤ 기저 붕괴 조용 flush(D116 개정 — MISS 잔여에 한한다): basePrefix가 세워진 뒤 value가 더
+    //   이상 접두로 시작하지 않고 잔여가 새 타깃 기준 MISS면(에코 잔해) 조용히 재플러시하고
+    //   리셋한다(내용 이벤트 없음). 유효 진행 잔여는 ⑤b가 보존을 잠근다.
+    it('base-prefix collapse with a MISS remainder silently flushes and resets (no content event)', () => {
       const h = harness('ko');
       h.setNow(100);
       reachGhanaExact(h);
@@ -581,10 +599,30 @@ describe('TypingInputController', () => {
       h.ctrl.setCountry(DADO);
       h.type('가나다', true); // Gboard strip → basePrefix='가나', progress '다'
       const before = contentCount(h.events);
-      h.type('다', true); // value가 더 이상 '가나'로 시작하지 않음 → 기저 붕괴
+      h.type('마', true); // 접두 증발 + 잔여 '마'(ㅁㅏ)는 다도 기준 MISS → 기저 붕괴 삼킴
       expect(contentCount(h.events)).toBe(before); // 조용한 리셋
       expect(h.input.value).toBe(''); // 재플러시
       expect(h.ctrl.getValue()).toBe('');
+    });
+
+    // ⑤b(D116 계약 반전 ★): 붕괴 잔여가 새 타깃의 유효 진행(PREFIX/EXACT)이면 사용자 입력이다 —
+    //   삼키지 않고 접두만 해제해 그대로 평가한다(D113 불가침 원칙의 base-collapse 적용).
+    //   [수정 전] '다'(다도의 유효 PREFIX)도 조용 flush로 파괴됐다 — "ㅈㅜ 소실" 라이브 증상의 원인.
+    it('⑤b: base-prefix collapse with a valid-PREFIX remainder is preserved (D116 mediation)', () => {
+      const h = harness('ko');
+      h.setNow(100);
+      reachGhanaExact(h);
+      h.setNow(300);
+      h.ctrl.setCountry(DADO);
+      h.type('가나다', true); // Gboard strip → basePrefix='가나', progress '다'
+      h.type('다', true); // 접두 '가나' 증발 — 잔여 '다'는 다도(ㄷㅏㄷㅗ)의 유효 PREFIX → 보존
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('다');
+      expect(h.input.value).toBe('다'); // 파괴되지 않는다(조합 데싱크 없음)
+      expect(h.ctrl.getValue()).toBe('다'); // basePrefix 해제 — 가상 스트립 잔재 없음
+      h.type('다도', true); // 진행이 그대로 EXACT까지 이어진다
+      expect(eventsOf(h.events, 'exact').at(-1)?.detail.bestTarget.display).toBe('다도');
     });
 
     // ⑥ setCountry 스킵 클리어: 조합 중 ESC 스킵(컨트롤러는 버퍼를 비우지 않음) 후 다음 국가
@@ -813,9 +851,11 @@ describe('TypingInputController', () => {
       expect(h.ctrl.getValue()).toBe('다');
     });
 
-    // W-C1 (스트립 후 기저 붕괴 승계): W-P1 첫 스냅샷으로 basePrefix='도'가 세워진 뒤, value가 더는
-    //   '도'로 시작하지 않으면(IME가 접두를 삼킴) 기존 ⑤ 기구(조용 flush·리셋)를 그대로 승계한다.
-    it('W-C1: after partial-tail strip, base-prefix collapse silently flushes (inherits ⑤ mechanism)', () => {
+    // W-C1 (D116 계약 반전 ★): W-P1 첫 스냅샷으로 basePrefix='도'가 세워진 뒤 IME가 접두를
+    //   걷어내고 value를 재작성하면(v='대'), 잔여 '대'는 대한민국의 유효 PREFIX다 — 구 계약(⑤
+    //   기구 승계·조용 flush)은 이 유효 진행을 파괴했다(북한→중국 "ㅈㅜ 소실" 라이브 재현과
+    //   동형). 이제 접두만 해제하고 보존한다. MISS 잔여의 조용 flush는 개정 ⑤가 계속 잠근다.
+    it('W-C1: after partial-tail strip, a valid-PREFIX collapse remainder is preserved (D116)', () => {
       const h = harness('ko');
       h.setNow(0);
       reachIndiaExact(h);
@@ -823,11 +863,13 @@ describe('TypingInputController', () => {
       h.ctrl.setCountry(KOREA);
       h.compositionStart();
       h.type('도대', true); // 스트립 → basePrefix='도', progress '대'
-      const before = contentCount(h.events);
-      h.type('대', true); // v='대'가 더 이상 '도'로 시작하지 않음 → 기저 붕괴
-      expect(contentCount(h.events)).toBe(before); // 조용한 리셋
-      expect(h.input.value).toBe(''); // 재플러시
-      expect(h.ctrl.getValue()).toBe('');
+      h.type('대', true); // 접두 '도' 증발 — 잔여 '대'는 유효 PREFIX → 보존
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('대');
+      expect(h.input.value).toBe('대'); // 파괴되지 않는다
+      expect(h.ctrl.getValue()).toBe('대');
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
     });
   });
 
@@ -1095,10 +1137,13 @@ describe('TypingInputController', () => {
         h.ctrl.setCountry(KOREA);
         h.compositionStart();
         h.type('도대', true); // strip 분기 → basePrefix='도'
-        h.type('대', true); // 더는 '도'로 시작하지 않음 → base-collapse 분기
+        h.type('대', true); // 붕괴 — 잔여 '대'는 유효 PREFIX → 보존 분기(D116)
+        h.type('도대한', true); // 재스트립 → basePrefix='도'
+        h.type('나', true); // 붕괴 — 잔여 '나'는 MISS → 조용한 리셋 분기
         const branches = debugSpy.mock.calls.map((c) => c[1]);
         expect(branches).toContain('armed');
         expect(branches).toContain('strip');
+        expect(branches).toContain('base-collapse-genuine'); // D116 보존 경로도 원격 진단 가능
         expect(branches).toContain('base-collapse');
       } finally {
         localStorage.removeItem('wt:imeTrace');
@@ -1356,6 +1401,59 @@ describe('TypingInputController', () => {
       h.type('도대한', true); // 이어지는 조합 — basePrefix('도') 지속 스트립
       expect(h.ctrl.getValue()).toBe('대한');
       expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+    });
+  });
+
+  // ── docs/00 §11-D116: 기저 붕괴 의미 중재 — D113 불가침 원칙의 마지막 누락 분기 ──
+  // IME는 분기 (3)이 가상 스트립한 반삽입 접두('한')를 다음 스냅샷에서 스스로 걷어내며 value를
+  // 자기 조합 상태 기준으로 재작성할 수 있다('한주'가 아니라 '주'). 구 base-collapse는 붕괴
+  // 잔여의 판정 상태를 보지 않고 settleSwallow해 조합 중 blur가 유효 진행을 파괴했고, 데싱크된
+  // IME가 다음 자모만으로 새 조합을 시작했다 — 라이브 증상 "북한→중국에서 중 입력 중 ㅈ·ㅜ가
+  // 지워지고 ㅇ만 잔존". 3방향 검증(독립 재추적·적대적 반박·대안 스윕) 후 확정.
+  describe('D116 base-collapse mediation (valid remainder survives prefix evaporation)', () => {
+    // Q1(라이브 재현 ★): 북한 확정 → 중국 제시 → ㅈ 키스트로크에 옛 끝음절 병합('한ㅈ') →
+    //   분기 (3) 스트립(basePrefix='한') → ㅜ 키스트로크에 IME가 접두를 걷어낸 재작성('주') 도착.
+    //   [수정 전] 기저 붕괴가 무중재 settleSwallow → value='' → 조합 데싱크 → 다음 ㅇ이 'ㅇ'만
+    //   잔존(MISS). [수정 후] '주'가 유효 PREFIX로 보존돼 EXACT까지 이어진다.
+    it('Q1: North Korea→China — IME rewrite evaporates the stripped prefix; progress survives to EXACT', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachNorthKoreaExact(h); // staleRaw='북한'
+      const before = contentCount(h.events);
+      h.setNow(600);
+      h.ctrl.setCountry(CHINA);
+      h.compositionStart();
+      h.type('한ㅈ', true); // ㅈ — 옛 끝음절 '한' 병합 발현 → 분기 (3) 스트립, 'ㅈ'만 평가
+      expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('ㅈ');
+      expect(h.ctrl.getValue()).toBe('ㅈ');
+      h.type('주', true); // ㅜ — IME 재작성으로 접두 '한' 증발(기저 붕괴) — 유효 PREFIX 보존
+      expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('주');
+      expect(h.input.value).toBe('주'); // 파괴되지 않는다(구현 전: value=''로 ㅈㅜ 소실)
+      expect(h.ctrl.getValue()).toBe('주');
+      h.type('중', true); // ㅇ — 조합이 정상 지속된다
+      h.type('중ㄱ', true);
+      h.type('중구', true);
+      h.type('중국', true); // EXACT
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+      expect(eventsOf(h.events, 'exact').at(-1)?.detail.bestTarget.display).toBe('중국');
+      expect(contentCount(h.events)).toBe(before + 6); // progress 5(ㅈ·주·중·중ㄱ·중구) + exact 1
+      // 계상 정합: 스트립('ㅈ')→붕괴 보존('주')→genuine('중'…)이 이어져도 실키스트로크 1타=1added.
+      expect(addedSeq(h.events).slice(-6)).toEqual([1, 1, 1, 1, 1, 1]);
+    });
+
+    // Q2(붕괴-EXACT 관통): 붕괴 잔여가 곧바로 EXACT면 확정까지 그대로 통과한다 — 불가침 원칙은
+    //   PREFIX만이 아니라 유효 진행 전체(PREFIX/EXACT)를 보호한다.
+    it('Q2: a collapse remainder that is EXACT confirms immediately', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachNorthKoreaExact(h);
+      h.setNow(600);
+      h.ctrl.setCountry(CHINA);
+      h.compositionStart();
+      h.type('한ㅈ', true); // 병합 스냅샷 — 분기 (3) 스트립 → basePrefix='한'
+      h.type('중국', true); // IME 재작성으로 접두 증발(기저 붕괴) + 잔여가 곧 EXACT → 보존·즉시 확정
+      expect(eventsOf(h.events, 'exact').at(-1)?.detail.bestTarget.display).toBe('중국');
+      expect(h.ctrl.getValue()).toBe(''); // EXACT flush로 리셋
     });
   });
 });

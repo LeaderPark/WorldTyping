@@ -59,6 +59,10 @@ const DADO = makeCountry({ id: 'DD', nameKo: '다도', acceptedInputsKo: ['다�
 // 전체 판정 PREFIX면 스트립되지 않고 보존됨을 잠근다(의미 중재).
 const INDIA = makeCountry({ id: 'IN', nameKo: '인도', acceptedInputsKo: ['인도'] });
 const DOMINICA = makeCountry({ id: 'DM', nameKo: '도미니카', acceptedInputsKo: ['도미니카'] });
+// D106(P3) 프로브: "keydown 없는 스냅샷이라도 전체 판정이 EXACT면 절대 삼키지 않는다"는 최후
+// 게이트를 재현하려면 옛 끝음절('도')과 문자열이 완전히 같은 값이 새 타깃의 EXACT여야 한다 —
+// 즉 1음절 타깃이 필요하다(실 데이터엔 없어 합성). 최악의 충돌 상황에서도 정답이 통과해야 한다.
+const ONE_SYLLABLE_DO = makeCountry({ id: 'DO', nameKo: '도', acceptedInputsKo: ['도'] });
 
 type EvtOf<T extends TypingEvent['type']> = Extract<TypingEvent, { type: T }>;
 
@@ -132,7 +136,13 @@ interface Harness {
   setNow(n: number): void;
   compositionStart(): void;
   compositionEnd(): void;
-  type(value: string, composing?: boolean): void;
+  /**
+   * 스냅샷 1회. D106: 기본값 keydown=true — 실사용자 타이핑은 input 직전에 반드시 물리 keydown이
+   * 선행하므로(한글 IME 조합 중에도 keyCode 229로 발생), 헬퍼 계층에서 그 "사용자 타" 시맨틱을
+   * 보존한다(기존 스위트 전체가 무수정으로 사용자 타로 유지된다). 기계 재삽입(IME 에코)만
+   * keydown=false로 시뮬레이션한다.
+   */
+  type(value: string, composing?: boolean, keydown?: boolean): void;
   paste(inputType?: string): boolean;
   keydown(key: string): boolean;
 }
@@ -154,7 +164,9 @@ function harness(lang: 'ko' | 'en'): Harness {
     },
     compositionStart: () => input.dispatchEvent(new CompositionEvent('compositionstart')),
     compositionEnd: () => input.dispatchEvent(new CompositionEvent('compositionend')),
-    type(value, composing = false) {
+    type(value, composing = false, keydown = true) {
+      // key='Process'는 IME가 키를 소비할 때 브라우저가 실제로 보내는 값(legacy keyCode 229와 짝).
+      if (keydown) input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Process' }));
       input.value = value;
       input.dispatchEvent(new InputEvent('input', { isComposing: composing }));
     },
@@ -1100,6 +1112,164 @@ describe('TypingInputController', () => {
       h.ctrl.setCountry(GHANA);
       h.type('가', true);
       expect(eventsOf(h.events, 'progress')).toHaveLength(1);
+    });
+  });
+
+  // ── docs/00 §11-D106(D104 개정): **점진 재조합 에코**. IME가 flush된 끝음절을 자모 단위로 다시
+  //    타이핑한다("ㄷ" input → "도" input). 첫 스냅샷 'ㄷ'은 단일 자모(§2.10 #4 비삼킴)라 genuine으로
+  //    통과하면서 staleEcho one-shot까지 소진시켜, 두 번째 '도'가 무방비로 안착하고 이후 사용자
+  //    입력과 합쳐져 '도대'가 된다. 근본 구별 신호 = **물리 keydown 상관**: 사용자 타는 input 직전
+  //    keydown이 있고(IME도 keyCode 229), 기계 재삽입은 keydown 없이 input만 온다. ─────────────
+  describe('D106 keydown correlation (progressive re-composition echo)', () => {
+    // P1(라이브 재현 ★): keydown 없는 'ㄷ' → '도' 2연속 에코를 모두 삼키고(one-shot 유지),
+    //   이어지는 사용자 실타 '대'만 genuine으로 통과한다 — 화면에 '도대'가 남지 않는다.
+    it('P1: a keydown-less progressive echo ("ㄷ"→"도") is fully swallowed; the next real keystroke is genuine', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // staleRaw='인도'(끝음절 '도'=ㄷㅗ), flushAt=0
+      const before = contentCount(h.events);
+      h.setNow(500); // 일반적인 플레이 호흡 — 시간 게이트는 D98에서 이미 제거됨
+      h.ctrl.setCountry(KOREA);
+      h.type('ㄷ', true, false); // 기계 스냅샷 1: 단일 자모지만 keydown이 없다 → 삼킴
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe('');
+      h.setNow(520);
+      h.type('도', true, false); // 기계 스냅샷 2: one-shot이 소진되지 않았으므로 여전히 무장 상태
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe('');
+      h.setNow(700);
+      h.type('대', true); // 사용자 실타(keydown 동반)
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+      expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('대');
+      expect(h.ctrl.getValue()).toBe('대'); // '도대'가 아니다
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+    });
+
+    // P2(§2.10 #4 보존 ★): 같은 'ㄷ'이라도 물리 keydown이 선행하면 사용자 첫 타다 — 절대 삼키지
+    //   않고 one-shot도 기존대로 소진된다(이후 옛-꼬리 전량 에코조차 방어 해제로 통과한다).
+    it('P2: a keydown-correlated single jamo "ㄷ" stays genuine and consumes the one-shot (§2.10 #4)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('ㄷ', true); // keydown 동반 = 사용자 첫 타
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+      expect(h.ctrl.getValue()).toBe('ㄷ');
+      // one-shot 소진 확인: 방어가 풀렸으므로 다음 스냅샷은 무조건 genuine이다.
+      h.setNow(520);
+      h.type('도', true, false);
+      expect(contentCount(h.events)).toBe(before + 2);
+      expect(h.ctrl.getValue()).toBe('도');
+    });
+
+    // P3(최후 게이트 ★): keydown이 없어도 **전체 판정이 EXACT면 절대 삼키지 않는다**. keydown을
+    //   주지 않는 모바일 소프트키보드/일부 IME에서 genuine을 기계로 오인해도 정답 입력은 통과한다.
+    it('P3: a keydown-less snapshot whose whole value is EXACT is never swallowed (final gate)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(500); // 윈도우 밖 — 전량 삼킴 fast-path를 피해 의미 중재 경로로만 판정
+      h.ctrl.setCountry(ONE_SYLLABLE_DO); // 타깃 '도' = 옛 끝음절과 완전 동일(최악의 충돌)
+      h.type('도', true, false); // keydown 없음 + 꼬리 관련 — 그러나 EXACT라 통과
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'exact')).toHaveLength(2); // 인도 + 도
+      expect(eventsOf(h.events, 'exact').at(-1)?.detail.bestTarget.display).toBe('도');
+    });
+
+    // P4(오탐 상한): keydown이 없어도 옛 끝음절과 무관한 값은 그대로 genuine이다 — 기계 판정만으로
+    //   삼키지 않고 "꼬리 관련성"이라는 구조 게이트를 함께 통과해야 한다.
+    it('P4: a keydown-less snapshot unrelated to the stale tail is genuine', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // 끝음절 '도' = ㄷㅗ
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.ctrl.setCountry(KOREA);
+      h.type('ㅎ', true, false); // ㅎ은 ㄷㅗ의 접두도 접미도 아니다
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX'); // '한국' 접두
+      expect(h.ctrl.getValue()).toBe('ㅎ');
+    });
+
+    // P5(경계값): keydown↔input 상관은 80ms 창이다(가상 시계). 경계 포함은 사용자 타, 초과는 무상관.
+    it('P5: keydown correlation holds at exactly 80ms and expires past it', () => {
+      // (a) 80ms 정각 — 상관 유효 → genuine
+      const a = harness('ko');
+      a.setNow(0);
+      reachIndiaExact(a);
+      const beforeA = contentCount(a.events);
+      a.setNow(500);
+      a.ctrl.setCountry(KOREA);
+      a.keydown('a'); // lastKeydownAt = 500
+      a.setNow(580); // 500 + 80 = 경계(포함)
+      a.type('ㄷ', true, false); // keydown 재발행 없이 input만
+      expect(contentCount(a.events)).toBe(beforeA + 1);
+      expect(a.ctrl.getValue()).toBe('ㄷ');
+
+      // (b) 81ms — 무상관 → 기계 스냅샷으로 삼킴
+      const b = harness('ko');
+      b.setNow(0);
+      reachIndiaExact(b);
+      const beforeB = contentCount(b.events);
+      b.setNow(500);
+      b.ctrl.setCountry(KOREA);
+      b.keydown('a'); // lastKeydownAt = 500
+      b.setNow(581);
+      b.type('ㄷ', true, false);
+      expect(contentCount(b.events)).toBe(beforeB);
+      expect(b.input.value).toBe('');
+    });
+
+    // P6(예산 공유 fail-open): keydown 없는 에코 삼킴도 reinsertFlushes 예산을 공유한다 — 3회
+    //   소진 후에는 기계 스냅샷도 genuine으로 통과시켜 입력 잠금을 원천 차단한다(N5와 동일 계약).
+    it('P6: keydown-less echo swallows share the reinsert budget and fail open after 3', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.ctrl.setCountry(KOREA); // reinsertFlushes=0
+      const before = contentCount(h.events);
+      for (const t of [500, 700, 900]) {
+        h.setNow(t);
+        h.type('ㄷ', true, false);
+        expect(h.input.value).toBe('');
+      }
+      expect(contentCount(h.events)).toBe(before); // 3연속 삼킴(앵커 유지 확인 포함)
+      h.setNow(1100);
+      h.type('ㄷ', true, false); // 4번째 — 예산 소진 → fail-open
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(h.ctrl.getValue()).toBe('ㄷ');
+    });
+
+    // P7(진단 채널): trace 로그에 kd/sinceKd가 실린다(라이브 원격 진단에서 이 두 필드로 "이 스냅샷이
+    //   사용자 타였는가"를 판별한다).
+    it('P7: the trace log carries kd / sinceKd and the keydown-less swallow branch', () => {
+      localStorage.setItem('wt:imeTrace', '1');
+      const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+      try {
+        const h = harness('ko');
+        h.setNow(0);
+        reachIndiaExact(h);
+        h.setNow(500);
+        h.ctrl.setCountry(KOREA);
+        h.type('ㄷ', true, false);
+        const branches = debugSpy.mock.calls.map((c) => c[1]);
+        expect(branches).toContain('armed');
+        expect(branches).toContain('swallow-echo');
+        const armed = debugSpy.mock.calls.find((c) => c[1] === 'armed')?.[2] as Record<
+          string,
+          unknown
+        >;
+        expect(armed.kd).toBe(false);
+        expect(armed.sinceKd).toBe(500);
+      } finally {
+        localStorage.removeItem('wt:imeTrace');
+      }
     });
   });
 });

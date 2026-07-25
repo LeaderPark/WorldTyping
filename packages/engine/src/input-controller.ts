@@ -16,7 +16,8 @@
 // ② flushIme의 epoch++는 blur 뒤에 온다 — 자기유발 compositionend가 옛 epoch를 캡처해 구세대화
 // 되게(마이크로태스크 재평가 차단). ③ flush 후 첫 입력은 evaluate 단일 관문(resolveRaw)에서
 // 판별한다: ≥2자모 옛-꼬리 전량 재삽입 = 무이벤트 삼킴, 옛 전체값 접두 + 연장 = 접두 가상 스트립
-// (Gboard 승계), 그 외 = genuine(단일 자모는 절대 비삼킴 — §2.10 #4 보존). 국가당 3회 삼킴 후 fail-open.
+// (Gboard 승계), 그 외 = genuine(단일 자모는 절대 비삼킴 — §2.10 #4 보존. 단 D106 이후 이 계약은
+// "keydown 상관이 있는 입력 = 사용자 타"에 한한다). 국가당 3회 삼킴 후 fail-open.
 // ③′(D84) 옛 값의 proper 접미(끝음절, ≥2자모)가 첫 입력의 raw 접두로 병합된 경우, 전체 판정 MISS ∧
 // 잔여 판정 non-MISS일 때만(의미 중재) 그 접미를 basePrefix로 가상 스트립하고 연장분만 평가(예산 공유).
 // ③″(D98) 실기기 IME는 재삽입을 focus 복귀 직후가 아니라 사용자의 다음 키스트로크 시점에 발현시킬 수
@@ -32,6 +33,15 @@
 //   (B) **삼킴 정리는 조합을 실제로 추적 중일 때만(this.composing) flushIme** — 아니면 신설
 //       silentClear(epoch·blur·focus 미유발). 기존엔 이벤트의 isComposing 비트만 보고 삼킴마다
 //       blur→focus를 돌려, 그 focus 복귀가 같은 재삽입을 다시 불러 예산(3)만 태우고 fail-open했다.
+// ⑥(D106) **점진 재조합 에코** — D104 이후 남은 마지막 라이브 경로. IME가 flush된 끝음절을 자모
+//   단위로 되타이핑한다("ㄷ" input → "도" input). 첫 스냅샷 'ㄷ'은 단일 자모라 ③의 §2.10 #4
+//   비삼킴에 걸려 genuine으로 통과하면서 staleEcho one-shot까지 소진시키고, 두 번째 '도'는 방어
+//   부재로 안착해 사용자 입력과 합쳐져 '도대'가 된다. 값 층만으로는 두 스냅샷이 사용자 타와
+//   구별되지 않는다 → **물리 keydown 상관**을 근본 신호로 도입한다: 사용자 타는 input 직전에
+//   keydown이 있고(한글 IME 조합 중에도 keyCode 229로 발생한다), 기계 재삽입은 keydown 없이
+//   input만 온다. (a) one-shot 소거는 keydown 상관 입력에서만 하고, (b) keydown 없는 스냅샷은
+//   [옛 끝음절 자모열의 접두/접미 ∧ 전체 판정이 EXACT가 아님] 하에 단일 자모여도 삼킨다.
+//   (c) keydown 있는 입력의 판정은 D98/D104 그대로다(변경 0).
 import {
   matchInputDetail,
   compileTargets,
@@ -56,6 +66,12 @@ const LATIN_RUN_RE = /[A-Za-z]{3,}/;
 const REINSERT_WINDOW_MS = 150;
 /** 국가당 재삽입 삼킴 상한 — 넘으면 fail-open(genuine 처리). 무한 삼킴/입력 잠금 방지. */
 const MAX_REINSERT_FLUSHES = 3;
+/** keydown↔input 상관 인정 창(ms, D106). 브라우저는 물리 키마다 keydown을 먼저 디스패치하고
+ *  (IME가 키를 소비하는 조합 중에도 legacy keyCode 229로 발생한다) 곧바로 같은/다음 태스크에서
+ *  input을 낸다. 80ms는 IME 파이프라인·이벤트 큐·저사양 기기의 프레임 스톨을 흡수하면서도
+ *  "keydown 없이 수백 ms 뒤 스스로 발현하는 재삽입"과는 겹치지 않는 여유값이다. 짧게 잡으면
+ *  느린 기기의 사용자 타가 기계로 오인되고(입력 유실), 길게 잡으면 에코가 사용자 타로 위장한다. */
+const KEYDOWN_CORRELATION_MS = 80;
 
 export type TypingEvent =
   | { type: 'progress'; detail: MatchDetail; delta: KeystrokeDelta; rawValue: string }
@@ -98,6 +114,8 @@ export class TypingInputController {
   private reinsertFlushes = 0;
   /** flushIme 실행 중 blur/focus가 유발할 수 있는 동기 input 재진입 방어 플래그. */
   private flushing = false;
+  /** D106: 마지막 물리 keydown 시각(this.now()). -Infinity = "아직 없음"(항상 무상관으로 시작). */
+  private lastKeydownAt = Number.NEGATIVE_INFINITY;
   /** D104 진단 채널: localStorage 'wt:imeTrace'==='1'일 때만 resolveRaw 분기 결정을 로그한다.
    *  생성 시 1회만 읽어 캐시하고 호출측에서 이 불리언으로 먼저 게이트한다 — 꺼져 있으면 핫패스
    *  비용은 불리언 검사 1회(문자열 포맷·객체 할당 없음). */
@@ -142,6 +160,10 @@ export class TypingInputController {
       this.evaluate(e);
     });
     on('keydown', (e) => {
+      // D106: 값이 아니라 "이 input이 물리 키에서 왔는가"를 기록한다 — IME 재삽입은 keydown 없이
+      // input만 내므로, resolveRaw가 이 타임스탬프 하나로 사용자 타와 기계 에코를 가른다.
+      // 어떤 키인지는 무관하다(IME 조합 중 keydown은 key='Process'/keyCode 229로 온다).
+      this.lastKeydownAt = this.now();
       if (e.key === 'Escape') {
         e.preventDefault();
         this.emit({ type: 'skipRequested' });
@@ -233,8 +255,10 @@ export class TypingInputController {
    * 지점에서 차단하고 Gboard가 남긴 옛 값 접두를 가상으로 스트립한다.
    *  - `null` 반환 = 이 입력을 삼킴(무이벤트·무계상). `string` 반환 = 그 값으로 평가.
    * 분기 순서는 계약(§2.10 #4 보존)이라 바꾸지 않는다: 기저접두 → 무-staleEcho → 빈값 →
-   * 전량삼킴(≥2자모·꼬리일치·상한·[윈도우 밖이면 의미 중재]) → Gboard 전체접두 →
-   * 부분꼬리 스트립(D84·의미 중재, 시간 무관 — D98) → genuine.
+   * [D106 keydown-무상관 꼬리 에코] → 전량삼킴(≥2자모·꼬리일치·상한·[윈도우 밖이면 의미 중재]) →
+   * Gboard 전체접두 → 부분꼬리 스트립(D84·의미 중재, 시간 무관 — D98) → genuine.
+   * D106 분기만 신설이고 뒤 분기들의 조건·순서는 불변이다 — keydown 상관이 있는 입력(사용자 타)은
+   * D106 분기를 무조건 건너뛰므로 기존 경로가 그대로 적용된다.
    */
   private resolveRaw(ev?: Event): string | null {
     const v = this.input.value;
@@ -252,20 +276,62 @@ export class TypingInputController {
     if (v.length === 0) return v; // 빈 input은 재삽입 판별 불가 — 가드 유지
     const stale = this.staleEchoJamo;
     const staleRaw = this.staleEchoRaw;
-    this.staleEchoJamo = ''; // 첫 비어있지 않은 입력에서 one-shot 해제
-    this.staleEchoRaw = '';
+    // ★D106-(a): one-shot 소거는 **keydown 상관이 있는 입력(사용자 타)에서만** 한다. 점진 재조합
+    // 에코의 1번째 조각('ㄷ')이 방어를 소진시켜 2번째('도')를 무방비로 통과시키던 경로를 닫는다.
+    // 기계 스냅샷은 staleEcho를 유지한 채 처리되므로 에코가 몇 조각으로 쪼개져 와도 유효하다
+    // (노출 상한은 시간이 아니라 예산 MAX_REINSERT_FLUSHES가 담당한다 — D98과 동일 원칙).
+    const kd = this.hasRecentKeydown();
+    if (kd) {
+      this.staleEchoJamo = ''; // 첫 비어있지 않은 "사용자" 입력에서 one-shot 해제
+      this.staleEchoRaw = '';
+    }
     const vJamo = this.jamoOf(v);
     const inWindow = this.now() - this.flushAt <= REINSERT_WINDOW_MS;
     const hasBudget = this.reinsertFlushes < MAX_REINSERT_FLUSHES;
     if (this.trace) {
       // evComposing(이벤트 비트) vs composing(우리가 추적 중인 조합)의 괴리가 구멍 B의 기기 신호다.
+      // kd/sinceKd(D106)는 "이 스냅샷이 물리 키에서 왔는가"의 원격 진단 필드다.
       const budget = this.reinsertFlushes;
       const evComposing = readIsComposing(ev);
       const composing = this.composing;
-      this.traceBranch('armed', { v, vJamo, stale, inWindow, budget, evComposing, composing });
+      const sinceKd = this.now() - this.lastKeydownAt;
+      this.traceBranch('armed', {
+        v,
+        vJamo,
+        stale,
+        inWindow,
+        budget,
+        evComposing,
+        composing,
+        kd,
+        sinceKd,
+      });
+    }
+    // (0) ★D106-(b): keydown 없는 스냅샷 = 기계 재삽입 후보. 두 게이트를 함께 통과할 때만 삼킨다.
+    //     ① 구조: v가 옛 끝음절 자모열의 접두이거나 접미(= 그 음절을 되타이핑하는 중). 무관한 값은
+    //        keydown이 없어도 genuine으로 통과시켜 오탐 상한을 둔다.
+    //     ② 의미: 전체 판정이 EXACT가 **아닐 것**. keydown을 주지 않는 소프트키보드/일부 IME에서
+    //        genuine을 기계로 오인하더라도 정답 입력만은 최악에도 통과한다(최후 안전 게이트).
+    //     §2.10 #4("단일 자모 절대 비삼킴")는 사용자 첫 타 보호가 목적이고 keydown 없는 입력은
+    //     사용자 타가 아니므로, 여기서 단일 자모를 삼키는 것은 그 계약의 위반이 아니라 적용 범위
+    //     밖이다 — 계약은 "keydown 상관 입력에 한한다"로 명문화된다(§2.10 #4 주석 개정).
+    if (!kd && hasBudget && this.isStaleTailEcho(vJamo, staleRaw)) {
+      if (matchInputDetail(v, this.targets, this.lang).state !== 'EXACT') {
+        if (this.trace) this.traceBranch('swallow-echo', { v, vJamo, stale });
+        this.reinsertFlushes++;
+        this.settleSwallow();
+        // 앵커 복원: 점진 에코는 여러 스냅샷에 걸쳐 자란다('ㄷ'→'도'). settleSwallow의 재무장이
+        // 방금 삼킨 조각으로 기준을 덮으면 다음 조각을 꼬리 에코로 못 알아본다 — 원래 옛 값을
+        // 기준으로 되돌려 에코가 끝날 때까지 같은 앵커로 판별한다(flushAt 갱신은 그대로 유지).
+        this.staleEchoJamo = stale;
+        this.staleEchoRaw = staleRaw;
+        return null;
+      }
     }
     // (1) 전량 에코 삼킴(D70-③): ≥2자모 조건이 핵심 — 실키스트로크 1타 = 자모 1개 → 확정 직후 0ms
     //     첫 타(§2.10 #4)는 절대 안 삼켜짐. 윈도우 안은 무중재 fast-path(현행 불변).
+    //     D106: 이 ≥2자모 게이트는 "사용자 타"를 보호하는 장치다. keydown 없는 기계 스냅샷은 위
+    //     (0)에서 이미 처리되므로 여기 도달하는 단일 자모는 언제나 물리 키에서 온 것이다.
     if (vJamo.length >= 2 && stale.endsWith(vJamo) && hasBudget) {
       // D98: 윈도우 밖(늦게 발현한 에코)은 의미 중재를 통과할 때만 삼킨다 — v가 새 타깃의 유효
       // PREFIX/EXACT면 genuine 우선. 알려진 한계: 인도→도미니카처럼 새 타깃이 옛 꼬리로 시작하면
@@ -292,7 +358,8 @@ export class TypingInputController {
       for (let i = 1; i < staleRaw.length; i++) {
         const r = staleRaw.slice(i); // 최장 proper 접미부터
         if (!v.startsWith(r) || v.length <= r.length) continue;
-        if (this.jamoOf(r).length < 2) break; // §2.10 #4 게이트 — 1자모 에코 해석 금지
+        // §2.10 #4 게이트 — 1자모 에코 해석 금지(D106: 여기 오는 입력은 keydown 상관 = 사용자 타).
+        if (this.jamoOf(r).length < 2) break;
         const rest = v.slice(r.length);
         // 의미 중재: genuine 해석(전체 v)이 유효(PREFIX/EXACT)하면 절대 스트립하지 않는다(over-strip 차단).
         const full = matchInputDetail(v, this.targets, this.lang);
@@ -308,6 +375,27 @@ export class TypingInputController {
     }
     if (this.trace) this.traceBranch('genuine', { v, vJamo, stale, hasBudget });
     return v; // genuine 신규 입력
+  }
+
+  /**
+   * D106: 직전 input이 물리 keydown과 상관되는가(= 사용자 타). 브라우저는 키 입력마다 keydown을
+   * input보다 먼저 디스패치하므로(IME 조합 중 포함), 상관이 없는 input은 IME/브라우저가 스스로
+   * 만든 스냅샷 — 즉 재삽입 에코 후보다. 값 층(자모열)만으로는 얻을 수 없는 유일한 출처 신호다.
+   */
+  private hasRecentKeydown(): boolean {
+    return this.now() - this.lastKeydownAt <= KEYDOWN_CORRELATION_MS;
+  }
+
+  /**
+   * D106: 기계 스냅샷 v가 "flush된 끝음절의 (부분) 되타이핑"인가 — v의 자모열이 옛 값 마지막
+   * 음절 자모열의 접두이거나 접미면 관련으로 본다. 점진 재조합 에코 'ㄷ'(접두) → '도'(전체)가
+   * 여기 걸린다. 꼬리보다 긴 값(= 사용자 입력이 섞여 자란 스냅샷)은 관련 아님으로 떨어져 뒤의
+   * 부분꼬리 스트립(3)이 담당한다 — 삼킴이 아니라 스트립이 정답인 경우이기 때문.
+   */
+  private isStaleTailEcho(vJamo: string, staleRaw: string): boolean {
+    const tail = this.jamoOf(staleRaw.slice(-1)); // 마지막 음절의 자모열(예: '인도' → 'ㄷㅗ')
+    if (!vJamo || !tail) return false;
+    return tail.startsWith(vJamo) || tail.endsWith(vJamo);
   }
 
   /**

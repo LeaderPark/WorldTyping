@@ -1926,6 +1926,12 @@ export class MatchRoomDO {
     if (!this.env.KV || !this.config) return;
     if (this.phase !== 'WAITING') return;
     const active = this.activePlayers().length;
+    // WT-FIX-EMPTYROOM: 활성 인원 0(호스트 이탈 등)이면 로비에 노출하지 않고 즉시 제거한다.
+    //   방 자체(emptyCleanup 60s 유예)는 유지 — 새로고침 재입장 시 onJoin의 updatePublicRoom가 재등록한다.
+    if (active === 0) {
+      await this.deletePublicRoom();
+      return;
+    }
     const host = this.hostId ? this.players.get(this.hostId) : undefined;
     try {
       await this.env.KV.put(

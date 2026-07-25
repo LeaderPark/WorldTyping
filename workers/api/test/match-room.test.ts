@@ -1110,4 +1110,82 @@ describe('MatchRoom DO — 자동 시작 / 공개 방', () => {
     expect(after).toBeNull();
     a.close();
   });
+
+  // WT-FIX-EMPTYROOM: 방장 단독 이탈로 activePlayers===0이 되면 방(emptyCleanup 60s 유예)은
+  // 유지하되 KV publicroom 엔트리는 즉시 제거해 로비(GET /rooms/public)에 빈 방(0/N)을 노출하지 않는다.
+  it('WT-FIX-EMPTYROOM T1: 호스트 단독 방 → WS close → publicroom KV 즉시 삭제', async () => {
+    const code = newRoomCode();
+    const stub = stubFor(code);
+    await createRoom(stub, code, { isPublic: true });
+    const a = await connect(stub, 'g1', 'Alice');
+    await sleep(30);
+    expect(await env.KV.get(`publicroom:${code}`)).not.toBeNull();
+
+    a.close(); // 뒤로가기/탭 닫기와 동등: 명시 leave 없이 소켓만 끊는다.
+
+    // onDisconnect(WAITING) → finalizeLeave(슬롯 제거) → updatePublicRoom(active===0) → KV 삭제.
+    // 소켓 close 전파는 비동기라(§ 기존 grace 테스트와 동일 사유) 짧은 폴링으로 수렴을 기다린다.
+    let raw: string | null = 'sentinel';
+    for (let i = 0; i < 50; i++) {
+      raw = await env.KV.get(`publicroom:${code}`);
+      if (raw === null) break;
+      await sleep(10);
+    }
+    expect(raw).toBeNull();
+
+    // 방 자체는 emptyCleanup(60s) 유예 중 → CREATED/CLOSED가 아니라 storage에 아직 남아 있어야 한다.
+    const emptyAt = (await debug(stub)).alarms.emptyCleanup;
+    expect(emptyAt).toBeGreaterThan(0);
+  });
+
+  it('WT-FIX-EMPTYROOM T2: 빈 방에 60초 경과 전 재입장 → publicroom KV 재등록(players 1)', async () => {
+    const code = newRoomCode();
+    const stub = stubFor(code);
+    await createRoom(stub, code, { isPublic: true });
+    const a = await connect(stub, 'g1', 'Alice');
+    await sleep(30);
+    a.close();
+    let deleted: string | null = 'sentinel';
+    for (let i = 0; i < 50; i++) {
+      deleted = await env.KV.get(`publicroom:${code}`);
+      if (deleted === null) break;
+      await sleep(10);
+    }
+    expect(deleted).toBeNull();
+
+    // emptyCleanup 만기(60_000ms) 전 재입장 — 새로고침/재접속 시나리오.
+    const b = await connect(stub, 'g2', 'Bob');
+    await sleep(30);
+    const raw = await env.KV.get(`publicroom:${code}`);
+    expect(raw).not.toBeNull();
+    const entry = JSON.parse(raw!) as { players: number };
+    expect(entry.players).toBe(1);
+    b.close();
+  });
+
+  it('WT-FIX-EMPTYROOM T3(회귀): 2인 방에서 1인만 이탈 → publicroom KV 유지(players 1로 갱신)', async () => {
+    const code = newRoomCode();
+    const stub = stubFor(code);
+    await createRoom(stub, code, { isPublic: true });
+    const a = await connect(stub, 'g1', 'Alice');
+    const b = await connect(stub, 'g2', 'Bob');
+    await sleep(30);
+    expect(await env.KV.get(`publicroom:${code}`)).not.toBeNull();
+
+    b.close(); // 호스트가 아닌 참가자만 이탈 — activePlayers는 1로 남는다.
+
+    let raw: string | null = null;
+    let entry: { players: number } | null = null;
+    for (let i = 0; i < 50; i++) {
+      raw = await env.KV.get(`publicroom:${code}`);
+      if (raw !== null) {
+        entry = JSON.parse(raw) as { players: number };
+        if (entry.players === 1) break;
+      }
+      await sleep(10);
+    }
+    expect(raw).not.toBeNull();
+    expect(entry?.players).toBe(1);
+    a.close();
+  });
 });

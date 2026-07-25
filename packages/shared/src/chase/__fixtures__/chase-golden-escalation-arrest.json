@@ -109,49 +109,49 @@
     },
     {
       "hopIndex": 20,
-      "countryId": "GR",
+      "countryId": "MT",
       "tMs": 31500
     }
   ],
   "endMs": 31500,
   "expected": {
     "home": "DK",
-    "player": "GR",
+    "player": "MT",
     "stars": 5,
     "police": [
       {
         "id": 1,
         "kind": "chaser",
-        "at": "GR",
-        "nextTickMs": 34500,
+        "at": "MT",
+        "nextTickMs": 32880,
         "spawnedAtMs": 3000
       },
       {
         "id": 2,
         "kind": "chaser",
-        "at": "GR",
-        "nextTickMs": 32000,
+        "at": "MT",
+        "nextTickMs": 32840,
         "spawnedAtMs": 8000
       },
       {
         "id": 3,
         "kind": "interceptor",
-        "at": "FI",
-        "nextTickMs": 34000,
+        "at": "EE",
+        "nextTickMs": 33160,
         "spawnedAtMs": 13000
       },
       {
         "id": 4,
         "kind": "chaser",
-        "at": "MT",
-        "nextTickMs": 33600,
+        "at": "GR",
+        "nextTickMs": 33120,
         "spawnedAtMs": 18000
       },
       {
         "id": 5,
         "kind": "heli",
-        "at": "GR",
-        "nextTickMs": 32000,
+        "at": "MT",
+        "nextTickMs": 31640,
         "spawnedAtMs": 23000
       }
     ],
@@ -278,13 +278,6 @@
         ]
       },
       {
-        "type": "policeMoved",
-        "tMs": 7200,
-        "id": 1,
-        "from": "NL",
-        "to": "DK"
-      },
-      {
         "type": "candidatesShown",
         "tMs": 7500,
         "hopIndex": 5,
@@ -307,7 +300,14 @@
         "tMs": 8000,
         "id": 2,
         "kind": "chaser",
-        "at": "NL"
+        "at": "IE"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 8040,
+        "id": 1,
+        "from": "NL",
+        "to": "DK"
       },
       {
         "type": "candidatesShown",
@@ -330,20 +330,6 @@
         ]
       },
       {
-        "type": "policeMoved",
-        "tMs": 11400,
-        "id": 1,
-        "from": "DK",
-        "to": "CZ"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 11900,
-        "id": 2,
-        "from": "NL",
-        "to": "CZ"
-      },
-      {
         "type": "candidatesShown",
         "tMs": 12000,
         "hopIndex": 8,
@@ -352,6 +338,20 @@
           "RO",
           "BA"
         ]
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 12680,
+        "id": 2,
+        "from": "IE",
+        "to": "LI"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 12720,
+        "id": 1,
+        "from": "DK",
+        "to": "PL"
       },
       {
         "type": "starChanged",
@@ -374,7 +374,7 @@
         "hopIndex": 9,
         "candidates": [
           "TR",
-          "PL",
+          "BG",
           "LV"
         ]
       },
@@ -389,20 +389,6 @@
         ]
       },
       {
-        "type": "policeMoved",
-        "tMs": 15300,
-        "id": 1,
-        "from": "CZ",
-        "to": "HU"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 15800,
-        "id": 2,
-        "from": "CZ",
-        "to": "HU"
-      },
-      {
         "type": "candidatesShown",
         "tMs": 16500,
         "hopIndex": 11,
@@ -414,10 +400,17 @@
       },
       {
         "type": "policeMoved",
-        "tMs": 17200,
-        "id": 3,
-        "from": "EE",
-        "to": "MD"
+        "tMs": 17360,
+        "id": 2,
+        "from": "LI",
+        "to": "HR"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 17400,
+        "id": 1,
+        "from": "PL",
+        "to": "RO"
       },
       {
         "type": "starChanged",
@@ -432,7 +425,7 @@
         "tMs": 18000,
         "id": 4,
         "kind": "chaser",
-        "at": "BA"
+        "at": "BG"
       },
       {
         "type": "candidatesShown",
@@ -446,17 +439,10 @@
       },
       {
         "type": "policeMoved",
-        "tMs": 18900,
-        "id": 1,
-        "from": "HU",
-        "to": "BG"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 19400,
-        "id": 2,
-        "from": "HU",
-        "to": "BG"
+        "tMs": 18040,
+        "id": 3,
+        "from": "EE",
+        "to": "MD"
       },
       {
         "type": "candidatesShown",
@@ -480,22 +466,22 @@
       },
       {
         "type": "policeMoved",
-        "tMs": 21300,
-        "id": 4,
-        "from": "BA",
-        "to": "MK"
+        "tMs": 21680,
+        "id": 2,
+        "from": "HR",
+        "to": "RS"
       },
       {
         "type": "policeMoved",
-        "tMs": 21400,
-        "id": 3,
-        "from": "MD",
-        "to": "BY"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 22200,
+        "tMs": 21720,
         "id": 1,
+        "from": "RO",
+        "to": "BG"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 21960,
+        "id": 4,
         "from": "BG",
         "to": "GR"
       },
@@ -508,13 +494,6 @@
           "ET",
           "OM"
         ]
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 22700,
-        "id": 2,
-        "from": "BG",
-        "to": "GR"
       },
       {
         "type": "starChanged",
@@ -530,6 +509,13 @@
         "id": 5,
         "kind": "heli",
         "at": "MA"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 23080,
+        "id": 3,
+        "from": "MD",
+        "to": "BY"
       },
       {
         "type": "goldPicked",
@@ -557,14 +543,7 @@
       },
       {
         "type": "policeMoved",
-        "tMs": 24600,
-        "id": 4,
-        "from": "MK",
-        "to": "BG"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 24800,
+        "tMs": 25160,
         "id": 5,
         "from": "MA",
         "to": "MT"
@@ -581,31 +560,24 @@
       },
       {
         "type": "policeMoved",
-        "tMs": 25500,
-        "id": 1,
-        "from": "GR",
-        "to": "BG"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 25600,
-        "id": 3,
-        "from": "BY",
-        "to": "EE"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 26000,
+        "tMs": 25640,
         "id": 2,
-        "from": "GR",
-        "to": "BG"
+        "from": "RS",
+        "to": "GR"
       },
       {
         "type": "policeMoved",
-        "tMs": 26600,
-        "id": 5,
-        "from": "MT",
+        "tMs": 25680,
+        "id": 1,
+        "from": "BG",
         "to": "GR"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 25920,
+        "id": 4,
+        "from": "GR",
+        "to": "BG"
       },
       {
         "type": "candidatesShown",
@@ -619,17 +591,17 @@
       },
       {
         "type": "policeMoved",
-        "tMs": 27600,
-        "id": 4,
-        "from": "BG",
+        "tMs": 27320,
+        "id": 5,
+        "from": "MT",
         "to": "GR"
       },
       {
         "type": "policeMoved",
-        "tMs": 28400,
-        "id": 5,
-        "from": "GR",
-        "to": "BG"
+        "tMs": 28120,
+        "id": 3,
+        "from": "BY",
+        "to": "EE"
       },
       {
         "type": "candidatesShown",
@@ -643,24 +615,31 @@
       },
       {
         "type": "policeMoved",
-        "tMs": 28500,
-        "id": 1,
-        "from": "BG",
-        "to": "GR"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 29000,
+        "tMs": 29240,
         "id": 2,
-        "from": "BG",
-        "to": "GR"
+        "from": "GR",
+        "to": "MT"
       },
       {
         "type": "policeMoved",
-        "tMs": 29800,
-        "id": 3,
-        "from": "EE",
-        "to": "FI"
+        "tMs": 29280,
+        "id": 1,
+        "from": "GR",
+        "to": "MT"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 29480,
+        "id": 5,
+        "from": "GR",
+        "to": "MT"
+      },
+      {
+        "type": "policeMoved",
+        "tMs": 29520,
+        "id": 4,
+        "from": "BG",
+        "to": "GR"
       },
       {
         "type": "candidatesShown",
@@ -673,34 +652,20 @@
         ]
       },
       {
-        "type": "policeMoved",
-        "tMs": 30200,
-        "id": 5,
-        "from": "BG",
-        "to": "GR"
-      },
-      {
-        "type": "policeMoved",
-        "tMs": 30600,
-        "id": 4,
-        "from": "GR",
-        "to": "MT"
-      },
-      {
         "type": "candidatesShown",
         "tMs": 31500,
         "hopIndex": 21,
         "candidates": [
           "IT",
-          "RS",
-          "BA"
+          "TN",
+          "MC"
         ]
       },
       {
         "type": "arrested",
         "tMs": 31500,
         "by": "chaser",
-        "at": "GR"
+        "at": "MT"
       }
     ],
     "arrestedAtMs": 31500,
@@ -728,12 +693,12 @@
       "SC",
       "MU",
       "SZ",
-      "GR"
+      "MT"
     ],
     "candidates": [
       "IT",
-      "RS",
-      "BA"
+      "TN",
+      "MC"
     ],
     "wantedStartMs": 3000,
     "nextStarUpMs": 33000,

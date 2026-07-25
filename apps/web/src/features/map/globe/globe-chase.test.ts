@@ -16,14 +16,15 @@ import { resolve } from 'node:path';
 import { createElement } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { geoContains, geoOrthographic } from 'd3-geo';
+import { geoContains, geoDistance, geoOrthographic } from 'd3-geo';
 import { CHASE_GRAPH } from '@wt/data';
+import { DEFAULT_CHASE_CONSTANTS } from '@wt/shared';
 import type { Country, CountryId } from '@wt/shared';
 import type { TopologyLike } from '../geo-index';
 import type { GeoFeature } from '../feature-binding';
 import { GlobeMap, type GlobeMapHandle } from './GlobeMap';
 import { buildGlobeIndex, type GlobeIndex } from './globe-index';
-import { isFrontFacing } from './globe-hop';
+import { hopDurationMs, isFrontFacing, sampleArc, type LngLat } from './globe-hop';
 import {
   createGlobeChaseHandle,
   largestPolygonCentroid,
@@ -104,6 +105,48 @@ function mockCore() {
     pulseCheckpointRing: vi.fn(),
     setIdleSpin: vi.fn(),
   };
+}
+
+/**
+ * §11-D114-A 활공 구동용 rAF 스텁 — 콜백을 핸들 단위 큐에 담아 **원하는 타임스탬프로 수동 실행**한다
+ * (jsdom pretendToBeVisual rAF의 setInterval 기반 타이밍 불확정성을 배제한 결정적 구동). cancel도
+ * 핸들 단위로 정확히 동작해 미러 홉 rAF와 경찰 활공 rAF가 서로를 지우지 않는다.
+ */
+function stubRaf(): {
+  step: (t: number) => void;
+  runToEnd: () => void;
+  pending: () => number;
+} {
+  const queue = new Map<number, FrameRequestCallback>();
+  let nextId = 1;
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    const id = nextId++;
+    queue.set(id, cb);
+    return id;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+    queue.delete(id);
+  });
+  const step = (t: number): void => {
+    const due = Array.from(queue.values());
+    queue.clear();
+    for (const cb of due) cb(t);
+  };
+  return {
+    step,
+    runToEnd: () => {
+      for (let i = 0; i < 100 && queue.size > 0; i++) step(performance.now() + 1_000_000);
+    },
+    pending: () => queue.size,
+  };
+}
+
+/** 마커 transform의 translate 좌표(rotate가 붙어도 앞부분만 읽는다). */
+function markerXY(el: SVGGElement): { x: number; y: number } {
+  const t = el.getAttribute('transform') ?? '';
+  const m = /translate\(([-\d.]+) ([-\d.]+)\)/.exec(t);
+  if (!m) throw new Error(`translate 없는 transform: "${t}"`);
+  return { x: Number(m[1]), y: Number(m[2]) };
 }
 
 function setup(): {
@@ -278,11 +321,15 @@ describe('뒷면 클리핑 → 레이더 에지 화살표 전환(§7.5)', () => 
   });
 
   it('뒷면 → 정면으로 국가가 바뀌면(재 upsert) 화살표가 해제되고 마커가 표시된다', () => {
+    // §11-D114-A 이후 at 변경은 즉시 전환이 아니라 활공이므로, 착지까지 구동한 뒤 판정한다
+    // (전환 규약 자체는 불변 — 정면 도달 시 화살표 해제 + 마커 표시).
+    const raf = stubRaf();
     const { handle, container } = setup();
     const { front, back } = pickFrontAndBack();
     handle.upsertPoliceMarker({ id: 11, kind: 'chaser', at: back });
     expect(container.querySelector('[data-radar-key="police:11"]')).not.toBeNull();
     handle.upsertPoliceMarker({ id: 11, kind: 'chaser', at: front });
+    raf.runToEnd();
     expect(container.querySelector('[data-radar-key="police:11"]')).toBeNull();
     const marker = container.querySelector('[data-police-id="11"]') as SVGGElement;
     expect(marker.style.display).not.toBe('none');
@@ -819,5 +866,259 @@ describe('§11-D111 ③ 배송 목표 강조 — setCarriedCount가 홈 비컨/�
 
     handle.setCarriedCount(0);
     expect(arrow.classList.contains('is-emphasis')).toBe(false);
+  });
+});
+
+// ── WT-CH-DEV-3(§11-D114-A) 경찰 활공 연출 ────────────────────────────────────────────────────
+// 순간이동으로 보이던 경찰 이동을 플레이어 비행기 홉과 같은 대권 활공으로 잇는다. 심(shared/engine)은
+// 무접촉이며 아래 검증은 전부 표시 계층 계약(좌표·경로·상한·재타깃·강등·정적 복귀)만 본다.
+
+/** 기본 카메라(INITIAL_CENTER=[20,20])에서 **둘 다 정면**이고, 충분히 떨어져 있으며(각거리 ≥0.3rad),
+ *  동/서 성분이 있어 기울임(lean≠0)이 관찰되는 국가 3개를 결정적으로 고른다. */
+function pickFrontTrio(): { a: CountryId; b: CountryId; c: CountryId } {
+  const center: LngLat = [20, 20];
+  const fronts: CountryId[] = [];
+  for (const [id, anchor] of index.anchor) {
+    if (index.featureByCountry.has(id) && isFrontFacing(anchor, center)) fronts.push(id);
+  }
+  fronts.sort(); // 데이터 순서에 의존하지 않도록 결정적 정렬.
+  const far = (x: CountryId, y: CountryId): boolean =>
+    geoDistance(index.anchor.get(x)!, index.anchor.get(y)!) > 0.3 &&
+    Math.abs(index.anchor.get(x)![0] - index.anchor.get(y)![0]) > 20; // 동서 성분 확보
+  for (const a of fronts)
+    for (const b of fronts)
+      for (const c of fronts) {
+        if (a === b || b === c || a === c) continue;
+        if (far(a, b) && far(b, c)) return { a, b, c };
+      }
+  throw new Error('fixture lacks three well-separated front countries');
+}
+
+/** setup()의 미러 카메라와 동일한 투영(테스트가 독립 계산하는 기대 좌표계). */
+function expectedProjection(): (p: LngLat) => [number, number] {
+  const proj = geoOrthographic();
+  proj.fitSize([960, 500], { type: 'Sphere' } as never);
+  proj.rotate([-20, -20]);
+  return (p) => proj(p) as [number, number];
+}
+
+describe('§11-D114-A 경찰 활공 — at 변경은 순간이동이 아니라 대권 보간', () => {
+  it('스폰(첫 upsert)과 동일국 재갱신은 정적 — rAF를 전혀 돌리지 않는다', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 1, kind: 'chaser', at: a });
+    const el = container.querySelector('[data-police-id="1"]') as SVGGElement;
+    expect(markerXY(el)).toEqual(handle.projectAnchor(a));
+    expect(raf.pending()).toBe(0);
+
+    // policeUpdated는 이동하지 않은 유닛도 함께 싣는다 — 동일국 재갱신에 애니메이션이 붙으면 안 된다.
+    handle.upsertPoliceMarker({ id: 1, kind: 'chaser', at: a });
+    expect(raf.pending()).toBe(0);
+  });
+
+  it('at 변경 시 즉시 순간이동하지 않고(출발지 유지) 활공을 시작해 착지에서 목적지 앵커에 정확히 안착', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 2, kind: 'chaser', at: a });
+    const el = container.querySelector('[data-police-id="2"]') as SVGGElement;
+    const startXY = markerXY(el);
+
+    handle.upsertPoliceMarker({ id: 2, kind: 'chaser', at: b });
+    expect(markerXY(el)).toEqual(startXY); // 순간이동 금지 — 아직 출발지.
+    expect(raf.pending()).toBe(1); // 활공 루프 1개(전 유닛 공용, 유휴 루프 없음).
+
+    raf.runToEnd();
+    expect(markerXY(el)).toEqual(handle.projectAnchor(b));
+    expect(raf.pending()).toBe(0); // 착지 즉시 루프 종료(상시 rAF 신설 금지 계약).
+  });
+
+  it('중간 프레임 좌표가 great-circle 아크 위에 있고(직선 아님) 양 끝점 사이에 있다', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b } = pickFrontTrio();
+    const anchorA = index.anchor.get(a)!;
+    const anchorB = index.anchor.get(b)!;
+    handle.upsertPoliceMarker({ id: 3, kind: 'chaser', at: a });
+    const el = container.querySelector('[data-police-id="3"]') as SVGGElement;
+
+    const t0 = performance.now();
+    handle.upsertPoliceMarker({ id: 3, kind: 'chaser', at: b });
+    raf.step(t0 + hopDurationMs(anchorA, anchorB) * 0.5); // 홉 중앙 부근
+
+    const mid = markerXY(el);
+    const project = expectedProjection();
+    // 대권 아크 샘플(globe-hop.sampleArc — 코어와 동일 수학) 위 1px 이내.
+    let best = Infinity;
+    for (const p of sampleArc(anchorA, anchorB, 512)) {
+      const [x, y] = project(p);
+      best = Math.min(best, Math.hypot(x - mid.x, y - mid.y));
+    }
+    expect(best).toBeLessThan(1);
+
+    // 양 끝점 어느 쪽도 아니다(= 진짜 중간 지점을 지난다).
+    const [ax, ay] = project(anchorA);
+    const [bx, by] = project(anchorB);
+    expect(Math.hypot(mid.x - ax, mid.y - ay)).toBeGreaterThan(5);
+    expect(Math.hypot(mid.x - bx, mid.y - by)).toBeGreaterThan(5);
+
+    // 진행 방향 미세 기울임(±8°)이 홉 중에만 붙고 착지에서 사라진다.
+    expect(el.getAttribute('transform')).toMatch(/rotate\(/);
+    raf.runToEnd();
+    expect(el.getAttribute('transform')).not.toMatch(/rotate\(/);
+  });
+
+  it('활공 지속은 최단 경찰 이동 주기의 80% 미만이다(연출이 다음 틱과 겹치지 않음)', () => {
+    const p = DEFAULT_CHASE_CONSTANTS.police;
+    const minTickMs = Math.min(p.heliTickMs, p.interceptorTickMs, p.chaserMinTickMs);
+    // 거리 가중 duration의 구조적 상한(대척 거리)조차 80% 밴드 아래다.
+    expect(hopDurationMs([0, 0], [180, 0])).toBeLessThan(minTickMs * 0.8);
+
+    // 행동 검증: 80% 시점에는 어떤 쌍이든 이미 착지해 루프가 끊겨 있다.
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 4, kind: 'heli', at: a });
+    const el = container.querySelector('[data-police-id="4"]') as SVGGElement;
+    const t0 = performance.now();
+    handle.upsertPoliceMarker({ id: 4, kind: 'heli', at: b });
+    raf.step(t0 + minTickMs * 0.8);
+    expect(markerXY(el)).toEqual(handle.projectAnchor(b));
+    expect(raf.pending()).toBe(0);
+  });
+
+  it('홉 도중 새 이동이 오면 현재 위치에서 새 목표로 재시작한다(스냅 금지·큐 누적 금지)', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b, c } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 5, kind: 'chaser', at: a });
+    const el = container.querySelector('[data-police-id="5"]') as SVGGElement;
+
+    const t0 = performance.now();
+    handle.upsertPoliceMarker({ id: 5, kind: 'chaser', at: b });
+    raf.step(t0 + hopDurationMs(index.anchor.get(a)!, index.anchor.get(b)!) * 0.5);
+    const mid = markerXY(el);
+
+    // 재타깃 — 위치가 튀지 않고(스냅 금지) 루프도 1개 그대로(큐 누적 금지).
+    handle.upsertPoliceMarker({ id: 5, kind: 'chaser', at: c });
+    expect(markerXY(el)).toEqual(mid);
+    expect(raf.pending()).toBe(1);
+
+    raf.runToEnd();
+    expect(markerXY(el)).toEqual(handle.projectAnchor(c)); // 최종 목적지는 마지막 목표.
+  });
+
+  it('활공 종료 후에는 정적 재투영 경로로 복귀한다(카메라 회전 시 목적지 앵커를 따라간다)', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 6, kind: 'chaser', at: a });
+    handle.upsertPoliceMarker({ id: 6, kind: 'chaser', at: b });
+    raf.runToEnd();
+    const el = container.querySelector('[data-police-id="6"]') as SVGGElement;
+    const landed = markerXY(el);
+
+    // 카메라를 크게 돌린다(스냅 홉 — 미러 rAF 없이 즉시 재투영).
+    stubMatchMedia(true);
+    handle.moveVehicle(a, 'BR' as CountryId);
+    const after = markerXY(el);
+    expect(after).not.toEqual(landed);
+    expect(after).toEqual(handle.projectAnchor(b)); // 정적 경로(=소속국 앵커) 복귀 확인.
+  });
+
+  it('활공 결과 지구 뒷면에 놓이면 기존 규약대로 은닉 + 레이더 화살표로 대체된다', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { front, back } = pickFrontAndBack();
+    handle.upsertPoliceMarker({ id: 7, kind: 'chaser', at: front });
+    expect(container.querySelector('[data-radar-key="police:7"]')).toBeNull();
+
+    handle.upsertPoliceMarker({ id: 7, kind: 'chaser', at: back });
+    raf.runToEnd();
+    const el = container.querySelector('[data-police-id="7"]') as SVGGElement;
+    expect(el.style.display).toBe('none');
+    expect(container.querySelector('[data-radar-key="police:7"]')).not.toBeNull();
+  });
+
+  it('reduced-motion이면 활공 없이 즉시 스냅한다(기존 강등 표)', () => {
+    stubMatchMedia(true);
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 8, kind: 'chaser', at: a });
+    handle.upsertPoliceMarker({ id: 8, kind: 'chaser', at: b });
+    const el = container.querySelector('[data-police-id="8"]') as SVGGElement;
+    expect(markerXY(el)).toEqual(handle.projectAnchor(b));
+    expect(raf.pending()).toBe(0); // rAF 자체를 예약하지 않는다.
+  });
+
+  it('juice 강등(=1)으로 전환되면 진행 중인 활공을 즉시 스냅하고 루프를 끊는다', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 9, kind: 'chaser', at: a });
+    handle.upsertPoliceMarker({ id: 9, kind: 'chaser', at: b });
+    expect(raf.pending()).toBe(1);
+
+    handle.setJuiceLevel(1);
+    const el = container.querySelector('[data-police-id="9"]') as SVGGElement;
+    expect(markerXY(el)).toEqual(handle.projectAnchor(b));
+    expect(raf.pending()).toBe(0);
+  });
+
+  it('활공 중 유닛 제거·reset은 루프를 남기지 않는다(rAF 누수 금지)', () => {
+    const raf = stubRaf();
+    const { handle } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 10, kind: 'chaser', at: a });
+    handle.upsertPoliceMarker({ id: 10, kind: 'chaser', at: b });
+    expect(raf.pending()).toBe(1);
+    handle.removePoliceMarker(10);
+    expect(raf.pending()).toBe(0);
+
+    handle.upsertPoliceMarker({ id: 11, kind: 'heli', at: a });
+    handle.upsertPoliceMarker({ id: 11, kind: 'heli', at: b });
+    expect(raf.pending()).toBe(1);
+    handle.reset();
+    expect(raf.pending()).toBe(0);
+  });
+
+  it('카메라 회전(홉 미러)과 공존한다 — 두 루프가 서로를 취소하지 않고 착지 좌표가 새 카메라와 정합', () => {
+    const raf = stubRaf();
+    const { handle, container } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 13, kind: 'chaser', at: a });
+    handle.upsertPoliceMarker({ id: 13, kind: 'chaser', at: b });
+    expect(raf.pending()).toBe(1);
+
+    handle.moveVehicle(a, 'BR' as CountryId); // 애니메이션 홉 → 미러 카메라 rAF가 함께 돈다.
+    expect(raf.pending()).toBe(2);
+
+    raf.runToEnd();
+    expect(raf.pending()).toBe(0); // 둘 다 정상 종료(유휴 루프 잔존 없음).
+    const el = container.querySelector('[data-police-id="13"]') as SVGGElement;
+    expect(markerXY(el)).toEqual(handle.projectAnchor(b)); // 회전이 끝난 카메라 기준 좌표.
+  });
+
+  it('canvas 재그리기 0 계약 유지 — 활공은 core 메서드를 단 한 번도 부르지 않는다(D67)', () => {
+    const raf = stubRaf();
+    const { handle, core } = setup();
+    const { a, b } = pickFrontTrio();
+    handle.upsertPoliceMarker({ id: 12, kind: 'chaser', at: a });
+    handle.upsertPoliceMarker({ id: 12, kind: 'chaser', at: b });
+    raf.runToEnd();
+    for (const spy of [
+      core.setTarget,
+      core.markSolved,
+      core.markSkipped,
+      core.drawRouteSegment,
+      core.moveVehicle,
+      core.flyTo,
+      core.reset,
+      core.pulseCheckpointRing,
+    ]) {
+      expect(spy).not.toHaveBeenCalled();
+    }
   });
 });

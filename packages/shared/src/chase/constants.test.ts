@@ -27,16 +27,26 @@ describe('ChaseConstants 기본값(§3 전사)', () => {
       starDrop: 1,
       floor: 1,
     });
-    expect(c.police.chaserBaseTickMs).toBe(4200);
-    expect(c.police.chaserTickPerStarMs).toBe(300);
-    expect(c.police.chaserMinTickMs).toBe(3000);
-    expect(c.police.interceptorTickMs).toBe(4200);
-    expect(c.police.heliTickMs).toBe(1800);
+    // 경찰 이동 주기 4항목은 §11-D114-B로 §3.4 원안의 정확히 1.2배(+20% 감속). 거리 규칙 3항목
+    // (switchHops/ringHops/spawnHopsBack)은 감속과 무관해 불변.
+    expect(c.police.chaserBaseTickMs).toBe(5040);
+    expect(c.police.chaserTickPerStarMs).toBe(360);
+    expect(c.police.chaserMinTickMs).toBe(3600);
+    expect(c.police.interceptorTickMs).toBe(5040);
+    expect(c.police.heliTickMs).toBe(2160);
     expect(c.police.interceptorChaseSwitchHops).toBe(2);
     expect(c.police.heliRingHops).toBe(4);
     expect(c.police.chaserSpawnHopsBack).toBe(2);
-    // ★5 추격조 틱 = 4200 − 300×4 = 3000(minTick과 일치).
+    // ★5 추격조 틱 = 5040 − 360×4 = 3600(minTick과 일치) — 배율 일관성이 파생 관계를 보존한다.
     expect(c.police.chaserBaseTickMs - c.police.chaserTickPerStarMs * 4).toBe(c.police.chaserMinTickMs);
+    // +20% 감속의 정확성(원안 대비 1.2배) 잠금.
+    expect([
+      c.police.chaserBaseTickMs,
+      c.police.chaserTickPerStarMs,
+      c.police.chaserMinTickMs,
+      c.police.interceptorTickMs,
+      c.police.heliTickMs,
+    ]).toEqual([4200, 300, 3000, 4200, 1800].map((v) => v * 1.2));
     expect(c.gold.activeCount).toBe(4);
     expect([c.gold.ringNearProb, c.gold.ringMidProb, c.gold.ringFarProb]).toEqual([0.3, 0.45, 0.25]);
     expect(c.gold.ringNearProb + c.gold.ringMidProb + c.gold.ringFarProb).toBeCloseTo(1, 10);
@@ -52,8 +62,8 @@ describe('ChaseConstants 기본값(§3 전사)', () => {
     expect(Object.isFrozen(DEFAULT_CHASE_CONSTANTS)).toBe(true);
   });
 
-  it('버전 상수를 노출한다(§9.4)', () => {
-    expect(CHASE_CONSTANTS_VERSION).toBe(1);
+  it('버전 상수를 노출한다(§9.4) — 경찰 감속(§11-D114-B)으로 v2', () => {
+    expect(CHASE_CONSTANTS_VERSION).toBe(2);
   });
 });
 
@@ -80,7 +90,7 @@ describe('KV config:chase 오버라이드 zod .strict() 검증', () => {
     expect(merged.escapeReduction.enabled).toBe(false);
     expect(merged.escapeReduction.windowMs).toBe(20_000); // 보존
     expect(merged.police.heliTickMs).toBe(1500);
-    expect(merged.police.chaserBaseTickMs).toBe(4200); // 보존
+    expect(merged.police.chaserBaseTickMs).toBe(5040); // 보존(§11-D114-B 기본값)
     expect(merged.gold.valueFar).toBe(2000);
     expect(merged.gold.valueNear).toBe(400); // 보존
     expect(merged.score.haulStep).toBe(0.5);

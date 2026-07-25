@@ -25,19 +25,24 @@
       "hopIndex": 3,
       "countryId": "KR",
       "tMs": 6000
+    },
+    {
+      "hopIndex": 4,
+      "countryId": "JP",
+      "tMs": 7500
     }
   ],
-  "endMs": 7000,
+  "endMs": 8500,
   "expected": {
     "home": "KR",
-    "player": "PW",
+    "player": "KR",
     "stars": 1,
     "police": [
       {
         "id": 1,
         "kind": "chaser",
-        "at": "PW",
-        "nextTickMs": 9900,
+        "at": "KR",
+        "nextTickMs": 11580,
         "spawnedAtMs": 1500
       }
     ],
@@ -63,12 +68,7 @@
         "value": 700
       }
     ],
-    "carried": [
-      {
-        "value": 400,
-        "ring": "near"
-      }
-    ],
+    "carried": [],
     "events": [
       {
         "type": "goldSpawned",
@@ -189,41 +189,59 @@
         ]
       },
       {
+        "type": "delivered",
+        "tMs": 6000,
+        "count": 1,
+        "payout": 400,
+        "starsAfter": 1
+      },
+      {
+        "type": "candidatesShown",
+        "tMs": 6000,
+        "hopIndex": 4,
+        "candidates": [
+          "JP",
+          "LA",
+          "MN"
+        ]
+      },
+      {
         "type": "policeMoved",
-        "tMs": 5700,
+        "tMs": 6540,
         "id": 1,
         "from": "KP",
-        "to": "PW"
+        "to": "KR"
       },
       {
         "type": "arrested",
-        "tMs": 5700,
+        "tMs": 6540,
         "by": "chaser",
-        "at": "PW"
+        "at": "KR"
       }
     ],
-    "arrestedAtMs": 5700,
-    "timeMs": 5700,
-    "hopsProcessed": 3,
+    "arrestedAtMs": 6540,
+    "timeMs": 6540,
+    "hopsProcessed": 4,
     "visited": [
       "KR",
       "MN",
       "KR",
-      "PW"
+      "PW",
+      "KR"
     ],
     "candidates": [
       "JP",
-      "KH",
-      "KR"
+      "LA",
+      "MN"
     ],
     "wantedStartMs": 1500,
     "nextStarUpMs": 46500,
-    "lastPoliceCloseMs": 5700,
+    "lastPoliceCloseMs": 6540,
     "lastEscapeMs": -1,
     "nextPoliceId": 2,
     "rngCandidates": {
       "seed": 1193047,
-      "draws": 12
+      "draws": 15
     },
     "rngGold": {
       "seed": 1193044,

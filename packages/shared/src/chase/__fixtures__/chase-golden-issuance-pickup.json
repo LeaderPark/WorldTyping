@@ -38,14 +38,14 @@
   "endMs": 11000,
   "expected": {
     "home": "VN",
-    "player": "SG",
+    "player": "ID",
     "stars": 1,
     "police": [
       {
         "id": 1,
         "kind": "chaser",
-        "at": "SG",
-        "nextTickMs": 12900,
+        "at": "ID",
+        "nextTickMs": 14580,
         "spawnedAtMs": 4500
       }
     ],
@@ -177,43 +177,54 @@
         ]
       },
       {
+        "type": "candidatesShown",
+        "tMs": 9000,
+        "hopIndex": 6,
+        "candidates": [
+          "AU",
+          "KH",
+          "BN"
+        ]
+      },
+      {
         "type": "policeMoved",
-        "tMs": 8700,
+        "tMs": 9540,
         "id": 1,
         "from": "MY",
-        "to": "SG"
+        "to": "ID"
       },
       {
         "type": "arrested",
-        "tMs": 8700,
+        "tMs": 9540,
         "by": "chaser",
-        "at": "SG"
+        "at": "ID"
       }
     ],
-    "arrestedAtMs": 8700,
-    "timeMs": 8700,
-    "hopsProcessed": 5,
+    "arrestedAtMs": 9540,
+    "timeMs": 9540,
+    "hopsProcessed": 6,
     "visited": [
       "VN",
       "MY",
       "TH",
       "CN",
       "VN",
-      "SG"
+      "SG",
+      "ID"
     ],
     "candidates": [
-      "ID",
-      "LK",
-      "TL"
+      "AU",
+      "KH",
+      "BN"
     ],
     "wantedStartMs": 4500,
     "nextStarUpMs": 49500,
-    "lastPoliceCloseMs": 8700,
+    "lastPoliceCloseMs": 9540,
     "lastEscapeMs": -1,
     "nextPoliceId": 2,
     "rngCandidates": {
       "seed": 10855844,
-      "draws": 18
+      "draws": 21
     },
     "rngGold": {
       "seed": 10855847,

@@ -216,6 +216,44 @@ describe('경찰/금 마커 — upsert·remove(§7.5)', () => {
   });
 });
 
+describe('지구본 정돈(§11-D115-C) — 금 광선 기둥·경찰 위협 글로우', () => {
+  it('금 마커는 광선 기둥(rect)+도트(circle) 그룹이고 그룹 transform으로 배치된다', () => {
+    const { handle, container } = setup();
+    const { front } = pickFrontAndBack();
+    handle.setGoldMarkers([{ at: front, ring: 'mid' }]);
+
+    const g = container.querySelector('.wt-chase__gold')!;
+    expect(g.tagName.toLowerCase()).toBe('g');
+    const beam = g.querySelector('.wt-chase__gold-beam')!;
+    expect(beam).not.toBeNull();
+    // 기둥은 마커에서 **위로** 뻗는다(로컬 y가 음수 시작).
+    expect(Number(beam.getAttribute('y'))).toBeLessThan(0);
+    expect(beam.getAttribute('fill')).toContain('url(#wt-chase-gold-beam');
+    expect(g.querySelector('.wt-chase__gold-dot')).not.toBeNull();
+    expect(g.getAttribute('transform')).toMatch(/^translate\(/);
+    // 그라디언트 정의는 오버레이 SVG의 defs에 1회만 존재한다.
+    expect(container.querySelectorAll('#wt-chase-gold-beam')).toHaveLength(1);
+  });
+
+  it('경찰 마커에 위협 글로우 원이 있고, setThreatLevel(nearestHops)이 강도 3단을 세팅한다', () => {
+    const { handle, container } = setup();
+    const { front } = pickFrontAndBack();
+    handle.upsertPoliceMarker({ id: 7, kind: 'chaser', at: front });
+    expect(container.querySelector('[data-police-id="7"] .wt-chase__police-threat')).not.toBeNull();
+
+    const layer = container.querySelector('[data-layer="chase-police"]')!;
+    handle.setThreatLevel(3, 5);
+    expect(layer.getAttribute('data-threat')).toBe('low');
+    handle.setThreatLevel(3, 2);
+    expect(layer.getAttribute('data-threat')).toBe('mid');
+    handle.setThreatLevel(3, 1);
+    expect(layer.getAttribute('data-threat')).toBe('high');
+
+    handle.reset();
+    expect(layer.getAttribute('data-threat')).toBeNull();
+  });
+});
+
 describe('projectAnchor — 고정 projection(INITIAL_CENTER) 대비 정확성(§8.5 소비 계약)', () => {
   it('앵커 좌표가 독립 계산한 geoOrthographic 투영과 일치한다', () => {
     const { handle } = setup();

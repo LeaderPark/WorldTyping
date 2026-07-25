@@ -36,6 +36,7 @@ import { useChaseEngine } from './use-chase-engine';
 import { useChaseSubmission, type ChaseSubmissionState } from './use-chase-submission';
 import { useChaseJuice } from './use-chase-juice';
 import { CandidateCallouts } from './CandidateCallouts';
+import { ChaseRadar } from './ChaseRadar';
 import { FocusStrip } from './FocusStrip';
 import { WantedHud } from './WantedHud';
 import { BriefingCard } from './BriefingCard';
@@ -454,7 +455,25 @@ function ChasePlaySession({ seed, runToken, graph, countries, lang, platform, re
 
       {(phase === 'countdown' || phase === 'playing') && chaseHandle && (
         <>
-          <CandidateCallouts engine={engine} controller={controller} globe={chaseHandle} countries={countries} lang={lang} />
+          {/* §11-D115-B 수배 레이더 — 콜아웃/HUD와 동일한 phase 게이팅(카운트다운부터 상주해야
+              beginPlaying 직후의 초기 goldSpawned×4·candidatesShown을 놓치지 않는다).
+              **콜아웃보다 먼저** 렌더한다: 둘 다 z-index auto라 DOM 순서가 곧 층이고, 09a §5.2의
+              "겹치면 판단 정보(칩)가 위" 원칙을 z-index 경쟁 없이 그대로 지킨다. */}
+          <ChaseRadar
+            engine={engine}
+            graph={compiledGraph}
+            countries={countries}
+            homeId={homeId}
+            reduced={reducedActive}
+          />
+          <CandidateCallouts
+            engine={engine}
+            controller={controller}
+            globe={chaseHandle}
+            countries={countries}
+            graph={compiledGraph}
+            lang={lang}
+          />
           <WantedHud engine={engine} />
         </>
       )}

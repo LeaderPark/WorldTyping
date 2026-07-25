@@ -161,6 +161,14 @@ const POLICE_TILT_MAX_DEG = 8;
 const RADAR_SWEEP_MS = 600;
 /** 스윕 부채꼴이 덮는 각도(도) — 좁으면 레이더 바늘, 넓으면 화면을 가린다. */
 const RADAR_SWEEP_DEG = 42;
+/** 금 광선 기둥 높이(§11-D115-C) — 마커에서 위로 뻗는 세로 빔. 지구본 곡면 위 소형 도트가
+ *  "여기 금이 있다"로 읽히도록 수직 실루엣을 세운다(칩 인텔 행과 이중 부호화). */
+const GOLD_BEAM_H = 26;
+/** 금 광선 그라디언트 id(오버레이 SVG 로컬 defs — 문서 전역 충돌을 피해 접두사 고정). */
+const GOLD_BEAM_GRADIENT_ID = 'wt-chase-gold-beam';
+/** 경찰 위협 반경 글로우 반경(§11-D115-C). 배지(r8.5)를 감싸는 후광 — 실제 사거리가 아니라
+ *  "여기 있으면 위험"의 시각 반경이며 강도는 setThreatLevel의 nearestHops로 3단 조절된다. */
+const POLICE_THREAT_R = 20;
 
 /** 노드 도트 강조 상태(D108-B). 우선순위: current > home > candidate > idle. */
 type NodeState = 'idle' | 'candidate' | 'home' | 'current';
@@ -370,7 +378,8 @@ interface PoliceMarkerEntry {
   tiltDeg: number;
 }
 interface GoldMarkerEntry {
-  el: SVGCircleElement;
+  /** §11-D115-C에서 단일 <circle>에서 "광선 기둥 + 도트" 그룹으로 승격(위치는 transform으로 이동). */
+  el: SVGGElement;
   view: GoldView;
 }
 
@@ -406,6 +415,26 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('data-juice', '0');
 
+  // 금 광선 기둥용 그라디언트(§11-D115-C) — 아래(마커)에서 위로 사라지는 세로 페이드. 색은
+  // currentColor(=CSS --chase-gold)를 상속받아 테마 토큰 규약을 지킨다.
+  const defs = document.createElementNS(SVG_NS, 'defs');
+  const beamGrad = document.createElementNS(SVG_NS, 'linearGradient');
+  beamGrad.setAttribute('id', GOLD_BEAM_GRADIENT_ID);
+  beamGrad.setAttribute('x1', '0');
+  beamGrad.setAttribute('y1', '1');
+  beamGrad.setAttribute('x2', '0');
+  beamGrad.setAttribute('y2', '0');
+  const stopA = document.createElementNS(SVG_NS, 'stop');
+  stopA.setAttribute('offset', '0%');
+  stopA.setAttribute('stop-color', 'currentColor');
+  stopA.setAttribute('stop-opacity', '0.75');
+  const stopB = document.createElementNS(SVG_NS, 'stop');
+  stopB.setAttribute('offset', '100%');
+  stopB.setAttribute('stop-color', 'currentColor');
+  stopB.setAttribute('stop-opacity', '0');
+  beamGrad.append(stopA, stopB);
+  defs.appendChild(beamGrad);
+
   const gPrehighlight = document.createElementNS(SVG_NS, 'g');
   gPrehighlight.setAttribute('data-layer', 'chase-prehighlight');
   const gLinks = document.createElementNS(SVG_NS, 'g');
@@ -433,7 +462,7 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
   // < 후보 대권 연결선 < 전 국가 노드 도트 < 추적선 < 레이더 화살표 < 홈 < 금 < 경찰(위협 정보 >
   // 후보 정보, §8.5) < 후보 앵커 배지 < 팝 이펙트/가방 배지. 신규 2종은 "지도 가구"라 기존 마커류
   // 아래에 깔린다(09a §4 "지구본 canvas < 추적선/마커 < 리더 라인 < 콜아웃 칩" 위계 유지).
-  svg.append(gPrehighlight, gLinks, gNodes, gTrails, gRadar, gHome, gGold, gPolice, gCandidates, gPop);
+  svg.append(defs, gPrehighlight, gLinks, gNodes, gTrails, gRadar, gHome, gGold, gPolice, gCandidates, gPop);
 
   const vignette = document.createElement('div');
   vignette.setAttribute('class', 'wt-chase__vignette');
@@ -697,8 +726,8 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
       if (!r) continue;
       if (r.front) {
         entry.el.style.display = '';
-        entry.el.setAttribute('cx', String(round(r.p[0])));
-        entry.el.setAttribute('cy', String(round(r.p[1])));
+        // 그룹 전체를 translate — 광선 기둥(로컬 y 0→−GOLD_BEAM_H)이 도트와 항상 붙어 다닌다.
+        entry.el.setAttribute('transform', `translate(${round(r.p[0])} ${round(r.p[1])})`);
         removeRadarArrow(`gold:${countryId}`);
       } else {
         entry.el.style.display = 'none';
@@ -939,6 +968,7 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     gNodes.replaceChildren();
     gTrails.replaceChildren();
     gPop.replaceChildren();
+    gPolice.removeAttribute('data-threat'); // §11-D115-C 글로우 강도 초기화
     carriedBadge = null;
     carriedCount = 0;
     vignette.style.setProperty('--chase-vignette-alpha', '0');
@@ -982,6 +1012,13 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     const g = document.createElementNS(SVG_NS, 'g');
     g.setAttribute('class', `wt-chase__police wt-chase__police--${kind}`);
     g.setAttribute('data-police-kind', kind);
+
+    // §11-D115-C 위협 반경 글로우 — 가장 뒤(먼저 삽입)에 깔리는 후광. 강도는 gPolice의
+    // data-threat(setThreatLevel 파생)로 CSS가 3단 조절한다(요소는 항상 존재, 비용 0).
+    const threat = document.createElementNS(SVG_NS, 'circle');
+    threat.setAttribute('class', 'wt-chase__police-threat');
+    threat.setAttribute('r', String(POLICE_THREAT_R));
+    g.appendChild(threat);
 
     if (kind === 'heli') {
       // 서치라이트 콘은 배지 뒤(먼저 삽입)에서 아래로 뻗는다.
@@ -1066,10 +1103,22 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     for (const g of golds) {
       const entry = goldMarkers.get(g.at);
       if (!entry) {
-        const el = document.createElementNS(SVG_NS, 'circle');
+        // §11-D115-C: 광선 기둥(아래→위 페이드) + 도트. 클래스·data-gold-ring은 종전대로 최상위
+        // 노드에 유지해 기존 셀렉터(.wt-chase__gold[data-gold-ring])가 그대로 성립한다.
+        const el = document.createElementNS(SVG_NS, 'g');
         el.setAttribute('class', 'wt-chase__gold');
-        el.setAttribute('r', '5');
         el.setAttribute('data-gold-ring', g.ring);
+        const beam = document.createElementNS(SVG_NS, 'rect');
+        beam.setAttribute('class', 'wt-chase__gold-beam');
+        beam.setAttribute('x', '-1.6');
+        beam.setAttribute('y', String(-GOLD_BEAM_H));
+        beam.setAttribute('width', '3.2');
+        beam.setAttribute('height', String(GOLD_BEAM_H));
+        beam.setAttribute('fill', `url(#${GOLD_BEAM_GRADIENT_ID})`);
+        const dot = document.createElementNS(SVG_NS, 'circle');
+        dot.setAttribute('class', 'wt-chase__gold-dot');
+        dot.setAttribute('r', '5');
+        el.append(beam, dot);
         gGold.appendChild(el);
         goldMarkers.set(g.at, { el, view: g });
       } else {
@@ -1164,6 +1213,9 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
   function setThreatLevel(stars: number, nearestHops: number): void {
     const alpha = clamp01(Math.min(0.28, 0.04 * stars + (nearestHops <= 2 ? 0.08 : 0)));
     vignette.style.setProperty('--chase-vignette-alpha', String(round(alpha)));
+    // §11-D115-C 위협 반경 글로우 강도 — 이미 계산 중인 nearestHops를 재사용한다(신규 데이터 0).
+    // 비네트가 "화면 전체의 압박"이라면 이 글로우는 "그 위협의 위치"를 지도 위에 국소화한다.
+    gPolice.setAttribute('data-threat', nearestHops <= 1 ? 'high' : nearestHops <= 2 ? 'mid' : 'low');
     for (const cb of threatCbs) cb(stars, nearestHops);
   }
 

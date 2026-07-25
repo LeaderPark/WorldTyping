@@ -1266,11 +1266,28 @@
    (절취선·코너 노치·바코드)를 시각 참조한다 — 클래스는 전부 독립 정의(그 파일들의 CSS와 결합
    없음). ResultCard.tsx/ResultView.tsx의 data-testid·i18n 키·verdict 분기·제출 배선은 무수정,
    여기는 시각만 담당한다. */
+/* [WT-TWEAK-RESULT-SCRIM] 결과 화면 전체(제목·카드·제출 상태·액션 버튼)가 GlobeMap(움직이는
+   배경, .wt-game-page__map — finished phase에도 idle spin 유지)의 z0 위에 배경 없이 떠 "투명하고
+   이상하게" 보이던 문제 수정. 시인성 패널로 승격해 .wt-result-card(92% surface 반쪽 티켓)가 그
+   패널 위에 놓인 인상을 준다(카드 쪽은 무접촉 — 중첩이 자연스럽다). 라이트/다크 모두 --surface·
+   --border 시맨틱 토큰이라 자동 대응하고(다크 실측 결과 과어둡지 않아 다크 전용 오버라이드 불요),
+   backdrop-filter 미지원 구형 브라우저는 color-mix 90% 불투명 배경만으로도 전경 대비 판독에
+   충분해 별도 폴백 규칙을 두지 않는다. width는 의도적으로 auto(shrink-to-fit) — 카드(max-width
+   26rem)를 감싸는 만큼만 커지고, max-width는 안전 상한(약 30rem 내외)일 뿐이다. */
 .wt-result-view {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1.25rem;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: 1.75rem 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: var(--shadow-card);
 }
 .wt-result-view__title {
   text-align: center;

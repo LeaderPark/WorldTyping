@@ -389,6 +389,67 @@ export function submitRun(body: RunSubmitReq): Promise<RunSubmitRes> {
   return apiClient.post<RunSubmitRes>('/runs/submit', body);
 }
 
+// ───────────────────────── chase(골드 러너, docs/09 §9.1·§9.2, WT-CH-08) ─────────────────────────
+// 기존 5모드 runs/start·submit(RunStartReq/RunSubmitReq)과 바디 모양이 완전히 달라(세트 없음,
+// moveLog/runLog/clientResult) 별도 타입·함수로 둔다 — net/run-session.ts의 useRunStart/useRunSubmit은
+// mode==='chase'를 이미 조기 return으로 제외하므로(그 파일 무수정) 이 함수들은 features/chase 쪽
+// 전용 훅에서만 호출된다. 응답 바디(RunSubmitRes)는 서버 submitRes() 헬퍼가 5모드와 동일하게
+// 조립하므로(workers/api/src/routes/runs.ts) 타입을 그대로 재사용한다.
+
+export interface ChaseStartReq {
+  lang: 'ko' | 'en';
+  platform: 'desktop' | 'mobile';
+}
+
+export interface ChaseStartRes {
+  runToken: string;
+  seed: number;
+  constantsVersion: number;
+}
+
+export function startChase(body: ChaseStartReq): Promise<ChaseStartRes> {
+  return apiClient.post<ChaseStartRes>('/chase/start', body);
+}
+
+export interface ChaseMoveLogEntrySubmit {
+  hopIndex: number;
+  countryId: string;
+  tMs: number;
+}
+
+export interface ChaseHopStatSubmit {
+  hopIndex: number;
+  keystrokes: number;
+  errors: number;
+}
+
+export interface ChaseClientResultSubmit {
+  score: number;
+  pi: number;
+  stats: {
+    totalKeystrokes: number;
+    correctKeystrokes: number;
+    elapsedMs: number;
+    maxCombo: number;
+  };
+  outcome: 'arrested' | 'resigned';
+  endedAtMs: number;
+  arrestedAtMs?: number;
+}
+
+export interface ChaseSubmitReq {
+  runToken: string;
+  moveLog: ChaseMoveLogEntrySubmit[];
+  runLog: ChaseHopStatSubmit[];
+  clientResult: ChaseClientResultSubmit;
+  /** [WT-AUTH-04] 게스트→계정 브리지(§11-D68-④) — RunSubmitReq.guestToken과 동일 계약. */
+  guestToken?: string;
+}
+
+export function submitChaseRun(body: ChaseSubmitReq): Promise<RunSubmitRes> {
+  return apiClient.post<RunSubmitRes>('/runs/submit', body);
+}
+
 // ───────────────────────── daily(docs/06 §2) ─────────────────────────
 
 export interface DailyTodayRes {

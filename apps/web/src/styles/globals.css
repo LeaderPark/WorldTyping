@@ -4273,3 +4273,56 @@ a.wt-brand:focus-visible {
     animation: none;
   }
 }
+
+/* ── 골드 러너(chase) 브리핑·모드 카드 (docs/09 §7.1·§8.2, docs/00 §11-D90, WT-CH-08) ──
+   BriefingCard.tsx는 기존 .wt-boarding__card 프레임(노치·억센트 바)을 재사용하고 새 accent
+   수식자 1개만 더한다(§7.1 "크라프트지 텍스처의 WANTED 전단" — 배경만 --chase-paper로 교체,
+   나머지 프레임은 5모드와 동일). 노치(::before/::after)는 티켓이 아니라 전단이라 숨긴다
+   (.wt-boarding__card--blocked와 동일 기법). */
+.wt-boarding__card--chase {
+  --wt-boarding-accent: var(--chase-siren-red);
+  background: color-mix(in srgb, var(--chase-paper) 85%, var(--surface));
+}
+.wt-boarding__card--chase::before,
+.wt-boarding__card--chase::after {
+  display: none;
+}
+.wt-chase-briefing__rules {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+.wt-chase-briefing__cta {
+  color: var(--chase-siren-red-text);
+  letter-spacing: 0.05em;
+}
+
+/* ModeSelectPage 4번째 카드(§8.2) — 카드 규격·그리드는 .wt-mode-card/.wt-mode-select__card 그대로
+   (무수정), 좌측 억센트 바 + 뱃지 행만 chase 전용으로 얹는다. */
+.wt-mode-card--chase {
+  position: relative;
+  border-left: 3px solid var(--chase-siren-red);
+}
+.wt-mode-card__badge-row {
+  margin: 0.15rem 0 0;
+  display: flex;
+  gap: 0.375rem;
+}
+.wt-mode-card__badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.wt-mode-card__badge--new {
+  background: color-mix(in srgb, var(--chase-siren-red) 16%, transparent);
+  color: var(--chase-siren-red-text);
+}

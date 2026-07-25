@@ -401,11 +401,14 @@
 
   "chase.mode.title": "골드 러너",
   "chase.mode.tagline": "잡히기 전까지, 전부 훔쳐라",
+  "chase.mode.typeBadge": "무한 생존",
+  "chase.mode.newBadge": "NEW",
   "chase.briefing.title": "지명수배",
   "chase.briefing.mission": "{home}의 금고를 털었다. 배송지: {home}. 잡히지 마라.",
   "chase.briefing.ruleMove": "타이핑 = 이동",
   "chase.briefing.rulePolice": "별 = 경찰 수배",
   "chase.briefing.ruleGold": "금은 홈으로",
+  "chase.briefing.cta": "START",
   "chase.hud.wanted": "수배 ★{stars} — 경찰 {count}기 추적 중",
   "chase.hud.goldBag": "금 가방 ×{count}",
   "chase.hud.survival": "생존 {time}",
@@ -431,5 +434,10 @@
   "chase.result.delivered": "배송 {count}회 · {payout}",
   "chase.share.caption": "{count}개국을 도주하고 {home}에 금 {n}개를 배송했다. 현상금 {score}.",
 
-  "chase.strip.focusLost": "클릭하여 복귀"
+  "chase.strip.focusLost": "클릭하여 복귀",
+
+  "chase.resign.title": "자수하시겠습니까?",
+  "chase.resign.body": "지금 자수하면 판이 즉시 종료됩니다(자수 중에도 심은 계속 진행됩니다 — 경찰이 먼저 잡을 수 있어요).",
+  "chase.resign.stay": "계속 도주",
+  "chase.resign.confirm": "자수한다"
 }

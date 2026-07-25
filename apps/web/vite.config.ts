@@ -118,6 +118,12 @@ export default defineConfig({
           // 청크를 분리한다 — 여기서는 그 청크들에 결정적 이름만 부여해 size-limit의 "lazy 청크
           // 제외" 글롭(tooling/ci/size-limit.json)이 안정적으로 매치되게 한다.
           if (id.includes("/src/pages/GamePage/")) return "game";
+          // WT-CH-08(docs/09 §11 번들 원칙, §11-D90): chase 코드(features/chase/*)는 GamePage가
+          // React.lazy로 동적 import하는 별도 서브트리라 이 규칙이 없어도 Rollup이 자연히 청크를
+          // 분리하지만, 이름을 고정해야 size-limit.json의 "chase-*.js" 제외 글롭이 안정적으로
+          // 매치된다(entry 청크에 "game" 청크의 4모드 코드와 섞이지 않게 분리 유지가 핵심 —
+          // /play/chase 미방문 사용자는 이 청크를 전혀 내려받지 않는다).
+          if (id.includes("/src/features/chase/")) return "chase";
           if (id.includes("/src/pages/multi/")) return "multi";
           if (id.includes("/src/pages/RankPage/")) return "rank";
           if (id.includes("/src/pages/PassportPage")) return "passport";

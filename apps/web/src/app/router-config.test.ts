@@ -26,6 +26,7 @@ describe('router.tsx wiring (§4.1 원문 대조)', () => {
     expect(pathsOf(routeChildren)).toEqual([
       '(index)',
       'play',
+      'play/chase',
       'play/:mode',
       'play/:mode/:trackId',
       'rank',

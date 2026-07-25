@@ -24,6 +24,11 @@ import { NotFoundPage } from '../pages/NotFoundPage';
 export const routeChildren: RouteObject[] = [
   { index: true, element: <HomePage /> }, // S1(+S2 오버레이)
   { path: 'play', element: <ModeSelectPage /> }, // S3
+  // WT-CH-08(docs/09 §8.1, §11-D90): chase는 TrackSelect 없이 직행(시드가 홈을 정한다) — trackId
+  // 세그먼트가 없는 이 정적 경로가 아래 동적 'play/:mode'보다 항상 우선 매칭된다(react-router
+  // 정적>동적 우선순위, 상단 주석·NotFoundPage catch-all과 동일 원리 — 배열 순서 무관). GamePage
+  // 모듈이 pathname으로 chase를 감지해 features/chase/ChaseGameRoot로 위임한다(별도 lazy 청크).
+  { path: 'play/chase', lazy: () => import('../pages/GamePage') },
   { path: 'play/:mode', element: <TrackSelectPage /> }, // S4
   { path: 'play/:mode/:trackId', lazy: () => import('../pages/GamePage') }, // S5→S6→S7
   { path: 'rank', lazy: () => import('../pages/RankPage') }, // S8

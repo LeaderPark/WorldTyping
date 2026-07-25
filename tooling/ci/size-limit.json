@@ -4,6 +4,7 @@
     "path": [
       "../../apps/web/dist/assets/*.js",
       "!../../apps/web/dist/assets/game-*.js",
+      "!../../apps/web/dist/assets/chase-*.js",
       "!../../apps/web/dist/assets/multi-*.js",
       "!../../apps/web/dist/assets/rank-*.js",
       "!../../apps/web/dist/assets/passport-*.js",

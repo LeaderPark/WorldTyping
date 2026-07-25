@@ -394,11 +394,14 @@
 
   "chase.mode.title": "Gold Runner",
   "chase.mode.tagline": "Steal it all before they catch you",
+  "chase.mode.typeBadge": "Infinite survival",
+  "chase.mode.newBadge": "NEW",
   "chase.briefing.title": "Wanted",
   "chase.briefing.mission": "You robbed {home}'s vault. Delivery point: {home}. Don't get caught.",
   "chase.briefing.ruleMove": "Typing = Moving",
   "chase.briefing.rulePolice": "Stars = Police heat",
   "chase.briefing.ruleGold": "Gold goes home",
+  "chase.briefing.cta": "START",
   "chase.hud.wanted": "Wanted ★{stars} — {count} units in pursuit",
   "chase.hud.goldBag": "Gold bag ×{count}",
   "chase.hud.survival": "Survived {time}",
@@ -424,5 +427,10 @@
   "chase.result.delivered": "Delivered {count}x · {payout}",
   "chase.share.caption": "Fled through {count} countries and delivered {n} gold to {home}. Bounty {score}.",
 
-  "chase.strip.focusLost": "Tap to resume"
+  "chase.strip.focusLost": "Tap to resume",
+
+  "chase.resign.title": "Turn yourself in?",
+  "chase.resign.body": "Ending now finishes the run immediately (the sim keeps running while this dialog is open — the police may catch you first).",
+  "chase.resign.stay": "Keep running",
+  "chase.resign.confirm": "Turn myself in"
 }

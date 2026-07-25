@@ -15,8 +15,8 @@
 // 탭 시점에 이미 DOM에 존재해야 한다(GameView 마운트를 기다리면 늦다). WorldMap 자체의
 // "마운트 후 리렌더 0" 계약(§3.6)은 그대로 지킨다 — GamePage가 이 컴포넌트를 리렌더해도
 // index/onReady props가 동일 참조로 유지되는 한 WorldMap 내부는 재조정되지 않는다.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useBlocker, useParams } from 'react-router-dom';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useBlocker, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { Country, GameMode } from '@wt/shared';
 import type { RunResult as EngineRunResult, SessionPhase } from '@wt/engine';
@@ -67,7 +67,21 @@ const COUNTDOWN_FALLBACK_MS = 3000;
 /** sound-manager 비프 케이던스와 동일한 절대 시각(ms). 표시 숫자는 이 시점에 재생되는 비프에 동기. */
 const COUNTDOWN_BEEP_TIMES = [0, 1000, 2000] as const;
 
-export function GamePage() {
+// WT-CH-08(docs/09 §8.1, §11-D90): chase는 GameSessionEngine(고정 국가 배열 전제)과 완전히 다른
+// 세션 모델(무한 생존)이라 이 화면의 나머지 90%(useGameSession/useTypingEngine/GameView/ResultView)와
+// 공유할 것이 없다 — features/chase/ChaseGameRoot.tsx가 자체 페이지 루트를 소유한다. React.lazy로
+// 감싸 별도 번들 청크로 분리한다(vite.config.ts manualChunks의 "chase" 규칙 — entry/기존 5모드
+// "game" 청크에 chase 코드가 섞이지 않는다, size-limit.json chase-*.js 제외 글롭 참조).
+const ChaseGameRoot = lazy(() =>
+  import('../../features/chase/ChaseGameRoot').then((m) => ({ default: m.ChaseGameRoot })),
+);
+
+/**
+ * 기존 5모드(대륙/티어/세계일주/데일리) 세션 화면 — 이름만 내부용으로 바뀌었을 뿐 로직은 전혀
+ * 수정되지 않았다(§8 "다른 모드 화면에 픽셀 영향 0"). 아래 GamePage가 라우트(pathname)로 이
+ * 컴포넌트와 ChaseGameRoot 중 하나를 고른다.
+ */
+function LegacyGamePage() {
   const { t } = useTranslation();
   const params = useParams<{ mode: string; trackId: string }>();
   const lang = useSettingsStore((s) => s.lang);
@@ -461,6 +475,25 @@ export function GamePage() {
       )}
     </div>
   );
+}
+
+/**
+ * 실제 라우트 진입점(router.tsx `play/:mode/:trackId` + `play/chase` 둘 다 이 모듈을 가리킨다).
+ * `/play/chase`는 시드가 홈을 정하므로 trackId 세그먼트가 없다(§8.1 "TrackSelect 없이 직행") —
+ * useParams()로는 구분할 수 없어 pathname으로 분기한다. 두 분기는 서로 다른 컴포넌트 타입을
+ * 반환하므로(LegacyGamePage vs ChaseGameRoot) React가 항상 완전히 언마운트/마운트하며 훅 순서
+ * 문제가 없다(이 GamePage 함수 자체는 훅을 전혀 호출하지 않는다 — useLocation 하나뿐).
+ */
+export function GamePage() {
+  const location = useLocation();
+  if (location.pathname === '/play/chase') {
+    return (
+      <Suspense fallback={<div className="wt-game-page" data-testid="chase-loading" />}>
+        <ChaseGameRoot />
+      </Suspense>
+    );
+  }
+  return <LegacyGamePage />;
 }
 
 export { GamePage as Component };

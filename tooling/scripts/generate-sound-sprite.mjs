@@ -5,32 +5,41 @@
 // 라이선스 주석: 자체 생성"). 포맷은 WAV(16-bit PCM mono) — Web Audio decodeAudioData가
 // 별도 코덱 없이 디코드 가능하다(§8.2 "포맷은 decodeAudioData 가능한 것으로").
 //
-// spec: docs/01 §13.1(오디오 표), docs/03 §8.2(사운드 스프라이트 전략), WT-M2-07
+// spec: docs/01 §13.1(오디오 표), docs/03 §8.2(사운드 스프라이트 전략), WT-M2-07,
+//       docs/09 §7.8(chase SFX 총괄표), WT-CH-07(2번째 시트 등록)
 //
-// apps/web/src/audio/sprite-layout.json이 유일한 레이아웃 원천이다 — 이 스크립트와
-// apps/web/src/audio/sprites.ts(런타임 오프셋 계산) 둘 다 그 JSON을 읽는다. 재생성 시
-// `node tooling/scripts/generate-sound-sprite.mjs`.
+// apps/web/src/audio/sprite-layout.json이 5모드 공용 시트의 유일한 레이아웃 원천이다 — 이
+// 스크립트와 apps/web/src/audio/sprites.ts(런타임 오프셋 계산) 둘 다 그 JSON을 읽는다.
+// WT-CH-07이 chase 전용 2번째 시트(apps/web/src/audio/chase-sprite-layout.json →
+// chase-sprite.wav, apps/web/src/audio/chase-sprites.ts가 오프셋 계산)를 등록했다 — chase를
+// 플레이하지 않는 4개 모드의 sprite.wav를 그대로 유지(바이트 동일)하기 위해 기존 시트를 확장하지
+// 않고 별도 파일로 분리했다(chase-sprites.ts 헤더 주석 참조). 재생성 시
+// `node tooling/scripts/generate-sound-sprite.mjs` — 두 시트 모두 재생성된다(SHEETS 배열).
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
-const LAYOUT_PATH = path.join(REPO_ROOT, 'apps/web/src/audio/sprite-layout.json');
+const AUDIO_SRC_DIR = path.join(REPO_ROOT, 'apps/web/src/audio');
 const OUT_DIR = path.join(REPO_ROOT, 'apps/web/public/sounds');
 
-const layout = JSON.parse(readFileSync(LAYOUT_PATH, 'utf8'));
-const SAMPLE_RATE = layout.sampleRate;
+/** 시트 목록 — layoutPath(JSON 레이아웃 원천) → outName(public/sounds 산출 파일명). 신규 시트
+ *  추가 시 이 배열에 1행만 더하면 된다(로직 변경 불요). */
+const SHEETS = [
+  { layoutPath: path.join(AUDIO_SRC_DIR, 'sprite-layout.json'), outName: 'sprite.wav' },
+  { layoutPath: path.join(AUDIO_SRC_DIR, 'chase-sprite-layout.json'), outName: 'chase-sprite.wav' },
+];
 
 /** 짧은 톤이라 순간 위상 근사(선형 주파수 스윕)로 충분하다 — 클릭/차임/비프류는 위상 연속성
  *  오차가 가청 아티팩트로 드러나기엔 지속시간이 너무 짧다(<0.5s). */
-function synthTone(region) {
-  const n = Math.max(1, Math.round(region.durationSec * SAMPLE_RATE));
+function synthTone(region, sampleRate) {
+  const n = Math.max(1, Math.round(region.durationSec * sampleRate));
   const samples = new Float32Array(n);
-  const attackN = Math.round(region.attackSec * SAMPLE_RATE);
-  const releaseN = Math.round(region.releaseSec * SAMPLE_RATE);
+  const attackN = Math.round(region.attackSec * sampleRate);
+  const releaseN = Math.round(region.releaseSec * sampleRate);
   for (let i = 0; i < n; i++) {
-    const t = i / SAMPLE_RATE;
+    const t = i / sampleRate;
     const progress = n > 1 ? i / (n - 1) : 0;
     const freq = region.freqStart + (region.freqEnd - region.freqStart) * progress;
     const phase = 2 * Math.PI * freq * t;
@@ -48,8 +57,8 @@ function synthTone(region) {
   return samples;
 }
 
-function silenceSamples(durationSec) {
-  return new Float32Array(Math.max(0, Math.round(durationSec * SAMPLE_RATE)));
+function silenceSamples(durationSec, sampleRate) {
+  return new Float32Array(Math.max(0, Math.round(durationSec * sampleRate)));
 }
 
 function concatFloat32(arrays) {
@@ -93,22 +102,40 @@ function encodeWav(samples, sampleRate) {
   return buffer;
 }
 
-function main() {
+/** 시트 1개(JSON 레이아웃 → WAV)를 합성해 OUT_DIR에 쓴다. 두 시트가 완전히 동일한 코드 경로를
+ *  타므로(SAMPLE_RATE/gapSec을 시트 자신의 JSON에서 읽음) 기존 sprite.wav 산출 로직은 파라미터화만
+ *  됐을 뿐 바이트 결과가 이전과 동일하다(회귀 0 — synthTone/silenceSamples가 이제 sampleRate를
+ *  인자로 받는 것 외에 수식 무변경). */
+function buildSheet({ layoutPath, outName }) {
+  const layout = JSON.parse(readFileSync(layoutPath, 'utf8'));
+  const sampleRate = layout.sampleRate;
   const chunks = [];
   for (const region of layout.regions) {
-    chunks.push(synthTone(region));
-    chunks.push(silenceSamples(layout.gapSec));
+    chunks.push(synthTone(region, sampleRate));
+    chunks.push(silenceSamples(layout.gapSec, sampleRate));
   }
   const all = concatFloat32(chunks);
+  writeFileSync(path.join(OUT_DIR, outName), encodeWav(all, sampleRate));
+  return { outName, seconds: all.length / sampleRate, regionCount: layout.regions.length };
+}
 
+function main() {
   mkdirSync(OUT_DIR, { recursive: true });
-  writeFileSync(path.join(OUT_DIR, 'sprite.wav'), encodeWav(all, SAMPLE_RATE));
-  writeFileSync(path.join(OUT_DIR, 'silence.wav'), encodeWav(silenceSamples(0.05), SAMPLE_RATE));
 
-  console.log(
-    `[generate-sound-sprite] wrote sprite.wav (${(all.length / SAMPLE_RATE).toFixed(3)}s, ` +
-      `${layout.regions.length} regions) + silence.wav → ${OUT_DIR}`,
+  const results = SHEETS.map(buildSheet);
+  // silence.wav는 원래 시트(5모드 공용)와 동일한 샘플레이트 관례를 그대로 따른다(기존 산출물 무변경).
+  const primarySampleRate = JSON.parse(readFileSync(SHEETS[0].layoutPath, 'utf8')).sampleRate;
+  writeFileSync(
+    path.join(OUT_DIR, 'silence.wav'),
+    encodeWav(silenceSamples(0.05, primarySampleRate), primarySampleRate),
   );
+
+  for (const r of results) {
+    console.log(
+      `[generate-sound-sprite] wrote ${r.outName} (${r.seconds.toFixed(3)}s, ${r.regionCount} regions) → ${OUT_DIR}`,
+    );
+  }
+  console.log(`[generate-sound-sprite] wrote silence.wav → ${OUT_DIR}`);
 }
 
 main();

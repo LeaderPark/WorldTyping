@@ -13,6 +13,7 @@ import {
   simulateChase,
   compileGraph,
   mergeChaseConstants,
+  CHASE_CONSTANTS_VERSION,
   computeChaseScore,
   requiredKeystrokes,
   signRunToken,
@@ -196,7 +197,9 @@ describe("POST /chase/start", () => {
     expect(body.runToken).toMatch(/^wt1\./);
     expect(Number.isInteger(body.seed)).toBe(true);
     expect(body.seed).toBeGreaterThanOrEqual(0);
-    expect(body.constantsVersion).toBe(1);
+    // 발급 응답의 버전은 shared의 CHASE_CONSTANTS_VERSION 그대로다(§9.4) — v2 = §11-D114-B 경찰 감속.
+    expect(body.constantsVersion).toBe(CHASE_CONSTANTS_VERSION);
+    expect(body.constantsVersion).toBe(2);
   });
 });
 
@@ -441,7 +444,7 @@ describe("POST /runs/submit — chase constantsVersion 불일치(§9.4)", () => 
     const stats: ChaseTypingStats = { ...totals, elapsedMs: endedAtMs };
     const { score } = expectedScore(seed, constants, journey.moveLog, endedAtMs, stats);
 
-    // /chase/start를 거치지 않고 발급 시점 버전을 v0(현행=1과 다름)으로 위조한 runToken을 직접
+    // /chase/start를 거치지 않고 발급 시점 버전을 v0(현행 CHASE_CONSTANTS_VERSION과 다름)으로 위조한 runToken을 직접
     // 서명한다(§9.1과 동일 문법 — setHash="chase:v{n}" 마커). v0 스냅샷(config:chase:v0)이 KV에
     // 없으므로 폴백 후보는 [기본값, 현행](둘 다 동일 값)이고, 점수를 고의로 어긋나게 제출하면
     // 두 후보 모두 불일치 → practice 강등 경로를 탄다(치터 오인 방지 — reject 아님).

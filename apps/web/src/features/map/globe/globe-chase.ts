@@ -73,6 +73,22 @@
 //    클래스를 건다 — "지금 어디로 가야 하는가"를 지구본에서 직접 읽히게 한다(HUD 목표 라벨과
 //    동일 상태의 이중 부호화). 신규 메서드 없이 **기존 setCarriedCount 경로**에 얹었다: 그 메서드는
 //    이미 ChaseGameRoot가 goldPicked/delivered마다 호출하고 있어 별도 배선이 불필요하다.
+//
+// ── WT-CH-DEV-3(§11-D114-A) 경찰 활공 연출 — 역시 표시 계층 전용(shared/engine 심 무접촉) ────────
+// H. **경찰 이동 활공.** 경찰 마커가 국가 간을 순간이동하던 것을 플레이어 비행기 홉과 같은 대권
+//    활공으로 잇는다. upsertPoliceMarker가 직전 at(entry.view.at)과 새 at을 비교해 변경일 때만
+//    globe-hop.ts의 **기존 수학을 그대로 재사용**(geoInterpolate 대권 보간 + easeInOutCubic + 거리
+//    가중 hopDurationMs)해 보간하며, 재구현·복제는 없다. 규약 4가지:
+//    ① duration은 hopDurationMs(550~900ms)에 상한 클램프(POLICE_HOP_MAX_MS = 최단 경찰 틱의 80%)를
+//       건다 — 연출이 다음 틱까지 이어지면 마커가 영영 목적지에 닿지 못한다.
+//    ② 홉 도중 새 이동이 도착하면 **현재 보간점에서** 새 목표로 재시작한다(스냅·큐 누적 금지 —
+//       유닛당 홉은 항상 0/1개).
+//    ③ 카메라 회전(홉 미러)과 공존한다: 활공 좌표는 policePoint() 한 곳에서만 나오고 마커·추적선·
+//       레이더 화살표가 전부 그것을 거치므로, 미러 rAF가 재투영해도 셋이 어긋나지 않는다. 활공용
+//       rAF는 진행 중일 때만 도는 bounded 루프이며(설계 결정 2 계약 승계) 착지 즉시 정적 경로로
+//       복귀한다. 뒷면 통과 구간은 기존 isFrontFacing 규약대로 은닉 + 레이더 화살표.
+//    ④ reduced-motion·juice 강등·rAF 미지원에서는 종전과 동일한 즉시 스냅(강등 표 불변). 로터 회전·
+//       배지 점멸 등 기존 연출은 그대로이고, 신규 연출은 진행 방향 미세 기울임(±8°) 하나뿐이다.
 import {
   geoCentroid,
   geoDistance,
@@ -80,12 +96,20 @@ import {
   geoOrthographic,
   geoPath,
 } from 'd3-geo';
+import { DEFAULT_CHASE_CONSTANTS } from '@wt/shared';
 import type { CountryId } from '@wt/shared';
 import type { FlyToOptions, JuiceLevel, MoveVehicleOptions } from '../map-handle';
 import type { GeoFeature } from '../feature-binding';
 import type { GlobeMapHandle } from './GlobeMap';
 import type { GlobeIndex } from './globe-index';
-import { easeInOutCubic, hopDurationMs, isFrontFacing, sampleArc, type LngLat } from './globe-hop';
+import {
+  bearingDeg,
+  easeInOutCubic,
+  hopDurationMs,
+  isFrontFacing,
+  sampleArc,
+  type LngLat,
+} from './globe-hop';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** GlobeMap.tsx의 LOGICAL_W/H·INITIAL_CENTER와 동일(코어가 export하지 않아 값만 복제 — 순수 치수
@@ -111,6 +135,26 @@ const NODE_R: Record<NodeState, number> = {
 };
 /** 경찰 배지 반경(D108-D "r 8~9"). */
 const POLICE_BADGE_R = 8.5;
+/**
+ * 경찰 활공(§11-D114-A) — 상한 산정의 기준이 되는 **최단 경찰 이동 주기**(3종 중 최소 = 헬기 틱,
+ * 추격조는 ★5의 minTick이 최단). 심 상수의 단일 원천은 어디까지나 @wt/shared이고 여기서는 읽기만
+ * 한다(복제·재정의 금지 — 상수를 올리면 이 상한도 자동으로 따라 올라간다). 클라 심은 KV 오버라이드
+ * 없이 기본값(mergeChaseConstants() — ChaseGameRoot)으로 도는 것이 현행 계약이므로 기본값을 읽는다.
+ */
+const POLICE_MIN_TICK_MS = Math.min(
+  DEFAULT_CHASE_CONSTANTS.police.heliTickMs,
+  DEFAULT_CHASE_CONSTANTS.police.interceptorTickMs,
+  DEFAULT_CHASE_CONSTANTS.police.chaserMinTickMs,
+);
+/**
+ * 활공 지속 상한 = 최단 이동 주기의 80%. **연출이 다음 틱과 겹치면 안 된다** — 겹치는 순간 매 틱
+ * 재타깃이 일어나 마커가 영구히 목적지에 도달하지 못하고(항상 이동 중) 실제 심 좌표보다 뒤처져
+ * 보인다. 기본 상수에서는 거리 가중 duration의 상한(hopDurationMs = 900ms)이 이 값(1728ms)보다 훨씬
+ * 작아 실제로 걸리는 일이 없고, KV로 틱을 크게 낮춘 경우의 안전망으로만 동작한다.
+ */
+const POLICE_HOP_MAX_MS = Math.floor(POLICE_MIN_TICK_MS * 0.8);
+/** 진행 방향 기울임 최대각(도, §11-D114-A-4 "살짝"). 홉 중앙에서 최대 → 착지에서 0으로 복귀. */
+const POLICE_TILT_MAX_DEG = 8;
 /** 수배 발령 레이더 스윕 1회전(§7.6 "600ms" — sequences.ts WANTED_ISSUANCE_TIMELINE_MS.total과 동일
  *  값이나, 그 상수는 시퀀스 오프셋 테이블 소유라 이 파일이 import하지 않는다: 표시 계층 → 시퀀스
  *  계층 역참조를 만들지 않기 위함. 값 변경 시 양쪽을 함께 고쳐야 한다). */
@@ -166,8 +210,9 @@ export interface GoldView {
 export interface GlobeChaseHandle extends GlobeMapHandle {
   /** 홈 국가 지정 — 금색 비컨(SVG 오버레이 링 2겹 펄스 2.4s). */
   setHome(id: CountryId): void;
-  /** 경찰 유닛 추가/갱신(id로 upsert). 위치 변경은 마커 속성 변경 + CSS transition뿐(§7.5 좌표 갱신
-   *  규약 — 경찰 틱은 canvas·rAF 무관, 홉/스핀 중에만 아래 미러 카메라가 재투영한다). */
+  /** 경찰 유닛 추가/갱신(id로 upsert). 소속국(at)이 바뀐 갱신은 **대권 활공**으로 이어진다
+   *  (§11-D114-A — 아래 헤더 H. 스폰·동일국 갱신은 종전대로 정적 1회 DOM 갱신이며, 활공 구간에만
+   *  bounded rAF가 돈다. canvas는 여전히 무접촉). */
   upsertPoliceMarker(u: PoliceView): void;
   removePoliceMarker(id: number): void;
   /** 금 마커 전체 치환(획득/재스폰마다 호출, §3.5 "동시 4개 유지"). */
@@ -304,9 +349,25 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+/**
+ * 진행 중인 경찰 활공(§11-D114-A). 플레이어 비행기 홉과 **동일한 수학**을 재사용한다 —
+ * geoInterpolate 대권 보간 + easeInOutCubic + 거리 가중 hopDurationMs(globe-hop.ts). 복제 없음.
+ */
+interface PoliceHop {
+  interp: (t: number) => [number, number];
+  start: number;
+  duration: number;
+  /** 기울임 계수 = sin(대권 초기 방위각) — 동/서 이동에서 ±1, 남북 이동에서 0. */
+  lean: number;
+}
 interface PoliceMarkerEntry {
   el: SVGGElement;
   view: PoliceView;
+  /** 활공 중 현재 좌표(대권 보간점). null이면 정적 = `view.at`의 chaseAnchor. */
+  pos: LngLat | null;
+  hop: PoliceHop | null;
+  /** 현재 프레임 기울임(도). 0이면 transform에 rotate를 아예 붙이지 않는다(정적 시 문자열 동일). */
+  tiltDeg: number;
 }
 interface GoldMarkerEntry {
   el: SVGCircleElement;
@@ -517,27 +578,117 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     applyHomeEmphasis();
   }
 
+  /** 경찰 마커의 **현재 표시 좌표**(§11-D114-A) — 활공 중이면 대권 보간점, 정적이면 소속국 앵커.
+   *  마커·추적선·레이더 화살표가 전부 이 한 함수를 거치므로 활공 중에도 셋이 어긋나지 않는다. */
+  function policePoint(entry: PoliceMarkerEntry): LngLat | null {
+    return entry.pos ?? chaseAnchor(entry.view.at);
+  }
+
   function reprojectPolice(): void {
+    const cam: LngLat = [camera.lng, camera.lat];
     for (const [id, entry] of policeMarkers) {
-      const r = project(entry.view.at);
-      if (!r) continue;
-      if (r.front) {
+      const a = policePoint(entry);
+      if (!a) continue;
+      const p = projection(a);
+      if (!p) continue;
+      if (isFrontFacing(a, cam)) {
         entry.el.style.display = '';
-        entry.el.setAttribute('transform', `translate(${round(r.p[0])} ${round(r.p[1])})`);
+        const xy = `translate(${round(p[0])} ${round(p[1])})`;
+        entry.el.setAttribute(
+          'transform',
+          entry.tiltDeg === 0 ? xy : `${xy} rotate(${round(entry.tiltDeg)})`,
+        );
         removeRadarArrow(`police:${id}`);
       } else {
+        // 활공 중 지구 뒷면을 지나가는 구간도 정적 규약과 동일하게 은닉 + 레이더 화살표로 대체한다.
         entry.el.style.display = 'none';
-        const a = chaseAnchor(entry.view.at);
-        if (a) {
-          upsertRadarArrow(
-            `police:${id}`,
-            'wt-chase__radar-arrow--police',
-            a,
-            geoDistance(a, [camera.lng, camera.lat]),
-          );
-        }
+        upsertRadarArrow(`police:${id}`, 'wt-chase__radar-arrow--police', a, geoDistance(a, cam));
       }
     }
+  }
+
+  // ── 경찰 활공 루프(§11-D114-A) ──────────────────────────────────────────
+  // 홉이 하나라도 진행 중일 때만 도는 bounded rAF다(파일 헤더 설계 결정 2의 "상시/유휴 루프 금지"
+  // 계약 승계). 유닛마다 rAF를 띄우지 않고 한 루프가 전 유닛을 함께 전진시킨다.
+  let policeRaf: number | null = null;
+
+  function cancelPoliceRaf(): void {
+    if (policeRaf != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(policeRaf);
+    policeRaf = null;
+  }
+  function ensurePoliceRaf(): void {
+    if (policeRaf != null || typeof requestAnimationFrame !== 'function') return;
+    policeRaf = requestAnimationFrame(policeHopFrame);
+  }
+  function policeHopFrame(now: number): void {
+    policeRaf = null;
+    let active = false;
+    for (const entry of policeMarkers.values()) {
+      const h = entry.hop;
+      if (!h) continue;
+      const raw = h.duration > 0 ? clamp01((now - h.start) / h.duration) : 1;
+      const pos = h.interp(easeInOutCubic(raw));
+      entry.pos = [pos[0], pos[1]];
+      // 기울임 봉투 sin(π·raw): 출발 0 → 중앙 최대 → 착지 0(코어 홉의 lift 봉투와 같은 형태).
+      entry.tiltDeg = POLICE_TILT_MAX_DEG * h.lean * Math.sin(Math.PI * raw);
+      if (raw >= 1) clearPoliceHop(entry);
+      else active = true;
+    }
+    reprojectPolice();
+    reprojectTrails(); // 추적선 기점도 활공 좌표를 따른다(policePoint 단일 출구).
+    if (active) policeRaf = requestAnimationFrame(policeHopFrame);
+  }
+  /** 활공 종료/취소 — 정적 경로(`view.at` 앵커)로 복귀시킨다(좌표 이중 보관 금지). */
+  function clearPoliceHop(entry: PoliceMarkerEntry): void {
+    entry.hop = null;
+    entry.pos = null;
+    entry.tiltDeg = 0;
+  }
+  /** 진행 중인 홉이 하나도 없으면 루프를 끊는다(누수 = 유휴 rAF = 계약 위반). */
+  function stopPoliceRafIfIdle(): void {
+    for (const entry of policeMarkers.values()) if (entry.hop) return;
+    cancelPoliceRaf();
+  }
+  /** 전 유닛 활공 즉시 종료(강등 전환·reset). 목적지로 스냅된다. */
+  function snapAllPoliceHops(): void {
+    let had = false;
+    for (const entry of policeMarkers.values()) {
+      if (!entry.hop) continue;
+      clearPoliceHop(entry);
+      had = true;
+    }
+    cancelPoliceRaf();
+    if (had) reprojectPolice();
+  }
+  /**
+   * 경찰 이동 활공 시작(§11-D114-A). 진행 중인 홉이 있으면 **현재 보간점에서** 새 목표로 재시작한다
+   * (스냅 금지 + 큐 누적 금지 — 유닛당 홉은 항상 0개 또는 1개). immediate() 강등(reduced-motion·
+   * juice≥1·rAF 미지원)에서는 연출 없이 즉시 스냅(기존 강등 표 준수).
+   */
+  function beginPoliceHop(entry: PoliceMarkerEntry, from: CountryId, to: CountryId): void {
+    if (immediate()) {
+      clearPoliceHop(entry);
+      stopPoliceRafIfIdle();
+      return;
+    }
+    const a = entry.pos ?? chaseAnchor(from);
+    const b = chaseAnchor(to);
+    if (!a || !b) {
+      clearPoliceHop(entry);
+      stopPoliceRafIfIdle();
+      return;
+    }
+    // duration = 코어와 동일한 거리 가중 공식 + 다음 틱과 겹치지 않게 상한 클램프(POLICE_HOP_MAX_MS).
+    const duration = Math.min(hopDurationMs(a, b), POLICE_HOP_MAX_MS);
+    entry.hop = {
+      interp: geoInterpolate(a, b),
+      start: nowMs(),
+      duration,
+      lean: Math.sin((bearingDeg(a, b) * Math.PI) / 180),
+    };
+    entry.pos = [a[0], a[1]];
+    entry.tiltDeg = 0;
+    ensurePoliceRaf();
   }
 
   function reprojectGold(): void {
@@ -570,8 +721,8 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     gTrails.replaceChildren();
     if (immediate()) return;
     const playerLngLat: LngLat = [camera.lng, camera.lat];
-    for (const { view } of policeMarkers.values()) {
-      const a = chaseAnchor(view.at);
+    for (const entry of policeMarkers.values()) {
+      const a = policePoint(entry); // 활공 중이면 보간점에서 선이 뻗는다(§11-D114-A).
       if (!a || !isFrontFacing(a, playerLngLat)) continue; // 뒷면 자동 클립(§7.5)
       const arc = sampleArc(a, playerLngLat, TRAIL_ARC_SAMPLES);
       const d = pathGen({ type: 'LineString', coordinates: arc } as never);
@@ -767,6 +918,7 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     homeId = null;
     currentId = null;
     prehighlightId = null;
+    cancelPoliceRaf(); // 진행 중인 활공 루프 해제(§11-D114-A — 세션 종료 후 유휴 rAF 금지).
     for (const { el } of policeMarkers.values()) el.remove();
     policeMarkers.clear();
     for (const { el } of goldMarkers.values()) el.remove();
@@ -796,6 +948,8 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     core.setJuiceLevel(level);
     juice = level;
     svg.setAttribute('data-juice', String(level));
+    // 강등으로 전환되면 진행 중이던 경찰 활공도 즉시 중단·스냅한다(§11-D114-A 강등 표 준수).
+    if (immediate()) snapAllPoliceHops();
     reprojectTrails(); // juice 변경 즉시 추적선 표시/은닉 반영(강등 표, §11).
   }
 
@@ -867,11 +1021,12 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
 
   function upsertPoliceMarker(u: PoliceView): void {
     let entry = policeMarkers.get(u.id);
+    const prevAt = entry ? entry.view.at : null;
     if (!entry) {
       const el = policeShape(u.kind);
       el.setAttribute('data-police-id', String(u.id));
       gPolice.appendChild(el);
-      entry = { el, view: u };
+      entry = { el, view: u, pos: null, hop: null, tiltDeg: 0 };
       policeMarkers.set(u.id, entry);
     } else {
       if (entry.view.kind !== u.kind) {
@@ -882,6 +1037,9 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
       }
       entry.view = u;
     }
+    // §11-D114-A: 소속국이 바뀐 갱신은 순간이동 대신 대권 활공으로 잇는다. 스폰(첫 upsert)과 동일국
+    // 재갱신(policeUpdated는 이동하지 않은 유닛도 함께 싣는다)은 정적 — 불필요한 애니메이션 없음.
+    if (prevAt !== null && prevAt !== u.at) beginPoliceHop(entry, prevAt, u.at);
     reprojectPolice();
     reprojectTrails();
   }
@@ -892,6 +1050,7 @@ export function createGlobeChaseHandle(deps: GlobeChaseDeps): GlobeChaseHandle {
     entry.el.remove();
     policeMarkers.delete(id);
     removeRadarArrow(`police:${id}`);
+    stopPoliceRafIfIdle(); // 마지막 활공 유닛이 사라졌으면 루프 종료(누수 금지).
     reprojectTrails();
   }
 

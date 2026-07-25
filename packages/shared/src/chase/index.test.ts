@@ -33,7 +33,7 @@ describe('chase 배럴 + GameMode 반입', () => {
     expect(typeof chase.compileGraph).toBe('function');
     expect(typeof chase.mergeChaseConstants).toBe('function');
     expect(typeof chase.parseChaseConstants).toBe('function');
-    expect(chase.CHASE_CONSTANTS_VERSION).toBe(1);
+    expect(chase.CHASE_CONSTANTS_VERSION).toBe(2); // §11-D114-B 경찰 감속으로 범프
     expect(chase.DEFAULT_CHASE_CONSTANTS.wantedMax).toBe(5);
   });
 });

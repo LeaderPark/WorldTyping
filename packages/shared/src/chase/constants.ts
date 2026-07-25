@@ -1,7 +1,8 @@
-// spec: docs/09 §3(게임 규칙 전 수치)·§9.4(KV config:chase 핫스왑), docs/00 §11-D90·D91·D93·D94
+// spec: docs/09 §3(게임 규칙 전 수치)·§9.4(KV config:chase 핫스왑), docs/00 §11-D90·D91·D93·D94·D114
 //
 // "골드 러너"(chase) 모드의 전 게임 수치를 코드화한 단일 원천. 기본값은 docs/09 §3을 1:1 전사한
-// 것이며(수치 임의 변경 금지 — 튜닝은 WT-CH-11의 KV 채널 소관), KV `config:chase`는 이 기본값 위에
+// 것이며(수치 임의 변경 금지 — 튜닝은 WT-CH-11의 KV 채널 소관이고, 기본값 자체의 변경은 §11 결정
+// 행이 있을 때만 — 현재 유일한 개정은 D114-B 경찰 이동 주기 +20%), KV `config:chase`는 이 기본값 위에
 // partial 병합된다(§9.4). 병합 입력은 zod `.strict()`로 검증하고, 검증 실패 시 코드 기본값으로
 // 폴백한다(§9.4). `constantsVersion`을 시드 발급 응답에 포함해 런 도중 값 변경이 검증 불일치를 만들지
 // 않도록 하는 규약은 CH-09(백엔드) 소관이며, 이 파일은 그 버전 상수(CHASE_CONSTANTS_VERSION)를 노출한다.
@@ -108,8 +109,15 @@ export interface ChaseConstants {
   score: ChaseScoreConstants;
 }
 
-/** docs/09 §9.4 — 시드 발급 응답에 포함되는 상수 버전. 값 변경 시 CH-11/리드가 증가시킨다. */
-export const CHASE_CONSTANTS_VERSION = 1 as const;
+/**
+ * docs/09 §9.4 — 시드 발급 응답에 포함되는 상수 버전. 값 변경 시 CH-11/리드가 증가시킨다.
+ *
+ * v2(§11-D114-B, WT-CH-DEV-3): 경찰 이동 주기 전 항목 **+20% 감속**(사용자 확정 — "경찰이 살짝
+ * 느리게"). 진행 중이던 v1 런은 D93 규약대로 발급 시점 버전으로 재계산되므로 영향이 없다
+ * (workers/api/src/lib/chase-config.ts `resolveChaseConstantsCandidates` — 버전 범프 시
+ * `config:chase:v1` 스냅샷을 남기는 런북 절차 대상).
+ */
+export const CHASE_CONSTANTS_VERSION = 2 as const;
 
 /**
  * docs/09 §3 기본값(전사). 이 객체는 절대 런타임 변경 금지 — 병합은 항상 새 객체를 만든다.
@@ -132,15 +140,19 @@ const DEFAULT_CHASE_CONSTANTS_BASE: ChaseConstants = {
     starDrop: 1, // §3.3 ★−1
     floor: 1, // §3.3 하한 ★1
   },
+  // 경찰 이동 주기 4항목은 §11-D114-B(WT-CH-DEV-3)로 docs/09 §3.4 원안(4200/300/3000/4200/1800)의
+  // **정확히 1.2배**(= +20% 감속)로 개정됐다 — 사용자 확정 "경찰이 살짝 느리게". 4항목을 같은 배율로
+  // 함께 올려야 파생 관계(★5 실틱 = base − perStar×4 = minTick)가 유지된다. 스폰 직후 첫 이동
+  // (spawnPolice의 `T + tickInterval`)도 같은 상수를 쓰므로 자동으로 동일 비율 지연된다.
   police: {
-    chaserBaseTickMs: 4200, // §3.4 4200 − 300×(★−1)
-    chaserTickPerStarMs: 300,
-    chaserMinTickMs: 3000, // §3.4 ★5 = 3000ms
-    interceptorTickMs: 4200, // §3.4 고정
-    heliTickMs: 1800, // §3.4 고정
-    interceptorChaseSwitchHops: 2, // §3.4 ≤2홉 접근 시 추격 전환
-    heliRingHops: 4, // §3.4 4홉 링
-    chaserSpawnHopsBack: 2, // §3.4 플레이어 2홉 전 경로 국가
+    chaserBaseTickMs: 5040, // §3.4 4200 − 300×(★−1) ×1.2 → 5040 − 360×(★−1)
+    chaserTickPerStarMs: 360,
+    chaserMinTickMs: 3600, // §3.4 ★5 = 3000ms ×1.2
+    interceptorTickMs: 5040, // §3.4 고정 4200ms ×1.2
+    heliTickMs: 2160, // §3.4 고정 1800ms ×1.2
+    interceptorChaseSwitchHops: 2, // §3.4 ≤2홉 접근 시 추격 전환(거리 규칙 — 감속 무관)
+    heliRingHops: 4, // §3.4 4홉 링(거리 규칙 — 감속 무관)
+    chaserSpawnHopsBack: 2, // §3.4 플레이어 2홉 전 경로 국가(거리 규칙 — 감속 무관)
   },
   gold: {
     activeCount: 4, // §3.5 동시 4개

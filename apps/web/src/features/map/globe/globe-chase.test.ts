@@ -16,13 +16,21 @@ import { resolve } from 'node:path';
 import { createElement } from 'react';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { geoOrthographic } from 'd3-geo';
+import { geoContains, geoOrthographic } from 'd3-geo';
+import { CHASE_GRAPH } from '@wt/data';
 import type { Country, CountryId } from '@wt/shared';
 import type { TopologyLike } from '../geo-index';
+import type { GeoFeature } from '../feature-binding';
 import { GlobeMap, type GlobeMapHandle } from './GlobeMap';
 import { buildGlobeIndex, type GlobeIndex } from './globe-index';
 import { isFrontFacing } from './globe-hop';
-import { createGlobeChaseHandle, type GlobeChaseHandle, type GoldView, type PoliceView } from './globe-chase';
+import {
+  createGlobeChaseHandle,
+  largestPolygonCentroid,
+  type GlobeChaseHandle,
+  type GoldView,
+  type PoliceView,
+} from './globe-chase';
 
 function load(name: string): unknown {
   for (const base of ['public/data', 'apps/web/public/data']) {
@@ -33,10 +41,12 @@ function load(name: string): unknown {
 }
 
 let index: GlobeIndex;
+let countries: Country[];
 
 beforeAll(() => {
   const topo = load('countries-110m.json') as TopologyLike;
   const dataset = load('countries.json') as { countries: Country[] };
+  countries = dataset.countries;
   index = buildGlobeIndex(topo, dataset.countries);
 });
 
@@ -407,6 +417,284 @@ describe('setCandidateAnchors — 후보 도트(§7.5, 리더 라인 시작점)'
     const remaining = container.querySelectorAll('[data-candidate-anchor]');
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.getAttribute('data-candidate-anchor')).toBe(front);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WT-CH-DEV-1(§11-D108) 시인성 디벨롭 4건
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 지구본 중심을 origin에 스냅한 상태로 setup — 후보/연결선이 항상 정면이 되게 한다. */
+function setupAt(origin: CountryId): ReturnType<typeof setup> {
+  stubMatchMedia(true); // reduced-motion = 즉시 스냅(비동기 홉 미러 rAF 회피)
+  const s = setup();
+  s.handle.moveVehicle(origin, origin);
+  return s;
+}
+
+/** chase-graph 기준 origin의 최근접 n개국(= 실전 후보와 동일 성격 — 항상 정면). */
+function nearestOf(origin: CountryId, n: number): CountryId[] {
+  return CHASE_GRAPH.nodes[origin]!.nearest.slice(0, n).map((e) => e.id);
+}
+
+describe('§11-D108-A 대표 좌표 단일 소스 — 앵커 == chase-graph 거리 기준점(본토 회귀 잠금)', () => {
+  it('FR·US·RU 앵커가 countries.json latlng 그대로이고 본토 폴리곤 내부에 있다', () => {
+    for (const id of ['FR', 'US', 'RU'] as CountryId[]) {
+      const anchor = index.anchor.get(id);
+      const country = countries.find((c) => c.id === id);
+      expect(country, `${id} 국가 데이터 부재`).toBeDefined();
+      // chase-graph(packages/data/src/build/chase-graph.ts)는 country.latlng으로 거리를 계산한다 —
+      // 시각 앵커가 [lng, lat] 역순 그대로여야 "심의 거리 ↔ 화면 위치"가 동일 점을 가리킨다.
+      expect(anchor).toEqual([country!.latlng[1], country!.latlng[0]]);
+      const feature = index.featureByCountry.get(id);
+      expect(feature, `${id} 폴리곤 부재`).toBeDefined();
+      // 다권역 국가(해외영토 포함)의 전체 centroid를 쓰면 바다에 찍힌다 — 본토 내부 잠금.
+      expect(geoContains(feature as never, anchor as [number, number])).toBe(true);
+    }
+  });
+
+  it('projectAnchor(FR)가 그 대표 좌표를 그대로 투영한다(모든 chase 좌표의 단일 출구)', () => {
+    const { handle } = setup();
+    const anchor = index.anchor.get('FR' as CountryId)!;
+    const expectedProj = geoOrthographic();
+    expectedProj.fitSize([960, 500], { type: 'Sphere' } as never);
+    expectedProj.rotate([-20, -20]);
+    const [ex, ey] = expectedProj(anchor)!;
+    const got = handle.projectAnchor('FR' as CountryId);
+    expect(got.x).toBeCloseTo(ex, 1);
+    expect(got.y).toBeCloseTo(ey, 1);
+  });
+
+  it('largestPolygonCentroid 폴백은 최대 면적 폴리곤의 대표점을 고른다(작은 섬 무시·감김 무관)', () => {
+    const island = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]];
+    const mainland = [[100, 0], [120, 0], [120, 20], [100, 20], [100, 0]];
+    const featureOf = (rings: number[][][]): GeoFeature => ({
+      type: 'Feature',
+      geometry: { type: 'MultiPolygon', coordinates: rings.map((r) => [r]) },
+    });
+
+    const c = largestPolygonCentroid(featureOf([island, mainland]));
+    expect(c).not.toBeNull();
+    expect(c![0]).toBeGreaterThan(90);
+    expect(c![1]).toBeGreaterThan(5);
+    // 두 번째 호출은 모듈 WeakMap 캐시(동일 값 반환).
+    const same = featureOf([island, mainland]);
+    expect(largestPolygonCentroid(same)).toEqual(largestPolygonCentroid(same));
+    // 링 감김을 뒤집어도 같은 덩어리를 고른다(d3 구면 geoArea의 winding 함정 회귀 잠금).
+    const reversed = largestPolygonCentroid(
+      featureOf([[...island].reverse(), [...mainland].reverse()]),
+    );
+    expect(reversed![0]).toBeCloseTo(c![0], 6);
+    expect(reversed![1]).toBeCloseTo(c![1], 6);
+
+    // Polygon(단일) 형태도 지원.
+    const single = largestPolygonCentroid({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [mainland] },
+    });
+    expect(single![0]).toBeCloseTo(c![0], 6);
+  });
+
+  it('회귀: 후보 앵커 배지가 홉(카메라 회전) 이후 재투영된다 — 리더 라인 끝점과 어긋나지 않는다', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    const [candidate] = nearestOf(origin, 1);
+    handle.setCandidateAnchors([candidate!]);
+    const el = container.querySelector(`[data-candidate-anchor="${candidate}"]`) as SVGGElement;
+    const before = el.getAttribute('transform');
+
+    // 지구 반대편으로 스냅 홉 — 카메라가 크게 회전한다.
+    handle.moveVehicle(origin, 'BR' as CountryId);
+    const after = el.getAttribute('transform');
+    expect(after).not.toBe(before);
+
+    // 재투영 결과가 라이브 projectAnchor(리더 라인이 쓰는 값)와 일치해야 한다.
+    const live = handle.projectAnchor(candidate!);
+    expect(after).toBe(`translate(${live.x} ${live.y})`);
+  });
+});
+
+describe('§11-D108-B 전 국가 노드 도트 레이어', () => {
+  it('setCountryNodes(un195)가 195개 노드를 만든다(레이어 1개, 중복 없음)', () => {
+    const { handle, container } = setup();
+    handle.setCountryNodes(CHASE_GRAPH.ids);
+    expect(container.querySelectorAll('[data-layer="chase-nodes"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-node]')).toHaveLength(CHASE_GRAPH.ids.length);
+    expect(CHASE_GRAPH.ids.length).toBe(195);
+    // 재호출은 치환(누적 금지).
+    handle.setCountryNodes(CHASE_GRAPH.ids);
+    expect(container.querySelectorAll('[data-node]')).toHaveLength(195);
+  });
+
+  it('현재국·홈·후보 3국만 강조 상태이고 나머지는 idle(반경도 확대)', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    handle.setCountryNodes(CHASE_GRAPH.ids);
+    const home = 'FR' as CountryId;
+    handle.setHome(home);
+    const candidates = nearestOf(origin, 3);
+    handle.setCandidateAnchors(candidates);
+
+    const nodeOf = (id: CountryId): SVGCircleElement =>
+      container.querySelector(`[data-node="${id}"]`) as SVGCircleElement;
+    expect(nodeOf(origin).getAttribute('data-node-state')).toBe('current');
+    expect(nodeOf(home).getAttribute('data-node-state')).toBe('home');
+    for (const c of candidates) expect(nodeOf(c).getAttribute('data-node-state')).toBe('candidate');
+
+    const emphasised = new Set<CountryId>([origin, home, ...candidates]);
+    const idle = CHASE_GRAPH.ids.filter((id) => !emphasised.has(id));
+    expect(nodeOf(idle[0]!).getAttribute('data-node-state')).toBe('idle');
+    expect(container.querySelectorAll('[data-node-state="idle"]')).toHaveLength(idle.length);
+
+    // 강조 노드는 idle보다 크다.
+    const r = (el: SVGCircleElement): number => Number(el.getAttribute('r'));
+    expect(r(nodeOf(origin))).toBeGreaterThan(r(nodeOf(idle[0]!)));
+    expect(r(nodeOf(candidates[0]!))).toBeGreaterThan(r(nodeOf(idle[0]!)));
+  });
+
+  it('뒷면(카메라 반대편) 노드는 은닉되고 정면 노드는 표시된다(기존 isFrontFacing 재사용)', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    handle.setCountryNodes(CHASE_GRAPH.ids);
+    const originAnchor = index.anchor.get(origin)!;
+    let hiddenBack = 0;
+    let shownFront = 0;
+    for (const id of CHASE_GRAPH.ids) {
+      const el = container.querySelector(`[data-node="${id}"]`) as SVGCircleElement | null;
+      if (!el) continue;
+      const front = isFrontFacing(index.anchor.get(id)!, originAnchor);
+      if (front) {
+        expect(el.style.display).not.toBe('none');
+        shownFront++;
+      } else {
+        expect(el.style.display).toBe('none');
+        hiddenBack++;
+      }
+    }
+    expect(shownFront).toBeGreaterThan(0);
+    expect(hiddenBack).toBeGreaterThan(0);
+  });
+
+  it('reset은 노드 레이어를 비운다', () => {
+    const { handle, container } = setup();
+    handle.setCountryNodes(CHASE_GRAPH.ids);
+    handle.reset();
+    expect(container.querySelector('[data-node]')).toBeNull();
+  });
+});
+
+describe('§11-D108-C 후보 대권 연결선 + 칩↔앵커 번호 일치', () => {
+  it('현재국 → 후보 3국 연결선 3개가 great-circle 원호(직선 아님)로 그려진다', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    const candidates = nearestOf(origin, 3);
+    handle.setCandidateAnchors(candidates);
+
+    const links = Array.from(container.querySelectorAll('[data-candidate-link]'));
+    expect(links).toHaveLength(3);
+    expect(links.map((l) => l.getAttribute('data-candidate-link'))).toEqual(candidates);
+    // 슬롯 번호가 전달 순서(=칩 슬롯 순서)와 일치.
+    expect(links.map((l) => l.getAttribute('data-candidate-slot'))).toEqual(['0', '1', '2']);
+    for (const l of links) {
+      const d = l.getAttribute('d') ?? '';
+      expect(d).toBeTruthy();
+      // 직선(M…L… 1개)이 아니라 다분절 원호여야 한다.
+      expect((d.match(/L/g) ?? []).length).toBeGreaterThan(1);
+    }
+  });
+
+  it('후보가 바뀌면 연결선이 갱신된다(옛 후보 선 잔존 없음)', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    const first = nearestOf(origin, 3);
+    handle.setCandidateAnchors(first);
+    const next = nearestOf(origin, 6).slice(3);
+    handle.setCandidateAnchors(next);
+
+    const links = Array.from(container.querySelectorAll('[data-candidate-link]'));
+    expect(links).toHaveLength(3);
+    expect(links.map((l) => l.getAttribute('data-candidate-link'))).toEqual(next);
+    for (const gone of first) {
+      expect(container.querySelector(`[data-candidate-link="${gone}"]`)).toBeNull();
+    }
+  });
+
+  it('앵커 배지가 슬롯 번호(1~3)를 표시하고 홉 후에도 유지된다', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    const candidates = nearestOf(origin, 3);
+    handle.setCandidateAnchors(candidates);
+    candidates.forEach((id, i) => {
+      const g = container.querySelector(`[data-candidate-anchor="${id}"]`) as SVGGElement;
+      expect(g.getAttribute('data-candidate-slot')).toBe(String(i));
+      expect(g.querySelector('.wt-chase__candidate-index')!.textContent).toBe(String(i + 1));
+    });
+  });
+
+  it('프리하이라이트 후보의 연결선만 선두 강조(--lead)되고 해제 시 사라진다', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    const candidates = nearestOf(origin, 3);
+    handle.setCandidateAnchors(candidates);
+
+    handle.setCandidatePrehighlight(candidates[1]!);
+    expect(container.querySelectorAll('.wt-chase__link--lead')).toHaveLength(1);
+    expect(
+      container.querySelector('.wt-chase__link--lead')!.getAttribute('data-candidate-link'),
+    ).toBe(candidates[1]);
+
+    // 재투영(홉)을 거쳐도 선두 강조가 유지된다.
+    handle.moveVehicle(origin, origin);
+    expect(container.querySelectorAll('.wt-chase__link--lead')).toHaveLength(1);
+
+    handle.setCandidatePrehighlight(null);
+    expect(container.querySelectorAll('.wt-chase__link--lead')).toHaveLength(0);
+  });
+
+  it('reset은 연결선 레이어를 비운다', () => {
+    const origin = 'KR' as CountryId;
+    const { handle, container } = setupAt(origin);
+    handle.setCandidateAnchors(nearestOf(origin, 3));
+    handle.reset();
+    expect(container.querySelector('[data-candidate-link]')).toBeNull();
+  });
+});
+
+describe('§11-D108-D 경찰 배지 아이콘 3종', () => {
+  it('3종 모두 원형 배지 + 순수 SVG path 실루엣 구조를 갖는다', () => {
+    const { handle, container } = setup();
+    const { front } = pickFrontAndBack();
+    const kinds: PoliceView['kind'][] = ['chaser', 'interceptor', 'heli'];
+    kinds.forEach((kind, i) => {
+      handle.upsertPoliceMarker({ id: 100 + i, kind, at: front });
+      const el = container.querySelector(`[data-police-id="${100 + i}"]`) as SVGGElement;
+      expect(el.getAttribute('data-police-kind')).toBe(kind);
+      const badge = el.querySelector('.wt-chase__police-badge');
+      expect(badge, `${kind} 배지 부재`).not.toBeNull();
+      expect(Number(badge!.getAttribute('r'))).toBeGreaterThanOrEqual(8);
+      const glyph = el.querySelector(`.wt-chase__police-glyph--${kind}`);
+      expect(glyph, `${kind} 실루엣 부재`).not.toBeNull();
+      expect(glyph!.tagName.toLowerCase()).toBe('path');
+      expect(glyph!.getAttribute('d')).toBeTruthy();
+      // 배지 없이 색 도트만 두던 구 구조는 완전히 사라졌다.
+      expect(el.querySelector('.wt-chase__police-dot')).toBeNull();
+    });
+  });
+
+  it('chaser는 확산 링, heli는 로터+서치라이트 콘을 추가로 갖는다', () => {
+    const { handle, container } = setup();
+    const { front } = pickFrontAndBack();
+    handle.upsertPoliceMarker({ id: 110, kind: 'chaser', at: front });
+    handle.upsertPoliceMarker({ id: 111, kind: 'interceptor', at: front });
+    handle.upsertPoliceMarker({ id: 112, kind: 'heli', at: front });
+    const el = (id: number): SVGGElement =>
+      container.querySelector(`[data-police-id="${id}"]`) as SVGGElement;
+
+    expect(el(110).querySelector('.wt-chase__police-ring')).not.toBeNull();
+    expect(el(111).querySelector('.wt-chase__police-ring')).toBeNull();
+    expect(el(111).querySelector('.wt-chase__police-rotor')).toBeNull();
+    expect(el(112).querySelector('.wt-chase__police-rotor')).not.toBeNull();
+    expect(el(112).querySelector('.wt-chase__police-cone')).not.toBeNull();
   });
 });
 

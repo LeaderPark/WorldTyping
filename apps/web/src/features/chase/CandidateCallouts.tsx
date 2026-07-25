@@ -148,6 +148,13 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
 
       const header = document.createElement('div');
       header.className = 'wt-candidate-chip__header';
+      // 슬롯 번호(1~3) — 지구본 앵커 배지·대권 연결선의 data-candidate-slot과 짝을 이뤄 "몇 번 칩이
+      // 어느 나라인지"를 즉시 읽히게 한다(§11-D108-C). 슬롯↔후보 매핑은 마운트 후 불변이라 여기서
+      // 1회만 쓴다. 표시 전용이므로 스크린리더에서 제외(칩 전체가 이미 aria-hidden 조상 아래).
+      const indexEl = document.createElement('span');
+      indexEl.className = 'wt-candidate-chip__index';
+      indexEl.setAttribute('aria-hidden', 'true');
+      indexEl.textContent = String(index + 1);
       const flagEl = document.createElement('span');
       flagEl.className = 'wt-candidate-chip__flag';
       const nameEl = document.createElement('span');
@@ -157,7 +164,7 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
       const statusEl = document.createElement('span');
       statusEl.className = 'wt-candidate-chip__status';
       statusEl.setAttribute('aria-hidden', 'true');
-      header.append(flagEl, nameEl, tierEl, statusEl);
+      header.append(indexEl, flagEl, nameEl, tierEl, statusEl);
 
       const glyphsEl = document.createElement('div');
       glyphsEl.className = 'wt-candidate-chip__slots';

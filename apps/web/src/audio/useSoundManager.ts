@@ -9,7 +9,10 @@ import type { GameSessionEngine, TypingInputController } from '@wt/engine';
 import { useSettingsStore } from '../stores/settings';
 import { getSoundManager, type SoundSettingsSnapshot } from './sound-manager';
 
-function readSoundSettings(): SoundSettingsSnapshot {
+/** 설정 스토어 스냅샷 읽기(getState — 구독 아님, 재생 시점마다 최신값). WT-CH-07이
+ *  features/chase/chase-audio.ts에서 재사용(동일 SoundManager 싱글턴이 동일 설정 원천을 써야
+ *  master/sfx 볼륨·keySound가 어긋나지 않는다 — 재구현 아님, 이 함수를 그대로 export만 했다). */
+export function readSoundSettings(): SoundSettingsSnapshot {
   const s = useSettingsStore.getState();
   return { keySound: s.keySound, volume: { master: s.volume.master, sfx: s.volume.sfx } };
 }

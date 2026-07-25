@@ -1,5 +1,17 @@
 // spec: docs/09-chase-mode-goldrunner.md §7.4(수배 별 HUD)·§8.3(슬림 HUD 40px·시선 동선)·
-//       §8.6(해부도)·§8.10(a11y), docs/09a §4, docs/00 §11-D90~D97, WT-CH-06.
+//       §8.6(해부도)·§8.10(a11y), docs/09a §4, docs/00 §11-D90~D97·D111 ③, WT-CH-06 → WT-CH-DEV-2.
+//
+// ── WT-CH-DEV-2(§11-D111 ③) "지금 할 일" 목표 라벨 ───────────────────────────────────────────
+// 처음 본 사람이 가장 많이 놓치는 정보는 "금을 주웠다는 사실"과 "이제 홈으로 가야 한다"는 다음
+// 행동이다(금 가방 카운터 💰×n만으로는 상태이지 지시가 아니다). HUD 1행 아래에 목표 문장 한 줄을
+// 얹어 소지 상태를 지시문으로 번역한다 — 금 미소지 `chase.goal.findGold` / 소지 `chase.goal.deliver`.
+// 구독 이벤트는 기존 goldPicked/delivered 2종뿐(엔진 이벤트 확장 금지, D7 정신 승계)이고 소지 수는
+// 항상 engine.getSnapshot().carriedCount에서 읽는다(카운터 재구현 금지 — 금 가방 표시와 동일 원천).
+// 지구본 쪽 방향 강조(홈 비컨·레이더 화살표)는 globe-chase.ts가 **기존 setCarriedCount 경로**에서
+// 같은 상태로 토글하므로(ChaseGameRoot가 두 이벤트마다 이미 호출) 이 컴포넌트가 지구본을 직접
+// 건드리지 않는다 — 표시 계층 간 결합 0.
+// 라벨은 40px HUD 바 바깥(바로 아래)에 절대 배치해 §8.3의 "슬림 HUD h40px" 규격과 지구본 레이아웃을
+// 건드리지 않는다. 갱신은 textContent 직접 조작(§4.5 — React state 미경유, 기존 HUD 관례 그대로).
 //
 // 상단 슬림 HUD(h 40px, 모바일 36px) — 별 5칸+게이지 중앙, 점수/금 가방 좌, 시간/CPM/ACC 우.
 // 고빈도 값(경과시간·CPM·ACC)은 statsTick(500ms 스로틀) 구독 → textContent 직접 갱신(§4.5,
@@ -38,6 +50,7 @@ export function WantedHud({ engine }: WantedHudProps) {
   const accRef = useRef<HTMLSpanElement | null>(null);
   const starsRowRef = useRef<HTMLDivElement | null>(null);
   const announceRef = useRef<HTMLDivElement | null>(null);
+  const goalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let stars = 0;
@@ -70,6 +83,13 @@ export function WantedHud({ engine }: WantedHudProps) {
       if (goldRef.current) {
         goldRef.current.textContent = `💰×${carried}`;
         goldRef.current.setAttribute('aria-label', t('chase.hud.goldBag', { count: carried }));
+      }
+      // §11-D111 ③ 목표 라벨 — 금 가방과 동일 원천(carriedCount)에서 파생, 같은 시점에 갱신.
+      const goal = goalRef.current;
+      if (goal) {
+        const delivering = carried > 0;
+        goal.textContent = t(delivering ? 'chase.goal.deliver' : 'chase.goal.findGold');
+        goal.setAttribute('data-goal', delivering ? 'deliver' : 'findGold');
       }
     };
     const paintScore = (): void => {
@@ -170,6 +190,11 @@ export function WantedHud({ engine }: WantedHudProps) {
           100%
         </span>
       </div>
+
+      {/* §11-D111 ③ "지금 할 일" 목표 라벨 — HUD 바 바깥(바로 아래)에 절대 배치(§8.3 h40px 불변).
+          aria-live는 붙이지 않는다: 같은 전환(획득/배송)을 아래 announcer가 이미 공지하고 있어
+          이중 낭독이 된다(§8.10 "병행 공지"는 1채널로 충분). */}
+      <div ref={goalRef} className="wt-wanted-hud__goal" data-goal="findGold" data-testid="chase-hud-goal" />
 
       {/* §8.10: 수배 변경/배송 병행 공지(스크린리더 게임 상태 추적). */}
       <div ref={announceRef} aria-live="polite" className="sr-only" data-testid="chase-hud-announcer" />

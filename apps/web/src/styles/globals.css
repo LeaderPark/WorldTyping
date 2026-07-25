@@ -4297,6 +4297,91 @@ a.wt-brand:focus-visible {
   }
 }
 
+/* §11-D111 ③ "지금 할 일" 목표 라벨 — HUD 바(h40px) **바깥** 바로 아래에 절대 배치해 §8.3 규격과
+   지구본 레이아웃(높이 78%)에 픽셀 영향을 주지 않는다. 클릭 통과(표시 전용). */
+.wt-wanted-hud__goal {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  box-shadow: var(--shadow-card);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.wt-wanted-hud__goal[data-goal='deliver'] {
+  color: var(--chase-gold-text);
+  background: color-mix(in srgb, var(--chase-gold) 18%, var(--surface));
+}
+
+/* §11-D111 ① 첫 런 코치마크(ChaseFirstRunTips.tsx) — 비모달·비블로킹. 컨테이너 전체가
+   pointer-events:none이라 클릭·타이핑을 한 순간도 가로채지 않는다(D96). 위치는 각 팁이 가리키는
+   UI 근처(콜아웃 링 위쪽 / HUD 별 아래 / 홈·레이더가 있는 하단)로 고정 — 화살표를 실제 좌표에
+   붙이지 않는 이유는 후보·홈 위치가 매 홉 바뀌어 상시 재투영(rAF)이 필요해지기 때문(D67 계약). */
+.wt-chase-tips {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+}
+.wt-chase-tip {
+  position: absolute;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-console) 92%, transparent);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-card);
+  transform: translateX(-50%);
+  animation: wt-chase-tip-in 180ms ease-out;
+}
+.wt-chase-tip[data-tip='callouts'] {
+  top: 22%;
+}
+.wt-chase-tip[data-tip='wanted'] {
+  top: 52px;
+}
+.wt-chase-tip[data-tip='delivery'] {
+  bottom: 28px;
+}
+.wt-chase-tip__step {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes wt-chase-tip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+.wt-chase-tips[data-static='true'] .wt-chase-tip,
+:root[data-reduced] .wt-chase-tip {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-chase-tip {
+    animation: none;
+  }
+}
+
 /* ── 골드 러너(chase) 브리핑·모드 카드 (docs/09 §7.1·§8.2, docs/00 §11-D90, WT-CH-08) ──
    BriefingCard.tsx는 기존 .wt-boarding__card 프레임(노치·억센트 바)을 재사용하고 새 accent
    수식자 1개만 더한다(§7.1 "크라프트지 텍스처의 WANTED 전단" — 배경만 --chase-paper로 교체,
@@ -4310,14 +4395,77 @@ a.wt-brand:focus-visible {
 .wt-boarding__card--chase::after {
   display: none;
 }
-.wt-chase-briefing__rules {
-  margin: 0.25rem 0 0;
-  padding: 0;
+/* §11-D111 ① "게임 방법" 안내 섹션(WT-CH-DEV-2) — 클릭-투-스타트 카드의 형제 노드(카드 안 중첩
+   금지, BriefingCard.tsx 헤더 참조). 첫 진입은 펼침, 이후는 접힌 디스클로저.
+   아이콘 폭을 고정해 제목·문장 시작선이 정렬되게 한다(스캔 속도 = 첫인상 목표의 핵심). */
+.wt-chase-howto {
+  width: min(100%, 30rem);
+  margin: 0.6rem auto 0;
+  text-align: left;
+}
+.wt-chase-howto__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wt-chase-howto__toggle:hover {
+  background: var(--surface-sunken);
+  color: var(--text);
+}
+.wt-chase-howto__chevron {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.wt-chase-howto__list {
+  margin: 0.3rem 0 0;
+  padding: 0.6rem 0.75rem;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--chase-paper) 60%, var(--surface));
+  border: 1px solid var(--border);
+  max-height: min(46vh, 22rem);
+  overflow-y: auto;
+}
+/* 접힘 상태 — 작성자 스타일의 display:flex가 UA의 [hidden]{display:none}을 이기므로 명시 필요. */
+.wt-chase-howto__list[hidden] {
+  display: none;
+}
+.wt-chase-howto__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.wt-chase-howto__icon {
+  flex: none;
+  width: 1.25rem;
+  text-align: center;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.wt-chase-howto__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.wt-chase-howto__item-title {
   font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.wt-chase-howto__item-body {
+  font-size: 0.78rem;
+  line-height: 1.45;
   color: var(--text-muted);
 }
 .wt-chase-briefing__cta {

@@ -43,6 +43,7 @@ function mockGlobe(): GlobeChaseHandle {
     playPickup: vi.fn(),
     playDelivery: vi.fn(),
     playArrest: vi.fn(),
+    playRadarSweep: vi.fn(), // §11-D111 ②-b(WT-CH-DEV-2)
   } as unknown as GlobeChaseHandle;
 }
 

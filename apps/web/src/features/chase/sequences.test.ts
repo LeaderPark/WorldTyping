@@ -49,6 +49,8 @@ function mockGlobe() {
     playPickup: vi.fn(),
     playDelivery: vi.fn(),
     playArrest: vi.fn(),
+    // §11-D111 ②-b: 수배 발령 타임라인이 시각 스윕을 호출한다(WT-CH-DEV-2에서 추가).
+    playRadarSweep: vi.fn(),
   } as unknown as GlobeChaseHandle;
 }
 
@@ -272,6 +274,38 @@ describe('sequences — 수배 발령/상승/하강(§7.4·§7.8 사운드 배�
     emit({ type: 'wantedChanged', stars: 1, direction: 'down' });
     expect(audio.radioStatic).toHaveBeenCalledTimes(2);
     expect(audio.sirenDoppler).toHaveBeenCalledTimes(2); // 하강엔 도플러 없음
+  });
+
+  it('최초 발령에서만 시각 레이더 스윕을 1회 재생한다(§11-D111 ②-b — CH-07 축소분 복원)', () => {
+    const { engine, emit } = mockEngine();
+    const globe = mockGlobe();
+    const audio = mockAudio();
+    createChaseSequences({
+      engine, globe, audio, countries: ALL, lang: 'ko',
+      getLayer: () => null, isReduced: () => false,
+    });
+
+    emit({ type: 'wantedChanged', stars: 1, direction: 'up' });
+    expect(globe.playRadarSweep).toHaveBeenCalledTimes(1);
+
+    emit({ type: 'wantedChanged', stars: 2, direction: 'up' });
+    emit({ type: 'wantedChanged', stars: 1, direction: 'down' });
+    expect(globe.playRadarSweep).toHaveBeenCalledTimes(1); // 이후 상승·하강엔 스윕 없음
+  });
+
+  it('reduced-motion이면 스윕을 생략하되 발령 사운드는 그대로 재생한다(§8.10)', () => {
+    const { engine, emit } = mockEngine();
+    const globe = mockGlobe();
+    const audio = mockAudio();
+    createChaseSequences({
+      engine, globe, audio, countries: ALL, lang: 'ko',
+      getLayer: () => null, isReduced: () => true,
+    });
+
+    emit({ type: 'wantedChanged', stars: 1, direction: 'up' });
+    expect(globe.playRadarSweep).not.toHaveBeenCalled();
+    expect(audio.radioStatic).toHaveBeenCalledTimes(1);
+    expect(audio.sirenDoppler).toHaveBeenCalledTimes(1);
   });
 
   it('재도전(phase countdown 재진입) 시 다음 상승을 다시 "최초 발령"으로 취급한다', () => {

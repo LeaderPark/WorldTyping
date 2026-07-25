@@ -1,7 +1,7 @@
 // spec: docs/09-chase-mode-goldrunner.md §7.1(브리핑)·§7.2(카운트다운)·§7.7(결과)·§8.1(화면 흐름·
 //       ESC=자수 확인 모달)·§9.1~9.2(시드 발급·제출), docs/00 §11-D90(라우팅/스코프)·D68(랭킹 게이팅)·
-//       D95(스킵·일시정지 부재, 자수는 심 비정지)·D96(체포 히트스톱은 CH-07 소관), CLAUDE.md Gotcha 3,
-//       WT-CH-08.
+//       D95(스킵·일시정지 부재, 자수는 심 비정지)·D96(체포 히트스톱은 CH-07 소관)·D111(첫 런 코치마크
+//       마운트·phase 오버레이 은닉), CLAUDE.md Gotcha 3, WT-CH-08 → WT-CH-DEV-2.
 //
 // GamePage(mode=chase)의 페이지 루트 — pages/GamePage/index.tsx가 chase 라우트에서 lazy(dynamic
 // import)로 불러온다(chase 코드는 entry/기존 5모드 "game" 청크와 분리된 별도 청크, vite.config.ts
@@ -39,6 +39,7 @@ import { CandidateCallouts } from './CandidateCallouts';
 import { FocusStrip } from './FocusStrip';
 import { WantedHud } from './WantedHud';
 import { BriefingCard } from './BriefingCard';
+import { ChaseFirstRunTips } from './ChaseFirstRunTips';
 import { ChaseResultCard } from './ChaseResultCard';
 
 interface ChaseBoot {
@@ -305,8 +306,21 @@ function ChasePlaySession({ seed, runToken, graph, countries, lang, platform, re
     return unsub;
   }, [engine, chaseHandle, compiledGraph, homeId]);
 
+  // idle spin(브리핑·결과)과 chase 오버레이 표시는 정확히 반대로 묶인다(§11-D111 ②-a).
+  // 코어 idle spin은 canvas만 회전시키고 globe-chase.ts의 미러 카메라는 따라가지 않으므로(미러는
+  // 홉 카메라 접점 3메서드로만 갱신 — D67 "상시 rAF 신설 금지" 계약), 스핀 구간에는 마커·노드·
+  // 연결선이 돌아가는 지구본 위에 고정돼 좌표가 어긋난 채로 남는다(D108 "알려진 잔여"). 리드
+  // 결정에 따라 그 구간에서는 오버레이를 은닉한다 — 브리핑·결과 화면에 마커 정보는 불필요하다
+  // (필요한 정보는 브리핑 카드·결과 카드가 이미 전달).
+  // [체포 시퀀스와의 관계 — 최종 보고 기재] 'arrested'는 즉시 phase='finished'라 오버레이도 즉시
+  // 페이드아웃한다. 그 결과 §7.6 체포 타임라인 520ms의 **마커 레벨 팝(playArrest)만** 보이지 않게
+  // 되는데, 같은 순간 이미 idle spin이 시작돼 그 팝은 어차피 어긋난 좌표에 찍히던 것이고(현행
+  // 동작), 풀스크린 체포 연출(히트스톱·플래시·톤다운·ARRESTED 스탬프·"○○에서 검거" 플로팅)은
+  // 별도 레이어(.wt-chase-fx)라 2,800ms 타임라인 전체가 그대로 재생된다 — 연출 타이밍 충돌 없음.
   useEffect(() => {
-    chaseHandle?.setIdleSpin(phase === 'idle' || phase === 'finished');
+    const spinning = phase === 'idle' || phase === 'finished';
+    chaseHandle?.setIdleSpin(spinning);
+    chaseHandle?.setOverlayVisible(!spinning);
   }, [phase, chaseHandle]);
 
   const reducedActive =
@@ -444,6 +458,10 @@ function ChasePlaySession({ seed, runToken, graph, countries, lang, platform, re
           <WantedHud engine={engine} />
         </>
       )}
+
+      {/* 첫 런 한정 코치마크 3개(§11-D111 ① — playing 진입 후에만, 카운트다운·결과에는 뜨지 않는다).
+          비모달·비블로킹이라 이 위치(HUD/콜아웃 형제)에 그대로 얹어도 입력을 가리지 않는다. */}
+      {phase === 'playing' && <ChaseFirstRunTips />}
 
       {phase === 'playing' && showResign && (
         <div

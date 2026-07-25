@@ -122,6 +122,41 @@ describe('WantedHud — 저빈도 텍스트 갱신(§4.5)', () => {
   });
 });
 
+describe('WantedHud — "지금 할 일" 목표 라벨(§11-D111 ③)', () => {
+  it('초기(금 미소지)에는 "금을 찾아 이동" 상태를 표시한다', () => {
+    const { engine } = makeStubEngine(0);
+    render(
+      <AppProviders>
+        <WantedHud engine={engine} />
+      </AppProviders>,
+    );
+    const goal = screen.getByTestId('chase-hud-goal');
+    expect(goal).toHaveAttribute('data-goal', 'findGold');
+    expect((goal.textContent ?? '').trim().length).toBeGreaterThan(1);
+  });
+
+  it('goldPicked(소지>0)에서 배송 지시로, delivered(소지 0)에서 다시 탐색 지시로 전환된다', () => {
+    const { engine, emit, setCarried } = makeStubEngine(0);
+    render(
+      <AppProviders>
+        <WantedHud engine={engine} />
+      </AppProviders>,
+    );
+    const goal = screen.getByTestId('chase-hud-goal');
+    const findText = goal.textContent;
+
+    setCarried(1);
+    emit({ type: 'goldPicked', at: 'JP', ring: 'near' });
+    expect(goal).toHaveAttribute('data-goal', 'deliver');
+    expect(goal.textContent).not.toBe(findText);
+
+    setCarried(0);
+    emit({ type: 'delivered', count: 1, payout: 900, starsAfter: 0 });
+    expect(goal).toHaveAttribute('data-goal', 'findGold');
+    expect(goal.textContent).toBe(findText);
+  });
+});
+
 describe('WantedHud — a11y 공지(§8.10)', () => {
   it('wantedChanged(up)을 aria-live 영역에 공지한다', () => {
     const { engine, emit } = makeStubEngine();

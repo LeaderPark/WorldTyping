@@ -724,3 +724,100 @@ describe('실 GlobeMap 합성 — 형제 오버레이 삽입(코어 무수정 �
     expect(() => chase.moveVehicle('KR', 'KR')).not.toThrow();
   });
 });
+
+// ── WT-CH-DEV-2(§11-D111) 신규 3종: phase 오버레이 은닉 · 레이더 스윕 · 배송 목표 강조 ──────────
+describe('§11-D111 ②-a setOverlayVisible — idle/finished 스핀 구간 오버레이 은닉', () => {
+  it('기본은 표시(is-hidden 없음), false면 오버레이+비네트 둘 다 은닉, true면 복귀한다', () => {
+    const { handle, container } = setup();
+    const svg = container.querySelector('svg.wt-chase__overlay')!;
+    const vignette = container.querySelector('.wt-chase__vignette')!;
+    expect(svg.classList.contains('is-hidden')).toBe(false);
+
+    handle.setOverlayVisible(false);
+    expect(svg.classList.contains('is-hidden')).toBe(true);
+    expect(vignette.classList.contains('is-hidden')).toBe(true);
+
+    handle.setOverlayVisible(true);
+    expect(svg.classList.contains('is-hidden')).toBe(false);
+    expect(vignette.classList.contains('is-hidden')).toBe(false);
+  });
+
+  it('은닉 중에도 DOM·상태는 유지돼 복귀 즉시 최신 마커가 보인다(재구축 비용 0)', () => {
+    const { handle, container } = setup();
+    const { front } = pickFrontAndBack();
+    handle.setOverlayVisible(false);
+    handle.upsertPoliceMarker({ id: 200, kind: 'chaser', at: front });
+    handle.setOverlayVisible(true);
+    expect(container.querySelector('[data-police-id="200"]')).not.toBeNull();
+  });
+});
+
+describe('§11-D111 ②-b playRadarSweep — 수배 발령 부채꼴 스윕(§7.6 600ms)', () => {
+  it('부채꼴 SVG 노드를 레이더 레이어에 1개 생성한다(중복 호출에도 1개 유지)', () => {
+    const { handle, container } = setup();
+    handle.playRadarSweep();
+    const sweeps = container.querySelectorAll('.wt-chase__sweep');
+    expect(sweeps).toHaveLength(1);
+    const wedge = sweeps[0]!.querySelector('.wt-chase__sweep-wedge');
+    expect(wedge).not.toBeNull();
+    expect(wedge!.tagName.toLowerCase()).toBe('path');
+    expect(wedge!.getAttribute('d')).toMatch(/^M0 0 L/);
+    expect((sweeps[0]!.parentNode as SVGGElement).getAttribute('data-layer')).toBe('chase-radar');
+
+    handle.playRadarSweep();
+    expect(container.querySelectorAll('.wt-chase__sweep')).toHaveLength(1);
+  });
+
+  it('reduced-motion이면 스윕을 그리지 않는다(§7 헤더 강등표)', () => {
+    stubMatchMedia(true);
+    const { handle, container } = setup();
+    handle.playRadarSweep();
+    expect(container.querySelectorAll('.wt-chase__sweep')).toHaveLength(0);
+  });
+
+  it('juice 강등(=1)에서도 스윕을 그리지 않는다', () => {
+    const { handle, container } = setup();
+    handle.setJuiceLevel(1);
+    handle.playRadarSweep();
+    expect(container.querySelectorAll('.wt-chase__sweep')).toHaveLength(0);
+  });
+
+  it('reset이 진행 중이던 스윕 노드를 정리한다(누수 금지)', () => {
+    const { handle, container } = setup();
+    handle.playRadarSweep();
+    expect(container.querySelectorAll('.wt-chase__sweep')).toHaveLength(1);
+    handle.reset();
+    expect(container.querySelectorAll('.wt-chase__sweep')).toHaveLength(0);
+  });
+});
+
+describe('§11-D111 ③ 배송 목표 강조 — setCarriedCount가 홈 비컨/레이더 화살표를 토글', () => {
+  it('금 소지 시 홈 레이어에 is-delivering, 배송 후 해제된다', () => {
+    const { handle, container } = setup();
+    const { front } = pickFrontAndBack();
+    handle.setHome(front);
+    const home = container.querySelector('.wt-chase__home')!;
+    expect(home.classList.contains('is-delivering')).toBe(false);
+
+    handle.setCarriedCount(2);
+    expect(home.classList.contains('is-delivering')).toBe(true);
+
+    handle.setCarriedCount(0);
+    expect(home.classList.contains('is-delivering')).toBe(false);
+  });
+
+  it('홈이 뒷면이면 레이더 화살표 쪽에 is-emphasis가 붙는다(방향 강조)', () => {
+    const { handle, container } = setup();
+    const { back } = pickFrontAndBack();
+    handle.setHome(back);
+    const arrow = container.querySelector('.wt-chase__radar-arrow--home')!;
+    expect(arrow).not.toBeNull();
+    expect(arrow.classList.contains('is-emphasis')).toBe(false);
+
+    handle.setCarriedCount(1);
+    expect(arrow.classList.contains('is-emphasis')).toBe(true);
+
+    handle.setCarriedCount(0);
+    expect(arrow.classList.contains('is-emphasis')).toBe(false);
+  });
+});

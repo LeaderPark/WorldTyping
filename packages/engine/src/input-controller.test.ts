@@ -1123,25 +1123,28 @@ describe('TypingInputController', () => {
   //    입력과 합쳐져 '도대'가 된다. 근본 구별 신호 = **물리 keydown 상관**: 사용자 타는 input 직전
   //    keydown이 있고(IME도 keyCode 229), 기계 재삽입은 keydown 없이 input만 온다. ─────────────
   describe('D106 keydown correlation (progressive re-composition echo)', () => {
-    // P1(라이브 재현 ★): keydown 없는 'ㄷ' → '도' 2연속 에코를 모두 삼키고(one-shot 유지),
-    //   이어지는 사용자 실타 '대'만 genuine으로 통과한다 — 화면에 '도대'가 남지 않는다.
-    it('P1: a keydown-less progressive echo ("ㄷ"→"도") is fully swallowed; the next real keystroke is genuine', () => {
+    // P1(라이브 재현 ★, D113 개정): keydown 없는 점진 에코 'ㄷ' → '도'. [D113] 1조각 'ㄷ'은 새
+    //   타깃(대한민국)의 **유효 PREFIX**라 삼키지 않는다 — kd 판별이 빗나간 진짜 사용자 자음일 수
+    //   있고, 유효 진행 불가침이 원칙이다(간헐적 첫 자음 소실 실사용 재현의 수정). 2조각 '도'가
+    //   MISS가 되는 즉시 삼켜져 버퍼가 자가 정리되므로 '도대'는 여전히 남지 않는다.
+    it('P1: a keydown-less progressive echo — valid-PREFIX piece passes, MISS piece is swallowed (D113)', () => {
       const h = harness('ko');
       h.setNow(0);
       reachIndiaExact(h); // staleRaw='인도'(끝음절 '도'=ㄷㅗ), flushAt=0
       const before = contentCount(h.events);
       h.setNow(500); // 일반적인 플레이 호흡 — 시간 게이트는 D98에서 이미 제거됨
       h.ctrl.setCountry(KOREA);
-      h.type('ㄷ', true, false); // 기계 스냅샷 1: 단일 자모지만 keydown이 없다 → 삼킴
-      expect(contentCount(h.events)).toBe(before);
-      expect(h.input.value).toBe('');
+      h.type('ㄷ', true, false); // 기계 스냅샷 1: 유효 PREFIX → 불가침(순간 표시 수용)
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+      expect(h.input.value).toBe('ㄷ');
       h.setNow(520);
-      h.type('도', true, false); // 기계 스냅샷 2: one-shot이 소진되지 않았으므로 여전히 무장 상태
-      expect(contentCount(h.events)).toBe(before);
+      h.type('도', true, false); // 기계 스냅샷 2: MISS → 삼킴(버퍼 자가 정리, 방어 무장 유지)
+      expect(contentCount(h.events)).toBe(before + 1);
       expect(h.input.value).toBe('');
       h.setNow(700);
       h.type('대', true); // 사용자 실타(keydown 동반)
-      expect(contentCount(h.events)).toBe(before + 1);
+      expect(contentCount(h.events)).toBe(before + 2);
       expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
       expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('대');
       expect(h.ctrl.getValue()).toBe('대'); // '도대'가 아니다
@@ -1204,25 +1207,27 @@ describe('TypingInputController', () => {
     // P5(경계값): keydown↔input 상관은 80ms 창이다(가상 시계). 경계 포함은 사용자 타, 초과는 무상관.
     it('P5: keydown correlation holds at exactly 80ms and expires past it', () => {
       // (a) 80ms 정각 — 상관 유효 → genuine
+      // [D113] 경계 판별에는 MISS-형 조각이 필요하다(유효 PREFIX는 kd와 무관하게 불가침이 됐으므로).
+      // 인도→가나 전환: 'ㄷ'은 가나 기준 MISS이면서 옛 끝음절 '도'(ㄷㅗ)의 접두 — 에코-형.
       const a = harness('ko');
       a.setNow(0);
       reachIndiaExact(a);
       const beforeA = contentCount(a.events);
       a.setNow(500);
-      a.ctrl.setCountry(KOREA);
+      a.ctrl.setCountry(GHANA);
       a.keydown('a'); // lastKeydownAt = 500
-      a.setNow(580); // 500 + 80 = 경계(포함)
+      a.setNow(580); // 500 + 80 = 경계(포함) — 사용자 타로 상관 → §2.10 #4 불가침(genuine MISS)
       a.type('ㄷ', true, false); // keydown 재발행 없이 input만
       expect(contentCount(a.events)).toBe(beforeA + 1);
       expect(a.ctrl.getValue()).toBe('ㄷ');
 
-      // (b) 81ms — 무상관 → 기계 스냅샷으로 삼킴
+      // (b) 81ms — 무상관 → 기계 스냅샷: MISS ∧ 꼬리 접두 → 삼킴
       const b = harness('ko');
       b.setNow(0);
       reachIndiaExact(b);
       const beforeB = contentCount(b.events);
       b.setNow(500);
-      b.ctrl.setCountry(KOREA);
+      b.ctrl.setCountry(GHANA);
       b.keydown('a'); // lastKeydownAt = 500
       b.setNow(581);
       b.type('ㄷ', true, false);
@@ -1233,10 +1238,11 @@ describe('TypingInputController', () => {
     // P6(예산 공유 fail-open): keydown 없는 에코 삼킴도 reinsertFlushes 예산을 공유한다 — 3회
     //   소진 후에는 기계 스냅샷도 genuine으로 통과시켜 입력 잠금을 원천 차단한다(N5와 동일 계약).
     it('P6: keydown-less echo swallows share the reinsert budget and fail open after 3', () => {
+      // [D113] MISS-형 조각으로 검증(인도→가나 — 'ㄷ'이 가나 기준 MISS ∧ 옛 꼬리 접두).
       const h = harness('ko');
       h.setNow(0);
       reachIndiaExact(h);
-      h.ctrl.setCountry(KOREA); // reinsertFlushes=0
+      h.ctrl.setCountry(GHANA); // reinsertFlushes=0
       const before = contentCount(h.events);
       for (const t of [500, 700, 900]) {
         h.setNow(t);
@@ -1260,7 +1266,7 @@ describe('TypingInputController', () => {
         h.setNow(0);
         reachIndiaExact(h);
         h.setNow(500);
-        h.ctrl.setCountry(KOREA);
+        h.ctrl.setCountry(GHANA); // [D113] MISS-형('ㄷ' vs 가나)이어야 swallow-echo 분기를 탄다
         h.type('ㄷ', true, false);
         const branches = debugSpy.mock.calls.map((c) => c[1]);
         expect(branches).toContain('armed');

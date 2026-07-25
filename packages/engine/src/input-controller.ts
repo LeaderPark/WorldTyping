@@ -50,6 +50,12 @@
 //   절대 걸리지 않고, 상시 무장으로 새로 노출되는 분기 (2)(옛 전체값 접두)에는 (3)과 동일한 의미
 //   중재를 추가한다(인도→인도네시아처럼 새 국가명이 옛 국가명으로 시작하는 genuine 진행 보호).
 //   부수 효과: 이미 누수된 버퍼('도대…')도 이후 스냅샷에서 중재 통과 시 자가 치유된다.
+// ⑧(D113) **기계 판별 오탐 봉인 — 분기 (0) 중재를 MISS-전용으로 강화**. keydown 상관(80ms)은
+//   무거운 프레임/기기 지연에서 빗나갈 수 있고, 그때 사용자의 진짜 첫 자음('ㄷ' = 새 타깃의 유효
+//   PREFIX)이 기계로 오인돼 삼켜졌다(D112 상시 무장으로 노출 확대 — "간헐적 첫 자음 소실" 실사용
+//   재현). 원칙 확정: **유효 진행(PREFIX/EXACT)은 어떤 판별 실패에도 불가침** — 전 분기가 동일한
+//   MISS-전용 중재를 쓴다. 트레이드: 점진 에코 1조각이 유효 접두면 순간 표시되나 다음 조각(MISS)에서
+//   즉시 자가 정리된다.
 import {
   matchInputDetail,
   compileTargets,
@@ -317,13 +323,15 @@ export class TypingInputController {
     // (0) ★D106-(b): keydown 없는 스냅샷 = 기계 재삽입 후보. 두 게이트를 함께 통과할 때만 삼킨다.
     //     ① 구조: v가 옛 끝음절 자모열의 접두이거나 접미(= 그 음절을 되타이핑하는 중). 무관한 값은
     //        keydown이 없어도 genuine으로 통과시켜 오탐 상한을 둔다.
-    //     ② 의미: 전체 판정이 EXACT가 **아닐 것**. keydown을 주지 않는 소프트키보드/일부 IME에서
-    //        genuine을 기계로 오인하더라도 정답 입력만은 최악에도 통과한다(최후 안전 게이트).
-    //     §2.10 #4("단일 자모 절대 비삼킴")는 사용자 첫 타 보호가 목적이고 keydown 없는 입력은
-    //     사용자 타가 아니므로, 여기서 단일 자모를 삼키는 것은 그 계약의 위반이 아니라 적용 범위
-    //     밖이다 — 계약은 "keydown 상관 입력에 한한다"로 명문화된다(§2.10 #4 주석 개정).
+    //     ② 의미(★D113 강화): 전체 판정이 **MISS일 때만** 삼킨다 — (1)(3)과 동일 중재 기준.
+    //        구 기준("EXACT만 보호")은 keydown 상관이 빗나가는 순간(무거운 프레임 등으로 input이
+    //        keydown보다 80ms 이상 지연)에 사용자의 진짜 첫 자음('ㄷ' = 대한민국의 유효 PREFIX)을
+    //        삼켰다 — D112 상시 무장으로 노출이 넓어지며 실사용 재현("간헐적 첫 자음 소실").
+    //        유효 진행(PREFIX/EXACT)은 어떤 판별 실패에도 불가침이 원칙이다. 트레이드: 점진 에코의
+    //        1번째 조각('ㄷ')이 새 타깃의 유효 접두면 순간 표시될 수 있으나, 이어지는 조각('도')이
+    //        MISS가 되는 즉시 삼켜져 자가 정리된다(§2.10 #4 주석의 keydown 한정 조항은 유지).
     if (!kd && hasBudget && this.isStaleTailEcho(vJamo, staleRaw)) {
-      if (matchInputDetail(v, this.targets, this.lang).state !== 'EXACT') {
+      if (matchInputDetail(v, this.targets, this.lang).state === 'MISS') {
         if (this.trace) this.traceBranch('swallow-echo', { v, vJamo, stale });
         this.reinsertFlushes++;
         this.settleSwallow();

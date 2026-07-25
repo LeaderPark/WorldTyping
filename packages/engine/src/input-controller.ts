@@ -42,6 +42,14 @@
 //   input만 온다. (a) one-shot 소거는 keydown 상관 입력에서만 하고, (b) keydown 없는 스냅샷은
 //   [옛 끝음절 자모열의 접두/접미 ∧ 전체 판정이 EXACT가 아님] 하에 단일 자모여도 삼킨다.
 //   (c) keydown 있는 입력의 판정은 D98/D104 그대로다(변경 0).
+// ⑦(D112) **재정렬 변형 — one-shot 폐기**. ⑥까지의 모든 방어는 "에코가 먼저 온다"를 가정했지만,
+//   실기기에는 사용자의 첫 자모('ㄷ', kd=true)가 먼저 도착해 one-shot을 소진시킨 뒤 IME가 다음
+//   스냅샷에서 옛 음절을 병합('도대')하는 순서 역전이 존재한다(라이브 잔존 재현의 원인). staleEcho는
+//   국가 전환 내내 무장 유지한다 — 해제는 다음 flush의 재무장/클리어뿐. 안전 근거: 모든 삼킴·스트립이
+//   [구조 게이트 ∧ 의미 중재(전체 MISS일 때만) ∧ 예산 3회]를 통과해야 하므로 정상 진행(PREFIX/EXACT)은
+//   절대 걸리지 않고, 상시 무장으로 새로 노출되는 분기 (2)(옛 전체값 접두)에는 (3)과 동일한 의미
+//   중재를 추가한다(인도→인도네시아처럼 새 국가명이 옛 국가명으로 시작하는 genuine 진행 보호).
+//   부수 효과: 이미 누수된 버퍼('도대…')도 이후 스냅샷에서 중재 통과 시 자가 치유된다.
 import {
   matchInputDetail,
   compileTargets,
@@ -276,15 +284,14 @@ export class TypingInputController {
     if (v.length === 0) return v; // 빈 input은 재삽입 판별 불가 — 가드 유지
     const stale = this.staleEchoJamo;
     const staleRaw = this.staleEchoRaw;
-    // ★D106-(a): one-shot 소거는 **keydown 상관이 있는 입력(사용자 타)에서만** 한다. 점진 재조합
-    // 에코의 1번째 조각('ㄷ')이 방어를 소진시켜 2번째('도')를 무방비로 통과시키던 경로를 닫는다.
-    // 기계 스냅샷은 staleEcho를 유지한 채 처리되므로 에코가 몇 조각으로 쪼개져 와도 유효하다
-    // (노출 상한은 시간이 아니라 예산 MAX_REINSERT_FLUSHES가 담당한다 — D98과 동일 원칙).
+    // ★D112: one-shot 소거 **전면 폐기** — staleEcho는 국가 전환 내내 무장 유지한다(해제는 다음
+    // flushIme/silentClear의 재무장 또는 비조합 빈-버퍼 flush의 클리어만). 근거: D106까지의 모든
+    // 방어는 "에코가 사용자 타보다 먼저 온다"를 가정했지만, 실기기에서는 사용자의 첫 자모('ㄷ',
+    // kd=true)가 먼저 와 one-shot을 소진시킨 뒤 IME가 다음 스냅샷에서 옛 음절을 병합('도대')하는
+    // **재정렬 변형**이 존재한다(라이브 잔존 재현의 원인). 상시 무장이 안전한 이유: 삼킴/스트립은
+    // 전부 [구조 게이트(꼬리 일치) ∧ 의미 중재(전체 MISS) ∧ 예산 3회]가 지키므로 정상 진행
+    // (PREFIX/EXACT)은 어떤 분기에도 걸리지 않고, 오탐 상한은 예산이 계속 담당한다.
     const kd = this.hasRecentKeydown();
-    if (kd) {
-      this.staleEchoJamo = ''; // 첫 비어있지 않은 "사용자" 입력에서 one-shot 해제
-      this.staleEchoRaw = '';
-    }
     const vJamo = this.jamoOf(v);
     const inWindow = this.now() - this.flushAt <= REINSERT_WINDOW_MS;
     const hasBudget = this.reinsertFlushes < MAX_REINSERT_FLUSHES;
@@ -343,11 +350,18 @@ export class TypingInputController {
         return null;
       }
     }
-    // (2) Gboard 옛 전체값 접두 스트립(D70-③) — 무게이트 현행 유지(테스트 ④는 윈도우 밖).
+    // (2) Gboard 옛 전체값 접두 스트립(D70-③). ★D112: 의미 중재 추가 — staleEcho가 상시 무장으로
+    //     바뀌면서, 새 국가명이 옛 국가명으로 시작하는 전환(인도→인도네시아)에서 genuine 진행
+    //     "인도네"가 이 분기에 걸릴 수 있게 됐다. (3)과 동일 중재: 전체 해석이 유효(PREFIX/EXACT)
+    //     하면 절대 스트립하지 않는다 — Gboard 에코("인도"+연장)는 전체가 MISS라 종전대로 잡힌다.
     if (v.startsWith(staleRaw) && v.length > staleRaw.length && staleRaw.length > 0) {
-      if (this.trace) this.traceBranch('gboard-prefix', { v, staleRaw });
-      this.basePrefix = staleRaw; // Gboard 접두 스트립 — 이후 basePrefix 분기가 연장분만 넘긴다
-      return v.slice(staleRaw.length);
+      const fullG = matchInputDetail(v, this.targets, this.lang);
+      const restG = matchInputDetail(v.slice(staleRaw.length), this.targets, this.lang);
+      if (fullG.state === 'MISS' && restG.state !== 'MISS') {
+        if (this.trace) this.traceBranch('gboard-prefix', { v, staleRaw });
+        this.basePrefix = staleRaw; // Gboard 접두 스트립 — 이후 basePrefix 분기가 연장분만 넘긴다
+        return v.slice(staleRaw.length);
+      }
     }
     // (3) ★D84(버그 W): 끝음절(부분 꼬리) 접미 재삽입이 사용자 첫 타와 병합된 스냅샷 — staleRaw의
     //     최장 proper 접미 r이 v의 raw 접두이고 연장분이 있으면, 의미 중재 통과 시에만 r을 기존

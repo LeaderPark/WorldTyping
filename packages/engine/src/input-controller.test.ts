@@ -58,6 +58,8 @@ const DADO = makeCountry({ id: 'DD', nameKo: '다도', acceptedInputsKo: ['다�
 // DOMINICA(도미니카)는 over-strip 가드용 — 전 국가 끝 음절 '도'로 시작하는 genuine 병합 입력이
 // 전체 판정 PREFIX면 스트립되지 않고 보존됨을 잠근다(의미 중재).
 const INDIA = makeCountry({ id: 'IN', nameKo: '인도', acceptedInputsKo: ['인도'] });
+// D112 P9: 새 국가명이 옛 국가명(staleRaw '인도')으로 시작하는 실존 전환 — 분기 (2) 의미 중재 가드.
+const INDONESIA = makeCountry({ id: 'ID', nameKo: '인도네시아', acceptedInputsKo: ['인도네시아'] });
 const DOMINICA = makeCountry({ id: 'DM', nameKo: '도미니카', acceptedInputsKo: ['도미니카'] });
 // D106(P3) 프로브: "keydown 없는 스냅샷이라도 전체 판정이 EXACT면 절대 삼키지 않는다"는 최후
 // 게이트를 재현하려면 옛 끝음절('도')과 문자열이 완전히 같은 값이 새 타깃의 EXACT여야 한다 —
@@ -1147,8 +1149,10 @@ describe('TypingInputController', () => {
     });
 
     // P2(§2.10 #4 보존 ★): 같은 'ㄷ'이라도 물리 keydown이 선행하면 사용자 첫 타다 — 절대 삼키지
-    //   않고 one-shot도 기존대로 소진된다(이후 옛-꼬리 전량 에코조차 방어 해제로 통과한다).
-    it('P2: a keydown-correlated single jamo "ㄷ" stays genuine and consumes the one-shot (§2.10 #4)', () => {
+    //   않는다. [D112 개정] one-shot은 폐기됐다 — 사용자 타 이후에도 방어는 계속 무장 상태라,
+    //   뒤따르는 keydown-무상관 꼬리 에코('도')는 여전히 삼켜진다(이 "소진 후 무방비" 계약이
+    //   재정렬 변형 누수의 원인이었다 — §11-D112).
+    it('P2: a keydown-correlated single jamo "ㄷ" stays genuine; defense stays armed after it (D112)', () => {
       const h = harness('ko');
       h.setNow(0);
       reachIndiaExact(h);
@@ -1160,11 +1164,11 @@ describe('TypingInputController', () => {
       expect(contentCount(h.events)).toBe(before + 1);
       expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
       expect(h.ctrl.getValue()).toBe('ㄷ');
-      // one-shot 소진 확인: 방어가 풀렸으므로 다음 스냅샷은 무조건 genuine이다.
+      // [D112] 방어 유지 확인: 늦은 기계 꼬리 에코는 사용자 타 이후에도 삼켜진다.
       h.setNow(520);
       h.type('도', true, false);
-      expect(contentCount(h.events)).toBe(before + 2);
-      expect(h.ctrl.getValue()).toBe('도');
+      expect(contentCount(h.events)).toBe(before + 1); // 이벤트 증가 없음 = 삼킴
+      expect(h.input.value).toBe('');
     });
 
     // P3(최후 게이트 ★): keydown이 없어도 **전체 판정이 EXACT면 절대 삼키지 않는다**. keydown을
@@ -1270,6 +1274,82 @@ describe('TypingInputController', () => {
       } finally {
         localStorage.removeItem('wt:imeTrace');
       }
+    });
+  });
+
+  // ── D112: 재정렬 변형(사용자 타 → 에코 병합) + one-shot 폐기 (§11-D112) ──
+  // D106까지의 방어는 "에코가 사용자 타보다 먼저 온다"를 가정했다. 실기기에는 사용자의 첫 자모가
+  // 먼저 오고(one-shot 소진) IME가 다음 스냅샷에서 옛 음절을 병합하는 순서 역전이 존재한다 —
+  // 라이브에서 D106 이후에도 '도대'가 잔존한 원인. one-shot을 폐기하고 staleEcho를 국가 내내
+  // 무장 유지한다(의미 중재·예산이 오탐 상한 담당).
+  describe('D112 reordered echo (user keystroke first, one-shot abolished)', () => {
+    // P8(핵심 재현 ★): 사용자 첫 타 'ㄷ'(kd, genuine) 이후 IME가 옛 끝음절을 병합한 '도대' 스냅샷.
+    //   [수정 전] one-shot이 'ㄷ'에서 소진돼 '도대'가 genuine으로 안착 — 라이브 증상 그대로.
+    //   [수정 후] 방어가 무장 유지 → 분기 (3) 부분 꼬리 스트립(전체 MISS ∧ 잔여 PREFIX) → '대'만 평가.
+    it('P8: user-first reorder — "ㄷ"(kd) then merged "도대" strips to "대"', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // staleRaw='인도'
+      const before = contentCount(h.events);
+      h.setNow(600);
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('ㄷ', true); // 사용자 첫 타(keydown) — genuine PREFIX
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+      h.setNow(650);
+      h.type('도대', true); // 다음 키스트로크 시점에 IME가 옛 음절 '도'를 병합해 발현
+      expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('대');
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+      expect(h.ctrl.getValue()).toBe('대'); // '도대'가 아니다 — 화면 잔류 없음
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+      expect(contentCount(h.events)).toBe(before + 2);
+    });
+
+    // P9(상시 무장의 신규 위험 가드 ★): 인도→인도네시아 — 새 국가명이 옛 전체값으로 시작하는
+    //   genuine 진행은 분기 (2)가 절대 스트립하면 안 된다(전체 해석이 PREFIX로 유효 — 의미 중재).
+    it('P9: India→Indonesia genuine progress "인도네" is never Gboard-prefix-stripped', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // staleRaw='인도'
+      h.setNow(600);
+      h.ctrl.setCountry(INDONESIA);
+      h.compositionStart();
+      h.type('인', true);
+      h.type('인도', true);
+      h.type('인도네', true); // staleRaw('인도') 접두 + 연장 — 그러나 전체가 유효 PREFIX
+      expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('인도네');
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+      expect(h.ctrl.getValue()).toBe('인도네'); // basePrefix 미설정 — 가상 스트립 없음
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+    });
+
+    // P9b(대조): 같은 전환에서 진짜 Gboard 에코('인도'+사용자 '대' → 전체 MISS)는 종전대로 잡힌다.
+    it('P9b: a real Gboard whole-prefix echo is still stripped under mediation', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.setNow(600);
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('인도대', true); // 옛 전체값 접두 + 사용자 연장 — 전체 MISS ∧ 잔여 PREFIX
+      expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('대');
+      expect(h.ctrl.getValue()).toBe('대');
+    });
+
+    // P10(자가 치유): 어떤 경로로든 이미 '도대'가 앉아버린 버퍼도, 사용자가 이어서 치는 순간
+    //   상시 무장 + 중재 스트립이 정리한다(수정 전엔 방어 소진 상태라 영구 잔류).
+    it('P10: an already-leaked "도대" buffer self-heals on the next snapshot', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.setNow(600);
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('도대', true); // 병합 스냅샷이 첫 입력으로 바로 도착한 형태
+      expect(h.ctrl.getValue()).toBe('대'); // 즉시 스트립
+      h.type('도대한', true); // 이어지는 조합 — basePrefix('도') 지속 스트립
+      expect(h.ctrl.getValue()).toBe('대한');
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
     });
   });
 });

@@ -21,6 +21,8 @@ import {
   type PassportRes,
 } from '../../net/api-client';
 import { humanizeUnlockId } from '../../lib/format';
+import { AchievementCodex } from '../../features/passport/AchievementCodex';
+import { unlockedAchievementIds } from '../../features/passport/achievements-catalog';
 
 const CONTINENTS: readonly Continent[] = ['asia', 'europe', 'africa', 'north-america', 'south-america', 'oceania'];
 const TIERS: readonly DifficultyTier[] = [1, 2, 3, 4, 5];
@@ -140,7 +142,9 @@ export function PassportPage() {
       .filter((u) => u.type === 'stamp')
       .map((u) => u.id.split(':').slice(1, -1).join(':')), // 'stamp:continent:asia:A' → 'continent:asia'
   );
-  const achievements = (data?.unlocks ?? []).filter((u) => u.type === 'achievement');
+  // [WT-PASSPORT-DEV-1] 업적은 "달성분 나열"이 아니라 24종 전량 도감 — 여기서는 달성 id 집합만
+  // 뽑고, 표시 카탈로그(순서·아이콘)와 렌더는 features/passport가 맡는다.
+  const unlockedAchievements = unlockedAchievementIds(data?.unlocks ?? []);
 
   const selectCover = useCallback(
     (coverId: string) => {
@@ -244,23 +248,12 @@ export function PassportPage() {
                 })}
               </ul>
             )}
-
-            <h2 className="wt-kicker">{t('passport.achievements.title')}</h2>
-            <p className="wt-passport-page__stat" data-testid="passport-achievements-count">
-              {t('passport.achievements.count', { count: achievements.length })}
-            </p>
-            {achievements.length === 0 ? (
-              <p data-testid="passport-achievements-empty">{t('passport.achievements.empty')}</p>
-            ) : (
-              <ul className="wt-passport-page__achievements" data-testid="passport-achievements">
-                {achievements.map((a) => (
-                  <li key={a.id} data-testid={`passport-achievement-${a.id}`}>
-                    {humanizeUnlockId(a.id)}
-                  </li>
-                ))}
-              </ul>
-            )}
           </section>
+
+          {/* 업적 도감은 스프레드 두 페이지를 가로지르는 3행(grid-column: 1 / -1) — 24종 × (아이콘+
+              이름+조건)은 반쪽 페이지(≈280px) 폭에서 읽을 수 없다. 여권 종이(.wt-passport-page__
+              spread) 안에 그대로 머물되 폭만 전체를 쓴다. */}
+          <AchievementCodex unlockedIds={unlockedAchievements} />
         </div>
       )}
     </main>

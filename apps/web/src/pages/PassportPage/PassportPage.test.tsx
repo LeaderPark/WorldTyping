@@ -107,6 +107,45 @@ describe('PassportPage', () => {
     expect(screen.getByTestId('passport-achievements-count').textContent).toContain('1/24');
   });
 
+  // ── 업적 도감(WT-PASSPORT-DEV-1) ────────────────────────────────────────────────
+  it('업적 도감은 미달성 포함 24종을 전부 렌더하고 달성분만 활성 상태로 바꾼다', async () => {
+    fetchPassportMock.mockResolvedValue(
+      basePassport({
+        unlocks: [
+          { type: 'achievement', id: 'ach:first_flight', meta: null, createdAt: 1 },
+          { type: 'achievement', id: 'ach:night_owl', meta: null, createdAt: 2 },
+        ],
+      }),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('passport-codex')).toBeInTheDocument());
+
+    expect(screen.getByTestId('passport-achievements').children).toHaveLength(24);
+    expect(screen.getByTestId('passport-achievements-count').textContent).toContain('2/24');
+
+    expect(screen.getByTestId('passport-achievement-ach:first_flight').className).toContain(
+      'wt-achv--unlocked',
+    );
+    expect(screen.getByTestId('passport-achievement-ach:night_owl').className).toContain(
+      'wt-achv--unlocked',
+    );
+    // 미달성도 사라지지 않고 흑백/비활성 상태로 남는다.
+    const locked = screen.getByTestId('passport-achievement-ach:grade_s_all');
+    expect(locked.className).toContain('wt-achv--locked');
+    expect(locked.dataset.unlocked).toBe('false');
+    expect(locked.querySelector('.wt-achv__desc')?.textContent).toBeTruthy();
+  });
+
+  it('업적이 하나도 없어도 도감은 24종 전부(0/24)를 보여준다 — 빈 상태 문구 없음', async () => {
+    fetchPassportMock.mockResolvedValue(basePassport({ unlocks: [] }));
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('passport-codex')).toBeInTheDocument());
+
+    expect(screen.getByTestId('passport-achievements').children).toHaveLength(24);
+    expect(screen.getByTestId('passport-achievements-count').textContent).toContain('0/24');
+    expect(screen.queryByTestId('passport-achievements-empty')).not.toBeInTheDocument();
+  });
+
   it('조회 실패는 error 상태를 보여준다', async () => {
     fetchPassportMock.mockRejectedValue(new Error('down'));
     renderPage();

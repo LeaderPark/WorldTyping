@@ -17,17 +17,6 @@ import { useSettingsStore } from '../../stores/settings';
 
 const CONTINENT_IDS = Object.keys(CONTINENT_ROUTES) as Continent[];
 
-// WT-CH-08(docs/09 §8.2, §11-D90): NEW 뱃지 14일 노출 규약. 사양은 "KV config:banner 재사용"을
-// 언급하지만 그 채널은 서버 응답(GET /api/v1/config)에 chase 전용 필드가 없어(구현 범위는 서버
-// 수정 금지) 이 태스크에서 새 서버 필드를 추가하지 않는다 — 런칭일 고정 상수 비교로 단순화한다
-// (최종 보고 기재, 무배포 원격 종료가 필요해지면 후속 태스크에서 config:client 필드로 승격).
-const CHASE_LAUNCH_DATE = Date.UTC(2026, 6, 25); // 2026-07-25
-const CHASE_NEW_BADGE_DAYS = 14;
-
-function isChaseNew(): boolean {
-  return Date.now() - CHASE_LAUNCH_DATE < CHASE_NEW_BADGE_DAYS * 24 * 60 * 60 * 1000;
-}
-
 export function ModeSelectPage() {
   const { t } = useTranslation();
   const lang = useSettingsStore((s) => s.lang);
@@ -114,10 +103,12 @@ export function ModeSelectPage() {
 
         {/* WT-CH-08(docs/09 §8.2): 4번째 카드 "골드 러너" — 카드 규격·그리드는 위 3장과 완전히
             동일한 클래스(무수정), 콘텐츠(타이틀·태그라인·뱃지 행)만 chase 전용. */}
-        <Link
-          to="/play/chase"
+        {/* [임시 — 리드 지시 2026-07-25] 골드 러너 밸런스 디벨롭 전까지 준비중 표시(비활성 카드).
+            복원 시 이 div를 직전 커밋의 <Link to="/play/chase">로 되돌리면 된다(라우트·구현은 존치). */}
+        <div
           data-testid="mode-card-chase"
-          className="wt-mode-card wt-mode-select__card wt-mode-card--chase"
+          className="wt-mode-card wt-mode-select__card wt-mode-card--chase is-coming-soon"
+          aria-disabled="true"
         >
           <p className="wt-mode-card__title">
             <span aria-hidden="true">🚨 </span>
@@ -125,14 +116,10 @@ export function ModeSelectPage() {
           </p>
           <p className="wt-mode-card__meta">{t('chase.mode.tagline')}</p>
           <p className="wt-mode-card__badge-row" aria-hidden="true">
-            <span className="wt-mode-card__badge">{t('chase.mode.typeBadge')}</span>
-            {isChaseNew() && (
-              <span className="wt-mode-card__badge wt-mode-card__badge--new" data-testid="mode-card-chase-new">
-                {t('chase.mode.newBadge')}
-              </span>
-            )}
+            <span className="wt-mode-card__badge">{t('chase.mode.comingSoon')}</span>
           </p>
-        </Link>
+          <p className="sr-only">{t('chase.mode.comingSoon')}</p>
+        </div>
       </div>
     </main>
   );

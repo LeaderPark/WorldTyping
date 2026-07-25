@@ -396,6 +396,7 @@
   "chase.mode.tagline": "잡히기 전까지, 전부 훔쳐라",
   "chase.mode.typeBadge": "무한 생존",
   "chase.mode.newBadge": "NEW",
+  "chase.mode.comingSoon": "준비중",
   "chase.briefing.title": "지명수배",
   "chase.briefing.mission": "{home}의 금고를 털었다. 배송지: {home}. 잡히지 마라.",
   "chase.briefing.ruleMove": "타이핑 = 이동",

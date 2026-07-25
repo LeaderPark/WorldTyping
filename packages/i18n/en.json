@@ -396,6 +396,7 @@
   "chase.mode.tagline": "Steal it all before they catch you",
   "chase.mode.typeBadge": "Infinite survival",
   "chase.mode.newBadge": "NEW",
+  "chase.mode.comingSoon": "Coming soon",
   "chase.briefing.title": "Wanted",
   "chase.briefing.mission": "You robbed {home}'s vault. Delivery point: {home}. Don't get caught.",
   "chase.briefing.ruleMove": "Typing = Moving",

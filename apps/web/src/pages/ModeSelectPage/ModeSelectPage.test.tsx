@@ -27,18 +27,15 @@ describe('ModeSelectPage (S3)', () => {
   });
   afterEach(() => cleanup());
 
-  it('renders exactly 4 mode cards linking to continent/tier/worldtour/chase', () => {
+  it('renders exactly 4 mode cards — 3장은 링크, chase는 준비중 비활성 카드(임시, 리드 지시 2026-07-25)', () => {
     renderPage();
     expect(screen.getByTestId('mode-card-continent')).toHaveAttribute('href', '/play/continent');
     expect(screen.getByTestId('mode-card-tier')).toHaveAttribute('href', '/play/tier');
     expect(screen.getByTestId('mode-card-worldtour')).toHaveAttribute('href', '/play/worldtour');
-    expect(screen.getByTestId('mode-card-chase')).toHaveAttribute('href', '/play/chase');
-  });
-
-  it('골드 러너 카드는 런칭 14일 이내에는 NEW 뱃지를, 그 이후엔 숨긴다', () => {
-    const { unmount } = renderPage();
-    expect(screen.getByTestId('mode-card-chase-new')).toBeInTheDocument();
-    unmount();
+    const chase = screen.getByTestId('mode-card-chase');
+    expect(chase).not.toHaveAttribute('href');
+    expect(chase).toHaveAttribute('aria-disabled', 'true');
+    expect(chase.textContent).toContain('준비중');
   });
 
   it('완주 기록이 없으면 "완주: 0/6"을 표시한다', () => {

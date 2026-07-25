@@ -4475,3 +4475,10 @@ a.wt-brand:focus-visible {
   stroke-linejoin: round;
   filter: drop-shadow(0 1.5px 2.5px rgb(0 0 0 / 0.35));
 }
+
+/* [임시 — 리드 지시 2026-07-25] 골드 러너 준비중 비활성 카드. 복원 시 이 블록과 ModeSelectPage의
+   is-coming-soon div를 함께 제거. */
+.wt-mode-card.is-coming-soon {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

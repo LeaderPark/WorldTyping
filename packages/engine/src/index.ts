@@ -20,7 +20,7 @@ export {
   type RunResult,
 } from "./session";
 
-// WT-M2-02: 모드 규칙 전략 객체 5종 + 팩토리.
+// WT-M2-02: 모드 규칙 전략 객체 5종 + 팩토리. WT-CH-04: chase 어댑터(chaseRules) 추가.
 export {
   createModeRules,
   continentRules,
@@ -28,9 +28,22 @@ export {
   worldtourRules,
   dailyRules,
   raceRules,
+  chaseRules,
   type ModeRules,
   type MutableRunState,
 } from "./rules";
+
+// WT-CH-04: "골드 러너"(chase) 세션 오케스트레이션 + 3-타깃 입력(docs/09 §6.2, §11-D97).
+export {
+  ChaseSessionEngine,
+  type ChaseEngineEvent,
+  type ChaseEngineDeps,
+  type ChaseSnapshot,
+  type ChaseRunSubmission,
+  type ChaseOutcome,
+  type CandidateView,
+  type PoliceView,
+} from "./chase-session";
 
 // WT-M2-02: 리플레이 로그(ring buffer) + 제출 페이로드 조립.
 export {

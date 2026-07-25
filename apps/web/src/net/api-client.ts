@@ -260,6 +260,23 @@ export function authDev(body: { sub: string; name?: string; email?: string }): P
   return apiClient.post<AuthAccountRes>('/auth/dev', body);
 }
 
+/**
+ * [WT-AUTH-REDIRECT] GIS `ux_mode:'redirect'` 로그인의 2단계 응답. 서버가 302로 되돌려준 1회용
+ * 코드(`?authcode=`)를 계정 세션으로 교환한 결과다. AuthAccountRes와 같은 필드에 표시 프로필
+ * (name/picture)이 더해져 있다 — redirect 모드에서는 클라가 credential(JWT)을 보지 못해
+ * decode-jwt로 아바타/이름을 얻을 수 없어서, 서버가 검증된 클레임에서 직접 실어 준다.
+ */
+export interface AuthExchangeRes {
+  token: string;
+  /** token은 형제 필드로 분리돼 있다(서버 AuthCodePayload와 동형). */
+  user: Omit<AuthAccountRes, 'token'> & { name?: string; picture?: string };
+}
+
+/** POST /auth/google/exchange — 1회용 authcode → {token, user}. 만료/재사용은 401. */
+export function exchangeAuthCode(code: string): Promise<AuthExchangeRes> {
+  return apiClient.post<AuthExchangeRes>('/auth/google/exchange', { code });
+}
+
 export interface SessionMeRes {
   playerId: string;
   nickname: string;

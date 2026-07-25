@@ -26,6 +26,16 @@ export const KV_KEYS = {
    *  아니라 인증 인프라 캐시라 auth: 프리픽스로 분리한다. */
   authGoogleJwks: "auth:google:jwks",
 
+  /**
+   * [WT-AUTH-REDIRECT] GIS `ux_mode:'redirect'` 로그인의 1회용 교환 코드. 값은 JSON
+   * `{token,user}` — **계정 세션 토큰을 리다이렉트 URL에 직접 싣지 않기 위한** 짧은 우회
+   * 저장소다(URL은 히스토리·Referer·공유에 남는다). TTL 60초(KV 최소 TTL)로 상한을 못박고,
+   * POST /auth/google/exchange가 get 직후 delete해 단일 사용을 강제한다 — KV 최종 일관성상
+   * delete 전파는 best-effort지만 60초 TTL + 코드가 URL에서 즉시 제거되는 클라 동작이 함께
+   * 노출 창을 닫는다. 인증 인프라라 config:*가 아니라 독립 프리픽스로 둔다.
+   */
+  authCode: (code: string): string => `authcode:${code}`,
+
   /** 데일리 세트 캐시. dateKst = 'YYYY-MM-DD'(KST). */
   daily: (dateKst: string): string => `daily:${dateKst}`,
 

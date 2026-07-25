@@ -7,9 +7,17 @@
 // dev 심이 유일한 통합 진입점이다(§11-D68-⑩). /auth/google의 크립토 검증은 src/lib/google-idtoken
 // .test.ts(node)가 담당하고, 여기서는 검증 이후 공유되는 upsert/토큰/DB 부수효과만 본다.
 import { SELF, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
-import { derivePlayerId, deriveDeviceHash, SessionPayloadSchema, verifyToken } from "@wt/shared";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  bytesToBase64url,
+  derivePlayerId,
+  deriveDeviceHash,
+  SessionPayloadSchema,
+  utf8ToBytes,
+  verifyToken,
+} from "@wt/shared";
 import type { AuthIdentityRow, UserRow } from "../src/db/types";
+import { KV_KEYS } from "../src/lib/kv-keys";
 
 const BASE = "http://local/api/v1";
 
@@ -211,6 +219,210 @@ describe("POST /auth/dev — 계정 생성(upsert) + 계정 세션 토큰", () =
     const body = (await res.json()) as AuthRes;
     expect(body.nickname).toBe("ABCDEFGHIJKL");
     expect(Array.from(body.nickname).length).toBe(12);
+  });
+});
+
+// ───────── WT-AUTH-REDIRECT: GIS ux_mode:'redirect' 전체 페이지 이동 로그인 ─────────
+//
+// /auth/dev와 달리 이 경로는 **실 credential 검증기를 그대로 통과**해야 한다(그게 이 경로의
+// 핵심이다). 로컬 RSA 키쌍으로 JWT를 서명하고 그 공개키를 KV `auth:google:jwks`에 미리 심어
+// 두면 google-idtoken이 캐시 히트로 검증을 끝내므로 실 네트워크 없이 전 구간이 돈다
+// (src/lib/google-idtoken.test.ts의 목 JWKS 기법을 pool-workers 통합으로 옮긴 것).
+
+const KID = "redirect-test-key";
+const ISS = "https://accounts.google.com";
+const CSRF = "csrf-abc-123";
+const AUTHCODE_RE = /^\/\?authcode=([0-9a-f]{32})$/;
+
+interface ExchangeRes {
+  token: string;
+  user: {
+    playerId: string;
+    nickname: string;
+    expiresAt: string;
+    geo: string;
+    acct: true;
+    email?: string;
+    name?: string;
+    picture?: string;
+  };
+}
+
+let redirectKeys: CryptoKeyPair | null = null;
+
+async function ensureKeyPair(): Promise<CryptoKeyPair> {
+  redirectKeys ??= (await crypto.subtle.generateKey(
+    { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+    true,
+    ["sign", "verify"],
+  )) as CryptoKeyPair;
+  return redirectKeys;
+}
+
+/** 로컬 공개키를 KV JWKS 캐시에 심는다(isolatedStorage라 테스트마다 다시 필요). */
+async function seedJwks(): Promise<void> {
+  const { publicKey } = await ensureKeyPair();
+  const jwk = (await crypto.subtle.exportKey("jwk", publicKey)) as JsonWebKey;
+  await env.KV.put(
+    KV_KEYS.authGoogleJwks,
+    JSON.stringify({ keys: [{ ...jwk, kid: KID, use: "sig", alg: "RS256" }] }),
+  );
+}
+
+function b64urlJson(obj: unknown): string {
+  return bytesToBase64url(utf8ToBytes(JSON.stringify(obj)));
+}
+
+async function makeCredential(overrides: Record<string, unknown> = {}): Promise<string> {
+  const { privateKey } = await ensureKeyPair();
+  const header = b64urlJson({ alg: "RS256", kid: KID, typ: "JWT" });
+  const payload = b64urlJson({
+    iss: ISS,
+    aud: env.GOOGLE_CLIENT_ID,
+    sub: "redir-sub-" + crypto.randomUUID(),
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    email: "redir@example.com",
+    email_verified: true,
+    name: "RedirUser",
+    picture: "https://lh3.googleusercontent.com/redir-avatar",
+    ...overrides,
+  });
+  const signingInput = `${header}.${payload}`;
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, utf8ToBytes(signingInput));
+  return `${signingInput}.${bytesToBase64url(new Uint8Array(sig))}`;
+}
+
+function postRedirect(fields: Record<string, string>, cookieCsrf?: string): Promise<Response> {
+  const headers: Record<string, string> = { "Content-Type": "application/x-www-form-urlencoded" };
+  if (cookieCsrf !== undefined) headers.Cookie = `g_csrf_token=${cookieCsrf}`;
+  return SELF.fetch(`${BASE}/auth/google/redirect`, {
+    method: "POST",
+    headers,
+    body: new URLSearchParams(fields).toString(),
+    // 302를 따라가면 SPA 자산 폴백까지 흘러가 Location 검증이 불가능해진다.
+    redirect: "manual",
+  });
+}
+
+function postExchange(code: string): Promise<Response> {
+  return SELF.fetch(`${BASE}/auth/google/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+}
+
+describe("POST /auth/google/redirect — GIS ux_mode:'redirect' 폼 POST 착지점", () => {
+  beforeEach(async () => {
+    await seedJwks();
+  });
+
+  it("정상 credential + CSRF 일치 → 302 /?authcode={32hex}, 토큰은 URL에 실리지 않는다", async () => {
+    const credential = await makeCredential();
+    const res = await postRedirect({ credential, g_csrf_token: CSRF }, CSRF);
+
+    expect(res.status).toBe(302);
+    const location = res.headers.get("Location") ?? "";
+    expect(location).toMatch(AUTHCODE_RE);
+    // 세션 토큰(wt1)이 URL에 새어나가지 않는다 — 코드만 실린다.
+    expect(location).not.toContain("wt1");
+
+    // 코드 자체는 KV에만 존재한다.
+    const code = AUTHCODE_RE.exec(location)?.[1] ?? "";
+    expect(await env.KV.get(KV_KEYS.authCode(code))).not.toBeNull();
+  });
+
+  it("발급된 코드는 exchange로 정확히 1회만 계정 세션이 된다(재사용은 401)", async () => {
+    const credential = await makeCredential();
+    const redirected = await postRedirect({ credential, g_csrf_token: CSRF }, CSRF);
+    const code = AUTHCODE_RE.exec(redirected.headers.get("Location") ?? "")?.[1] ?? "";
+    expect(code).toHaveLength(32);
+
+    const first = await postExchange(code);
+    expect(first.status).toBe(200);
+    const body = (await first.json()) as ExchangeRes;
+
+    // /auth/google(JSON 경로)과 완전히 같은 계정 세션 — acct:1 토큰 + 동일 upsert 산출물.
+    expect(body.user.acct).toBe(true);
+    expect(body.user.nickname).toBe("RedirUser");
+    expect(body.user.email).toBe("redir@example.com");
+    // redirect 모드는 클라가 credential을 못 보므로 표시 프로필을 서버가 실어 준다.
+    expect(body.user.name).toBe("RedirUser");
+    expect(body.user.picture).toBe("https://lh3.googleusercontent.com/redir-avatar");
+
+    const verified = await verifyToken(body.token, env.SESSION_HMAC_SECRET, SessionPayloadSchema);
+    expect(verified.ok).toBe(true);
+    if (verified.ok) {
+      expect(verified.payload.pid).toBe(body.user.playerId);
+      expect(verified.payload.acct).toBe(1);
+    }
+    expect((await selectUser(body.user.playerId))?.status).toBe("active");
+
+    // 단일 사용 — 두 번째 교환은 401(KV에서 이미 소각).
+    const second = await postExchange(code);
+    expect(second.status).toBe(401);
+    expect(await env.KV.get(KV_KEYS.authCode(code))).toBeNull();
+  });
+
+  it("CSRF 실패(불일치·쿠키 부재·바디 토큰 부재) → 302 /?authError=1 (JSON 400 아님, 계정 생성 없음)", async () => {
+    // 리드 확정: 전체 페이지 이동 중인 사용자에게 JSON 400은 막다른 골목이라 credential 검증
+    // 실패와 동일하게 SPA 로그인 모달로 되돌린다. 인증 자체는 여전히 거부된다(계정 미생성).
+    const sub = "csrf-reject-" + crypto.randomUUID();
+    const credential = await makeCredential({ sub });
+
+    const mismatched = await postRedirect({ credential, g_csrf_token: CSRF }, "other-value");
+    expect(mismatched.status).toBe(302);
+    expect(mismatched.headers.get("Location")).toBe("/?authError=1");
+
+    const noCookie = await postRedirect({ credential, g_csrf_token: CSRF });
+    expect(noCookie.status).toBe(302);
+    expect(noCookie.headers.get("Location")).toBe("/?authError=1");
+
+    const noBodyToken = await postRedirect({ credential }, CSRF);
+    expect(noBodyToken.status).toBe(302);
+    expect(noBodyToken.headers.get("Location")).toBe("/?authError=1");
+
+    // 세 경우 모두 credential 검증까지 가지 않았다 — 계정도, 교환 코드도 만들어지지 않는다.
+    expect(await selectUser(await expectedPid(sub))).toBeNull();
+    expect((await env.KV.list({ prefix: "authcode:" })).keys).toHaveLength(0);
+  });
+
+  it("검증 실패 credential(서명 변조) → 302 /?authError=1 (500/400 아님, 계정 생성 없음)", async () => {
+    const credential = await makeCredential();
+    // 페이로드만 바꿔치기 → 서명 불일치. sub도 바뀌므로 그 pid의 계정 부재를 함께 확인한다.
+    const tamperedSub = "tampered-" + crypto.randomUUID();
+    const parts = credential.split(".");
+    parts[1] = b64urlJson({
+      iss: ISS,
+      aud: env.GOOGLE_CLIENT_ID,
+      sub: tamperedSub,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    const res = await postRedirect({ credential: parts.join("."), g_csrf_token: CSRF }, CSRF);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("/?authError=1");
+    expect(await selectUser(await expectedPid(tamperedSub))).toBeNull();
+  });
+});
+
+describe("POST /auth/google/exchange — 1회용 코드 교환", () => {
+  it("존재하지 않는(=만료된) 코드 → 401", async () => {
+    // TTL 60s는 테스트에서 기다릴 수 없다 — 만료 후 상태(KV get null)와 완전히 같은 경로를 탄다.
+    const res = await postExchange("0123456789abcdef0123456789abcdef");
+    expect(res.status).toBe(401);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("INVALID_CODE");
+  });
+
+  it("TTL 만료로 KV에서 사라진 코드 → 401", async () => {
+    const code = "deadbeefdeadbeefdeadbeefdeadbeef";
+    await env.KV.put(KV_KEYS.authCode(code), JSON.stringify({ token: "t", user: {} }));
+    await env.KV.delete(KV_KEYS.authCode(code)); // 만료 시뮬레이션.
+    expect((await postExchange(code)).status).toBe(401);
+  });
+
+  it("형식이 어긋난 code → 400", async () => {
+    expect((await postExchange("not-a-code")).status).toBe(400);
   });
 });
 

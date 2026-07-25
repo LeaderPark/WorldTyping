@@ -2,9 +2,23 @@
 //
 // POST /auth/google — Google GIS ID-token(credential) 검증 → 계정 upsert → 계정 세션 토큰(wt1,
 //   acct:1) 발급. 비인증(토큰 발급 전) + RL 'auth'(10/60s/IP).
+// POST /auth/google/redirect — [WT-AUTH-REDIRECT] GIS `ux_mode:'redirect'` 전체 페이지 이동 경로.
+//   GIS가 **브라우저 폼 POST**(application/x-www-form-urlencoded, credential + g_csrf_token)로
+//   직접 때린다 — 팝업·FedCM·COOP·프롬프트 엠바고가 전부 무관한 유일한 경로라 라이브에서 이것이
+//   기본 로그인 방식이다(아래 "왜 필요한가" 참조). 응답은 SPA로의 302다.
+// POST /auth/google/exchange — 위 302에 실린 1회용 코드(authcode)를 {token,user}로 교환한다.
 // POST /auth/dev — 테스트 심(§11-D68-⑩). ENVIRONMENT==='dev'에서만 활성, 그 외 404. Google JWKS
 //   검증을 우회해 {sub,name?,email?}로 곧장 동일 upsert 경로를 태운다(pool-workers/E2E가 계정
 //   세션을 발급받기 위한 유일한 수단 — 실 Google 토큰을 테스트에서 만들 수 없기 때문).
+//
+// [왜 redirect 경로인가 — 라이브 장애 대응] 일부 크롬 사용자가 GIS 위젯 단계에서 자격증명 자체를
+// 생성하지 못해 로그인이 영구 실패했다(팝업 COOP 차단 이력 → 프롬프트 반복 닫음 → 크롬이 사이트
+// FedCM을 장기 엠바고). 서버 /auth/google은 애초에 도달조차 못 한다. D101(use_fedcm_for_button)로도
+// 구제 불가라, 브라우저 표준 폼 POST + 전체 페이지 이동만 사용하는 이 경로로 대체했다.
+//
+// [토큰을 URL에 싣지 않는다] 302 Location에 세션 토큰을 그대로 실으면 히스토리·Referer·공유
+// 링크에 그대로 남는다. 대신 KV `authcode:{32hex}`(TTL 60s, 1회용)에 {token,user}를 넣고 코드만
+// 싣는다 — 클라 부트가 exchange로 즉시 교환하고 URL에서 코드를 지운다.
 //
 // 신원 파생(docs/04 §5.5, D38 승계): 계정 user_id = derivePlayerId(SESSION_HMAC_SECRET,"google:"+sub),
 // device_hash = deriveDeviceHash(SESSION_HMAC_SECRET,"google:"+sub). sub당 결정적이라 재로그인 멱등.
@@ -18,6 +32,7 @@
 // USER_xxxx 폴백으로 강등됐던 계정도 다음 로그인에 원래 이름으로 치유된다.
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { getCookie } from "hono/cookie";
 import { z } from "zod";
 import {
   derivePlayerId,
@@ -30,6 +45,7 @@ import type { UserRow } from "../db/types";
 import { ApiHttpError } from "../lib/api-error";
 import { getGeoCountry } from "../lib/ip-hash";
 import { verifyGoogleIdToken, type GoogleIdentity } from "../lib/google-idtoken";
+import { KV_KEYS } from "../lib/kv-keys";
 import { rateLimit } from "../mw/ratelimit";
 import type { AuthVariables } from "../mw/auth";
 
@@ -80,6 +96,120 @@ auth.post("/auth/google", rateLimit("auth"), async (c) => {
 
   return c.json(await issueAccountSession(c, result.identity));
 });
+
+// ─────────────── POST /auth/google/redirect (GIS ux_mode:'redirect' 착지점) ───────────────
+
+/** GIS redirect 모드가 폼 POST로 보내는 필드 이름(Google 규약 — 바꿀 수 없다). */
+const GIS_CSRF_FIELD = "g_csrf_token";
+/** 폼 바디 상한(정상 credential JWT는 1~2KB). 초과는 우리 엔드포인트로 온 요청이 아니다. */
+const MAX_FORM_BODY_BYTES = 16 * 1024;
+/** 교환 코드 TTL. KV가 허용하는 최소 expirationTtl이 60초라 이보다 짧게 둘 수 없다. */
+const AUTH_CODE_TTL_SEC = 60;
+
+/** 로그인 실패 시 사용자를 되돌려 보낼 SPA 경로. 클라 부트가 이 쿼리를 보고 로그인 모달을 연다. */
+const AUTH_ERROR_LOCATION = "/?authError=1";
+
+/**
+ * KV `authcode:{code}`에 담기는 페이로드. `user`는 AuthRes(=/auth/google JSON 응답)에 더해
+ * 표시 프로필(name/picture)을 포함한다 — redirect 모드에서는 클라가 credential(JWT)을 아예 보지
+ * 못해 기존처럼 클라측 decode-jwt로 아바타/이름을 얻을 수 없기 때문이다(그것만이 유일한 차이).
+ */
+interface AuthCodePayload {
+  token: string;
+  user: Omit<AuthRes, "token"> & { name?: string; picture?: string };
+}
+
+auth.post("/auth/google/redirect", rateLimit("auth"), async (c) => {
+  const db = c.env.DB;
+  if (!db) throw new ApiHttpError(503, "SERVICE_UNAVAILABLE", "DB binding not configured");
+
+  // ① 폼 바디 파싱. multipart가 아니라 항상 application/x-www-form-urlencoded라(GIS 규약)
+  //    text→URLSearchParams가 가장 좁고 확실한 파서다.
+  const raw = await c.req.text().catch(() => "");
+  if (raw.length > MAX_FORM_BODY_BYTES) {
+    throw new ApiHttpError(400, "INVALID_BODY", "form body too large");
+  }
+  const form = new URLSearchParams(raw);
+
+  // ② 여기부터의 실패는 400/500이 아니라 **SPA로의 302**다(리드 확정) — 사용자는 전체 페이지
+  //    이동 중이라 JSON 에러 바디를 보면 막다른 골목이 된다. 클라가 ?authError=1을 보고 안내
+  //    문구를 띄우고 곧바로 재시도할 수 있게 한다.
+  //
+  // ②-a CSRF 이중 제출 쿠키 검증(Google 공식 절차). 바디 토큰과 쿠키 토큰이 일치해야 한다 —
+  //      둘 중 하나라도 없으면 GIS가 만든 요청이 아니다. 다만 서드파티 쿠키를 강하게 차단하는
+  //      환경에서 쿠키만 유실될 여지가 있어(그리고 이 경로가 이제 **기본** 로그인이라) 여기서
+  //      막힌 사용자도 JSON 404지가 아니라 로그인 모달로 되돌린다.
+  const bodyCsrf = form.get(GIS_CSRF_FIELD);
+  const cookieCsrf = getCookie(c, GIS_CSRF_FIELD);
+  if (!bodyCsrf || !cookieCsrf || bodyCsrf !== cookieCsrf) {
+    return c.redirect(AUTH_ERROR_LOCATION, 302);
+  }
+
+  // credential 필드 자체의 부재는 실제 GIS 폼 POST에서 발생할 수 없다(Google이 항상 싣는다) —
+  // 즉 우리 엔드포인트를 직접 두드린 잘못된 요청이므로 그대로 400으로 남긴다.
+  const credential = form.get("credential");
+  if (!credential) throw new ApiHttpError(400, "INVALID_BODY", "credential(Google ID-token)이 필요합니다.");
+
+  // ②-b 설정 부재(KV/clientId 미바인딩)와 credential 검증 실패도 동일하게 302.
+  const kv = c.env.KV;
+  const clientId = c.env.GOOGLE_CLIENT_ID;
+  if (!kv || !clientId) return c.redirect(AUTH_ERROR_LOCATION, 302);
+
+  const result = await verifyGoogleIdToken(credential, { clientId, kv });
+  if (!result.ok) return c.redirect(AUTH_ERROR_LOCATION, 302);
+
+  const session = await issueAccountSession(c, result.identity);
+  const { token, ...user } = session;
+  const payload: AuthCodePayload = { token, user };
+  if (result.identity.name) payload.user.name = result.identity.name;
+  if (result.identity.picture) payload.user.picture = result.identity.picture;
+
+  const code = randomAuthCode();
+  try {
+    await kv.put(KV_KEYS.authCode(code), JSON.stringify(payload), {
+      expirationTtl: AUTH_CODE_TTL_SEC,
+    });
+  } catch {
+    // KV 쓰기 실패(쿼터/장애) — 계정 upsert는 이미 끝났지만 멱등이라 재로그인으로 그대로 회복된다.
+    return c.redirect(AUTH_ERROR_LOCATION, 302);
+  }
+
+  return c.redirect(`/?authcode=${code}`, 302);
+});
+
+// ─────────────── POST /auth/google/exchange (1회용 코드 → 계정 세션) ───────────────
+
+const ExchangeReqSchema = z.object({ code: z.string().regex(/^[0-9a-f]{32}$/) }).strict();
+
+auth.post("/auth/google/exchange", rateLimit("auth"), async (c) => {
+  const kv = c.env.KV;
+  if (!kv) throw new ApiHttpError(503, "SERVICE_UNAVAILABLE", "KV binding not configured");
+
+  const parsed = ExchangeReqSchema.safeParse(await c.req.json().catch(() => undefined));
+  if (!parsed.success) throw new ApiHttpError(400, "INVALID_BODY", "code(32 hex)가 필요합니다.");
+
+  const key = KV_KEYS.authCode(parsed.data.code);
+  const raw = await kv.get(key);
+  // 부재 = 만료(TTL 60s) 또는 이미 사용됨. 둘을 구분해 알려줄 이유가 없다(열거 힌트 최소화).
+  if (raw === null) throw new ApiHttpError(401, "INVALID_CODE", "만료되었거나 이미 사용된 로그인 코드입니다.");
+  await kv.delete(key); // 단일 사용 — 읽은 즉시 소각.
+
+  let payload: AuthCodePayload;
+  try {
+    payload = JSON.parse(raw) as AuthCodePayload;
+  } catch {
+    throw new ApiHttpError(401, "INVALID_CODE", "손상된 로그인 코드입니다.");
+  }
+  return c.json(payload);
+});
+
+/** 1회용 교환 코드(128비트 CSPRNG → 32 hex). 추측 불가면 충분하다 — TTL 60s + 단일 사용. */
+function randomAuthCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
 
 // ───────────────────────── POST /auth/dev (dev 전용 테스트 심) ─────────────────────────
 

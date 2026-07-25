@@ -16,12 +16,23 @@ interface GsiCredentialResponse {
 
 interface GsiIdConfig {
   client_id: string;
+  /** popup/One Tap 경로 전용. `ux_mode:'redirect'`에서는 호출되지 않는다(GIS가 login_uri로 폼 POST). */
   callback: (response: GsiCredentialResponse) => void;
   auto_select?: boolean;
   cancel_on_tap_outside?: boolean;
   use_fedcm_for_prompt?: boolean;
   use_fedcm_for_button?: boolean;
   itp_support?: boolean;
+  /**
+   * [WT-AUTH-REDIRECT] 'popup'(기본, JS 콜백) vs 'redirect'(전체 페이지 이동 + login_uri로 폼 POST).
+   * 우리는 'redirect'만 쓴다 — 팝업/FedCM 경로가 일부 크롬에서 영구 차단되는 라이브 장애 대응.
+   */
+  ux_mode?: 'popup' | 'redirect';
+  /**
+   * ux_mode:'redirect'일 때 GIS가 credential + g_csrf_token을 폼 POST할 **절대** URI.
+   * Google Cloud Console의 OAuth 클라이언트 "승인된 리디렉션 URI"에 등록돼 있어야 한다.
+   */
+  login_uri?: string;
 }
 
 interface GsiButtonConfig {

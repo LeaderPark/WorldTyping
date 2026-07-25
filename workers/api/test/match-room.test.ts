@@ -175,6 +175,19 @@ class Client {
       await sleep(4);
     }
   }
+  /** take()의 조건부 버전 — 같은 type이 여러 번 브로드캐스트되는 room-state 등에서 특정 필드값
+   *  (예: phase)을 만족하는 가장 먼저 도착한 메시지를 찾는다(WT-FIX-FINISH-TRANSITION). */
+  async takeWhere(pred: (m: AnyMsg) => boolean, timeoutMs = 2000): Promise<AnyMsg> {
+    const start = Date.now();
+    for (;;) {
+      const i = this.inbox.findIndex(pred);
+      if (i >= 0) return this.inbox.splice(i, 1)[0]!;
+      if (Date.now() - start > timeoutMs) {
+        throw new Error(`timeout waiting predicate match. inbox=${JSON.stringify(this.inbox.map((m) => m.type))}`);
+      }
+      await sleep(4);
+    }
+  }
   has(type: string): boolean {
     return this.inbox.some((m) => m.type === type);
   }
@@ -946,6 +959,12 @@ describe('MatchRoom DO — 완주 / 리매치 / 승계 / 정리', () => {
     expect(rows.every((r) => r.finished)).toBe(true);
     // 두 완주자 중 하나 이상은 photoFinish(같은 시각 완주).
     expect(a.inbox.concat(b.inbox).some((m) => m.type === 'player-finished' && m.photoFinish === true)).toBe(true);
+    // [WT-FIX-FINISH-TRANSITION] results 직후 phase='FINISHED'인 room-state를 브로드캐스트해야
+    // 클라(RoomPage)가 room.phase==='result' 전환을 감지한다(§11-D7 기존 room-state 재사용).
+    // a의 inbox엔 앞선 페이즈 전이(B 참가/COUNTDOWN/RACING)의 room-state가 이미 여러 건 미소비로
+    // 쌓여 있을 수 있어 take('room-state')는 그 중 가장 오래된 것을 집어버린다 — phase로 특정한다.
+    const roomState = await a.takeWhere((m) => m.type === 'room-state' && m.phase === 'FINISHED');
+    expect(roomState.phase).toBe('FINISHED');
     a.close();
     b.close();
   });

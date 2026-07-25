@@ -171,6 +171,12 @@ export function useMultiplayer() {
         // RaceView 엔진 구성 원천 캐시(store 주석 참조) — attachRace가 아직 안 붙었을 수 있어
         // RaceClient 위임과 별개로 여기서 캐시해둔다.
         store.getState().setRaceReplay(m);
+        // [WT-FIX-FINISH-TRANSITION] 새 레이스(최초 시작 또는 리매치) 시작 시 이전 레이스의
+        // raceResult/raceFinishedReason을 클리어한다 — RoomPage의 결과 화면 폴백 게이트
+        // (room.phase === 'result' || raceFinishedReason !== null)가 리매치 카운트다운 취소(F8)로
+        // WAITING 복귀 후에도 stale raceResult를 오표출하지 않도록 하는 회귀 방지.
+        store.getState().setRaceResult(null);
+        store.getState().setRaceFinishedReason(null);
         break;
       case 'race-sync':
         store.getState().setRaceReplay(m);

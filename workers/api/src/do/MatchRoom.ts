@@ -1464,6 +1464,9 @@ export class MatchRoomDO {
     this.broadcast({ v: 1, type: 'race-finished', reason });
     this.broadcast({ v: 1, type: 'results', raceId: this.race.raceId, rows, rematchDeadline });
     this.broadcast(this.rematchStateMsg());
+    // room.phase='result' 전환 신호(WT-FIX-FINISH-TRANSITION) — 클라 RoomPage는 room-state의
+    // phase로만 S11 결과 화면 전환을 게이트한다(§11-D7 기존 room-state 타입 재사용, 신규 메시지 0).
+    this.broadcast(this.roomStateMsg());
 
     // D1 영속화(§10.1-5) — 실패 시 pendingPersist + 재시도(§10.1-7).
     await this.persistResults(reason, rows, raceEndAt);

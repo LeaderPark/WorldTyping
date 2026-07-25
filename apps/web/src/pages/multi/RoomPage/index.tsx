@@ -50,6 +50,7 @@ export function RoomPage() {
   const myPlayerId = useMultiplayerStore((s) => s.myPlayerId);
   const raceReplay = useMultiplayerStore((s) => s.raceReplay);
   const raceResult = useMultiplayerStore((s) => s.raceResult);
+  const raceFinishedReason = useMultiplayerStore((s) => s.raceFinishedReason);
   const rematchState = useMultiplayerStore((s) => s.rematchState);
   const latencyMs = useMultiplayerStore((s) => s.latencyMs);
   const lastError = useMultiplayerStore((s) => s.lastError);
@@ -193,7 +194,11 @@ export function RoomPage() {
           <p className="wt-room__loading" data-testid="room-race-loading">{t('boarding.connecting')}</p>
         ))}
 
-      {room.phase === 'result' && raceResult && (
+      {/* [WT-FIX-FINISH-TRANSITION] room-state의 phase='result' 반영이 유실/지연돼도
+          race-finished(raceFinishedReason)가 이미 도착했다면 결과 화면으로 전환한다(이중 안전망).
+          raceFinishedReason은 'start' 수신 시 클리어되므로(useMultiplayer.ts routeMessage) 리매치
+          카운트다운 취소(F8) 이후 재진입에서 잘못 재표출되지 않는다. */}
+      {(room.phase === 'result' || raceFinishedReason !== null) && raceResult && (
         <RaceResult
           raceResult={raceResult}
           rematchState={rematchState}

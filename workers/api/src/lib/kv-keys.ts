@@ -17,6 +17,9 @@ export const KV_KEYS = {
    *  지워도 자동 소멸한다. `wrangler kv key put config:loadtest "1" --ttl 7200`으로만 조작하고
    *  종료 후 `wrangler kv key delete config:loadtest`로 원복한다(ops/loadtest-report.md 절차). */
   configLoadtest: "config:loadtest",
+  /** chase(골드 러너) 밸런스 오버라이드(§9.4, WT-CH-09) — ChaseConstants partial, zod .strict()
+   *  검증 실패/부재 시 코드 기본값(parseChaseConstants). */
+  configChase: "config:chase",
   dataCountriesOverride: "data:countries:override",
   /** Google JWKS(RS256 공개키 세트) 캐시(WT-AUTH-01, docs/04 §5.5). 6h TTL로 저장하고,
    *  ID-token의 kid가 캐시에 없으면 1회 재조회해 갱신한다(lib/google-idtoken.ts). config:* 채널이
@@ -25,6 +28,14 @@ export const KV_KEYS = {
 
   /** 데일리 세트 캐시. dateKst = 'YYYY-MM-DD'(KST). */
   daily: (dateKst: string): string => `daily:${dateKst}`,
+
+  /**
+   * chase 상수 버전 스냅샷(§9.4, WT-CH-09). `CHASE_CONSTANTS_VERSION`을 올릴 때(런북 규약 —
+   * 갱신 절차 자체는 WT-CH-11/리드 소관) 그 직전까지 유효했던 병합 완료 `ChaseConstants` 전체를
+   * 이 키에 기록해 두면, 발급 시점 버전으로 제출된 진행 중인 런을 재배포 이후에도 그 시점 값으로
+   * 정확히 재계산할 수 있다(제출 검증이 버전 불일치 시 이 스냅샷 → 기본값 → 현행 순으로 시도).
+   */
+  configChaseVersion: (version: number): string => `config:chase:v${version}`,
 
   /** 리더보드 top100 캐시. */
   lb: (boardKey: string): string => `lb:${boardKey}`,

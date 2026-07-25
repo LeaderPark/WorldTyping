@@ -8,7 +8,7 @@
 //
 // rejected는 HTTP 200 + verdict:'rejected'로 응답한다(4xx로 어뷰저에게 탐지 신호를 주지 않음,
 // docs/06 §3.1). verdict_reason은 DB에만 기록하고 응답에는 노출하지 않는다.
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import {
   verifyToken,
@@ -30,6 +30,8 @@ import { kstDate, kstYesterday } from "../lib/kst";
 import { loadAnticheatConfig } from "../lib/anticheat-config";
 import { buildSetForStart, rebuildSet, computeSetHash, type SingleMode } from "../lib/set-builder";
 import { verifyRun, type ServerValues } from "../lib/run-verify";
+import { verifyChaseRun } from "../lib/chase-verify";
+import { loadChaseConstants, resolveChaseConstantsCandidates } from "../lib/chase-config";
 import {
   allBoardKey,
   boardKeysForRun,
@@ -116,6 +118,61 @@ const RunSubmitReqSchema = z
     // D68-④ 게스트→계정 브리지 토큰(옵션). 계정 세션이 게스트 시절 시작한 판을 결과 화면에서
     //   등재하려 할 때, 게스트 신원 보유를 증명하는 게스트 세션 토큰(wt1)을 함께 보낸다. 서명이
     //   유효하고 pid가 runToken.pid와 일치할 때만 소유권을 인정한다(§11-D68-④).
+    guestToken: z.string().min(1).max(4096).optional(),
+  })
+  .strict();
+
+// ── chase(골드 러너) 제출 바디(docs/09 §9.2, WT-CH-09) ──────────────────────────────────────
+// 기존 5모드(RunSubmitReqSchema)와 완전히 다른 모양(moveLog/runLog/clientResult) — 둘 다
+// .strict()라 필드 집합이 겹치지 않으므로 아래 /runs/submit 핸들러가 바디 모양만으로 안전하게
+// 분기할 수 있다(토큰 내용을 먼저 열어볼 필요 없음).
+
+const ChaseMoveLogEntrySchema = z
+  .object({
+    hopIndex: z.number().int().nonnegative(),
+    countryId: z.string().min(2).max(8),
+    tMs: z.number().nonnegative(),
+  })
+  .strict();
+
+/** runLog 1홉 요약 — moveLog와 1:1(hopIndex로 대응). ms는 moveLog[i].tMs 차분에서 서버가 직접
+ *  산출하므로 담지 않는다(클라 제출 여지를 최소화 — 서버가 유일하게 신뢰하는 시각축). */
+const ChaseHopStatSchema = z
+  .object({
+    hopIndex: z.number().int().nonnegative(),
+    keystrokes: z.number().int().nonnegative(),
+    errors: z.number().int().nonnegative(),
+  })
+  .strict();
+
+const ChaseClientResultSchema = z
+  .object({
+    score: z.number(),
+    pi: z.number(),
+    stats: z
+      .object({
+        totalKeystrokes: z.number().int().nonnegative(),
+        correctKeystrokes: z.number().int().nonnegative(),
+        elapsedMs: z.number().nonnegative(),
+        maxCombo: z.number().int().nonnegative(),
+      })
+      .strict(),
+    // D95: 체포 외에 자수(resigned)도 정상 종료 — 미체포 상태의 endedAtMs 시점 종료로 재계산 검증.
+    outcome: z.enum(["arrested", "resigned"]),
+    endedAtMs: z.number().nonnegative(),
+    arrestedAtMs: z.number().nonnegative().optional(),
+  })
+  .strict();
+
+// moveLog/runLog 상한(2000)은 심 CPU 예산(§9.2 — 10분 런 ≈ 수백 이벤트)의 수십 배 여유를 둔
+// 방어적 상한(비정상 장시간·봇 제출로 인한 검증 비용 폭주를 차단하되 정상 장기 생존 런은 여유롭게 수용).
+const ChaseSubmitReqSchema = z
+  .object({
+    runToken: z.string().min(1).max(4096),
+    moveLog: z.array(ChaseMoveLogEntrySchema).max(2000),
+    runLog: z.array(ChaseHopStatSchema).max(2000),
+    clientResult: ChaseClientResultSchema,
+    // D68-④ 게스트→계정 브리지 — 기존 5모드 제출과 동일 계약(아래 handleChaseSubmit 참조).
     guestToken: z.string().min(1).max(4096).optional(),
   })
   .strict();
@@ -209,12 +266,22 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   const db = c.env.DB;
   if (!db) throw new ApiHttpError(503, "SERVICE_UNAVAILABLE", "DB binding not configured");
 
-  const parsed = RunSubmitReqSchema.safeParse(await c.req.json().catch(() => undefined));
+  const raw = await c.req.json().catch(() => undefined);
+  const now = Date.now();
+
+  // mode:'chase' 제출 분기(WT-CH-09, docs/09 §9.2) — 바디 모양이 완전히 달라(moveLog/runLog/
+  // clientResult) 기존 스키마 검증보다 먼저 시도한다. 실패하면 기존 5모드 경로로 그대로 흘러가
+  // 아래 RunSubmitReqSchema가 처리한다(무회귀 — 두 스키마는 .strict()라 필드 집합이 겹치지 않음).
+  const chaseParsed = ChaseSubmitReqSchema.safeParse(raw);
+  if (chaseParsed.success) {
+    return handleChaseSubmit(c, db, chaseParsed.data, pid, isAcct, now);
+  }
+
+  const parsed = RunSubmitReqSchema.safeParse(raw);
   if (!parsed.success) {
     throw new ApiHttpError(400, "INVALID_BODY", "runs/submit 요청 형식이 올바르지 않습니다.");
   }
   const body = parsed.data;
-  const now = Date.now();
 
   // 토큰 검증(서명/exp) — 실패 시 HTTP 200 rejected. 신뢰 가능한 run 식별자가 없어 INSERT하지 않는다.
   const verified = await verifyToken(body.runToken, c.env.RUN_HMAC_SECRET, RunTokenPayloadSchema, now);
@@ -472,6 +539,205 @@ runs.post("/runs/submit", requireAuth, rateLimit("runs/submit"), async (c) => {
   return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks, shareText, shareId));
 });
 
+// ───────────────────────── chase(골드 러너) 제출 분기(WT-CH-09) ─────────────────────────
+// docs/09 §9.2 전문. 기존 5모드 파이프라인(verifyRun/rebuildSet — countryIds 세트 전제)과는
+// 완전히 독립된 경로다: chase는 "세트"가 없고 심(@wt/shared simulateChase)이 매 홉 선택지를
+// 그때그때 생성하므로, 세트 재현 대신 moveLog 재생성 대조로 서버 권위를 확보한다(chase-verify.ts
+// verifyChaseRun — Gotcha 3: 심·판정·점수는 shared import만, 이 라우트에서 재구현하지 않는다).
+// 기존 5모드 경로(위 블록)는 이 함수를 호출하지 않으며 완전히 그대로다(무회귀).
+
+/** runToken.setHash="chase:v{n}"(routes/chase.ts 발급 규약)에서 발급 시점 constantsVersion을
+ *  역파싱한다. 형식이 어긋나면(발급 코드 버그가 아니면 서명 검증을 통과할 수 없는 경우다 —
+ *  HMAC이 페이로드 전체를 커버) null — 호출부가 현행 버전으로 관대하게 폴백한다. */
+function parseIssuedChaseVersion(setHash: string): number | null {
+  const m = /^chase:v(\d+)$/.exec(setHash);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isInteger(n) ? n : null;
+}
+
+async function handleChaseSubmit(
+  c: Context<{ Bindings: Env; Variables: AuthVariables }>,
+  db: D1Database,
+  body: z.infer<typeof ChaseSubmitReqSchema>,
+  pid: string,
+  isAcct: boolean,
+  now: number,
+): Promise<Response> {
+  const verified = await verifyToken(body.runToken, c.env.RUN_HMAC_SECRET, RunTokenPayloadSchema, now);
+  // mode!=='chase' 방어: 바디 모양은 chase지만 다른 모드의(예: 도난) runToken을 붙인 시도 —
+  // 서명은 유효해도 이 경로에서 신뢰하지 않는다(rejected, 원장 미기록 — 기존 invalid_token과 동일 톤).
+  if (!verified.ok || verified.payload.mode !== "chase") {
+    return c.json(submitRes("rejected", ZERO));
+  }
+  const token = verified.payload;
+
+  // D68-④ 게스트→계정 브리지 — 기존 5모드(위 /runs/submit 본 핸들러)와 완전히 동일한 계약.
+  let verifyPid = pid;
+  if (token.pid !== pid && isAcct && body.guestToken) {
+    const gv = await verifyToken(
+      body.guestToken,
+      [c.env.SESSION_HMAC_SECRET, c.env.SESSION_HMAC_SECRET_PREV],
+      SessionPayloadSchema,
+      now,
+    );
+    if (gv.ok && gv.payload.pid === token.pid) verifyPid = token.pid;
+  }
+
+  const config = await loadAnticheatConfig(c.env.KV);
+  const alreadyUsed = c.env.KV ? (await c.env.KV.get(KV_KEYS.session(token.rid))) !== null : false;
+
+  // §9.4: 발급 시점 버전 → 후보 상수 목록(정상 경로는 후보 1개 = 현행 KV config:chase).
+  const issuedVersion = parseIssuedChaseVersion(token.setHash);
+  const { candidates, versionMismatch } =
+    issuedVersion !== null
+      ? await resolveChaseConstantsCandidates(c.env.KV, issuedVersion)
+      : { candidates: [await loadChaseConstants(c.env.KV)], versionMismatch: false };
+
+  const vr = verifyChaseRun({
+    sessionPid: verifyPid,
+    token,
+    alreadyUsed,
+    submit: { moveLog: body.moveLog, runLog: body.runLog, clientResult: body.clientResult },
+    now,
+    runTokenTtlMs: RUN_TOKEN_TTL_MS,
+    config,
+    constantsCandidates: candidates,
+    versionMismatch,
+  });
+
+  // ①(pid 불일치)·②(리플레이) — 기존 5모드와 동일하게 신뢰 가능한 신규 run이 아니므로 INSERT 없음.
+  if (vr.verdict === "rejected" && (vr.verdictReason === "invalid_token" || vr.verdictReason === "replay")) {
+    return c.json(submitRes(vr.verdict, vr.server));
+  }
+
+  // 토큰 소비(일회용) — reject 여부와 무관하게 재제출 차단 플래그를 남긴다.
+  if (c.env.KV) {
+    await c.env.KV.put(KV_KEYS.session(token.rid), "1", { expirationTtl: SESS_FLAG_TTL_SEC });
+  }
+
+  let finalVerdict: RunVerdict = vr.verdict;
+  let finalReason = vr.verdictReason;
+
+  // D68-① 랭킹 게이팅 — 게스트(비계정) 제출은 practice/'guest'로 강등(기존 5모드와 동일 규약).
+  if (!isAcct && finalVerdict !== "rejected") {
+    finalVerdict = "practice";
+    finalReason = "guest";
+  }
+
+  // 섀도우밴(§3.5) — modeKey='chase' 한정이 아니라 계정 전체 rejected 누적(loadPersonalStats와 동일
+  // 집계, mode_key 인자는 board_valid_count/board_best_pi 산출에만 쓰이고 여기선 미사용).
+  const personal = await loadPersonalStats(db, pid, token.modeKey);
+  const newRejectedCount = personal.rejectedCount + (finalVerdict === "rejected" ? 1 : 0);
+  const shadowban = newRejectedCount >= config.rejectedShadowbanThreshold;
+
+  const geo = getGeoCountry(c);
+  const stmts: D1PreparedStatement[] = [
+    insertRunStmt(db, {
+      runId: token.rid,
+      userId: pid,
+      token,
+      server: vr.server,
+      verdict: finalVerdict,
+      verdictReason: finalReason,
+      geo,
+      // chase 고유 통계(moveLog/runLog/delivered 등)는 기존 스키마에 컬럼을 신설하지 않고
+      // detail_json에 담는다(킷 에스컬레이션 항목 해소 — lb_best·runs는 기존 5모드와 완전히
+      // 동일한 형태로 재사용하고, chase만의 부가 정보는 이 JSON이 유일한 저장소다).
+      detailJson: JSON.stringify({
+        moveLog: body.moveLog,
+        runLog: body.runLog,
+        clientResult: body.clientResult,
+        delivered: vr.delivered,
+      }),
+      now,
+    }),
+  ];
+  if (shadowban) {
+    stmts.push(shadowbanStmt(db, pid, now));
+  }
+
+  const shareId = finalVerdict !== "rejected" ? generateShareId() : null;
+  if (shareId) {
+    stmts.push(shareInsertStmt(db, shareId, token.rid, now));
+  }
+
+  const doBoard = finalVerdict === "valid" && !shadowban;
+  let boardKeys: string[] = [];
+  if (doBoard) {
+    boardKeys = boardKeysForRun({
+      modeKey: token.modeKey,
+      lang: token.lang,
+      platform: token.platform,
+      now,
+      activeSeasonPeriod: null, // §11-D15·D60 — v1 시즌 없음(기존 5모드와 동일 상수 고정).
+    });
+    stmts.push(
+      ...upsertBestStmts(db, {
+        boardKeys,
+        userId: pid,
+        runId: token.rid,
+        score: vr.server.score,
+        elapsedMs: vr.server.elapsedMs,
+        accMilli: vr.server.accMilli,
+        achievedAt: now,
+        geo,
+        isDaily: false,
+      }),
+    );
+  }
+
+  await db.batch(stmts);
+
+  let inline: InlineRank | undefined;
+  if (doBoard) {
+    if (c.env.KV) {
+      const kv = c.env.KV;
+      await Promise.all([
+        ...boardKeys.map((bk) => kv.put(KV_KEYS.dirty(bk), "1", { expirationTtl: DIRTY_TTL_SEC })),
+        kv.put(KV_KEYS.dirtySentinel, "1", { expirationTtl: DIRTY_TTL_SEC }),
+      ]);
+    }
+    inline = await inlineRankForRun(db, allBoardKey(token.modeKey, token.lang, token.platform), pid, token.rid);
+  }
+
+  // [구현 결정 — 최종 보고 escalations 참조] evaluateRunAchievements는 perCountry(기존 5모드
+  // shape) 전제라 chase(moveLog 기반)를 아직 지원하지 않는다 — 이 태스크(WT-CH-09, 백엔드
+  // 파이프라인) 스코프 밖으로 두고 newUnlocks=[] 고정. 업적 확장은 후속 태스크 소관.
+  const newUnlocks: string[] = [];
+
+  // game_finish + 일별 제출 카운터 — 응답을 막지 않는다(기존 5모드와 동일 패턴).
+  c.executionCtx.waitUntil(
+    (async () => {
+      try {
+        await trackGameFinish(
+          c.env,
+          pid,
+          { modeKey: token.modeKey, lang: token.lang, platform: token.platform, geo: geo ?? undefined, verdict: finalVerdict },
+          {
+            score: vr.server.score,
+            pi: vr.server.pi,
+            cpm: vr.server.cpm,
+            accMilli: vr.server.accMilli,
+            elapsedMs: vr.server.elapsedMs,
+            countriesCleared: vr.server.countriesCleared,
+            skipped: vr.server.countriesSkipped,
+            completed: vr.server.completed,
+          },
+        );
+        if (c.env.KV) {
+          await bumpDailyCounter(c.env.KV, KV_KEYS.telSubmits(kstDate(now)));
+        }
+      } catch (err) {
+        logWarn("chase_submit_telemetry_failed", { message: err instanceof Error ? err.message : String(err) });
+      }
+    })(),
+  );
+
+  // shareText는 daily 전용 필드(§2.3, WT-M5-04) — chase는 항상 null(클라가 UI를 숨긴다).
+  return c.json(submitRes(finalVerdict, vr.server, inline, newUnlocks, null, shareId));
+}
+
 // ───────────────────────── 응답/SQL 헬퍼 ─────────────────────────
 
 const ZERO: ServerValues = {
@@ -514,8 +780,9 @@ function submitRes(
 
 /** 일별 KV 카운터 증분(game_abandon 근사 집계, cron/retention.ts 소비). TTL은 다음날 01:30
  *  크론이 읽고 지나가기에 충분한 여유(3일)만 준다 — 정밀 한도 판정 목적이 아니라 KV 최종
- *  일관성으로 충분하다(§7 gotcha 8과 동일 원칙). */
-async function bumpDailyCounter(kv: KVNamespace, key: string): Promise<void> {
+ *  일관성으로 충분하다(§7 gotcha 8과 동일 원칙). routes/chase.ts(WT-CH-09)도 재사용한다 —
+ *  export해 chase/start 텔레메트리가 동일 카운터 문법을 그대로 쓰게 한다. */
+export async function bumpDailyCounter(kv: KVNamespace, key: string): Promise<void> {
   const raw = await kv.get(key);
   const count = raw ? Number(raw) : 0;
   await kv.put(key, String(count + 1), { expirationTtl: 3 * 24 * 60 * 60 });

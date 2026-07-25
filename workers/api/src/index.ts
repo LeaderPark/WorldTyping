@@ -11,6 +11,7 @@ import { auth } from "./routes/auth";
 import { config } from "./routes/config";
 import { data } from "./routes/data";
 import { runs } from "./routes/runs";
+import { chase } from "./routes/chase";
 import { lb } from "./routes/lb";
 import { daily } from "./routes/daily";
 import { nickname } from "./routes/nickname";
@@ -56,6 +57,7 @@ app.route("/api/v1", auth); // WT-AUTH-01: POST /auth/google, POST /auth/dev(dev
 app.route("/api/v1", config); // WT-M3-02: GET /config
 app.route("/api/v1", data); // WT-M3-02: GET /data/countries (KV 핫스왑 서빙)
 app.route("/api/v1", runs); // WT-M3-03: POST /runs/start, POST /runs/submit
+app.route("/api/v1", chase); // WT-CH-09: POST /chase/start (submit은 /runs/submit mode='chase' 분기)
 app.route("/api/v1", lb); // WT-M3-04: GET /lb, GET /lb/me
 app.route("/api/v1", daily); // WT-M3-05: GET /daily/today, GET /daily/me
 app.route("/api/v1", nickname); // WT-M3-05: POST /nickname/check, PUT /nickname

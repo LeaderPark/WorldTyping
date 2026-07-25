@@ -21,7 +21,10 @@ export const LB_CACHE_TOP_N = 100;
 /** 제출 핸들러가 남기는 dirty 마킹 TTL(§1.5 — 180s). */
 export const DIRTY_TTL_SEC = 180;
 
-/** 싱글 모드 12종(§1.1 modeKey). daily/multi는 period 규칙이 달라 별도 취급. */
+/** 싱글 모드 13종(§1.1 modeKey). daily/multi는 period 규칙이 달라 별도 취급.
+ *  'chase'(골드 러너, WT-CH-09·docs/09 §9.3)는 modeKey가 항상 고정 문자열 'chase' 하나뿐이다
+ *  (대륙/티어처럼 세분 없음) — 콜드(alltime) 리프레시 대상에 포함시켜 다른 싱글 모드와 동일하게
+ *  10분 주기 캐시 갱신을 받는다. */
 export const SINGLE_MODE_KEYS: readonly string[] = [
   "continent:asia",
   "continent:europe",
@@ -35,6 +38,7 @@ export const SINGLE_MODE_KEYS: readonly string[] = [
   "tier:4",
   "tier:5",
   "worldtour",
+  "chase",
 ] as const;
 
 const LANGS = ["ko", "en"] as const;
@@ -130,7 +134,7 @@ export function coldAlltimeBoardKeys(): string[] {
  * 막는다. 4파트(modeKey|lang|platform|periodKey) + 각 파트 화이트리스트 패턴.
  */
 const MODEKEY_RE =
-  /^(continent:(asia|europe|africa|north-america|south-america|oceania)|tier:[1-5]|worldtour|multi|daily:\d{4}-\d{2}-\d{2})$/;
+  /^(continent:(asia|europe|africa|north-america|south-america|oceania)|tier:[1-5]|worldtour|chase|multi|daily:\d{4}-\d{2}-\d{2})$/;
 const PERIOD_RE = /^(all|d:\d{4}-\d{2}-\d{2}|w:\d{4}-W\d{2}|s:[a-z0-9:-]{1,32})$/;
 
 export function isValidBoardKey(boardKey: string): boolean {

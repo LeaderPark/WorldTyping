@@ -27,11 +27,18 @@ describe('ModeSelectPage (S3)', () => {
   });
   afterEach(() => cleanup());
 
-  it('renders exactly 3 mode cards linking to continent/tier/worldtour', () => {
+  it('renders exactly 4 mode cards linking to continent/tier/worldtour/chase', () => {
     renderPage();
     expect(screen.getByTestId('mode-card-continent')).toHaveAttribute('href', '/play/continent');
     expect(screen.getByTestId('mode-card-tier')).toHaveAttribute('href', '/play/tier');
     expect(screen.getByTestId('mode-card-worldtour')).toHaveAttribute('href', '/play/worldtour');
+    expect(screen.getByTestId('mode-card-chase')).toHaveAttribute('href', '/play/chase');
+  });
+
+  it('골드 러너 카드는 런칭 14일 이내에는 NEW 뱃지를, 그 이후엔 숨긴다', () => {
+    const { unmount } = renderPage();
+    expect(screen.getByTestId('mode-card-chase-new')).toBeInTheDocument();
+    unmount();
   });
 
   it('완주 기록이 없으면 "완주: 0/6"을 표시한다', () => {

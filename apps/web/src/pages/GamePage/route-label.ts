@@ -1,8 +1,10 @@
 // spec: docs/01 §10.2(S5 보딩패스·S7 결과의 노선/모드 라벨), WT-M2-06
 //
 // BoardingPass(S5)·ResultView(S7)가 공유하는 "모드 → 표시 라벨" 헬퍼. i18n 카탈로그 키 조합만
-// 하고 문자열을 하드코딩하지 않는다(CLAUDE.md "UI 문자열 하드코딩 금지"). GameMode.race는 이
-// 화면에 도달하지 않지만(useGameSession이 거부) 스위치 완전성을 위해 폴백을 둔다.
+// 하고 문자열을 하드코딩하지 않는다(CLAUDE.md "UI 문자열 하드코딩 금지"). GameMode.race/chase는
+// 이 화면(LegacyGamePage, pages/GamePage/index.tsx)에 도달하지 않지만(race는 useGameSession이
+// 거부, chase는 pathname으로 갈라져 features/chase/ChaseGameRoot가 전담 — WT-CH-08) 스위치
+// 완전성을 위해 방어적 폴백을 둔다.
 import type { GameMode } from '@wt/shared';
 
 export type TFn = (key: string, opts?: Record<string, unknown>) => string;
@@ -21,7 +23,7 @@ export function describeRouteLabel(mode: GameMode, trackId: string, count: numbe
     case 'race':
       return t('menu.multi');
     case 'chase':
-      return t('chase.mode.title'); // [WT-CH 조정 스텁] chase 라벨 — WT-CH-06(i18n)/CH-08 정제
+      return t('chase.mode.title'); // 도달 불가 폴백(ChaseGameRoot가 전담) — 스위치 완전성용.
   }
 }
 
@@ -37,6 +39,6 @@ export function ruleTypeKey(mode: GameMode): string {
     case 'daily':
     case 'race':
     case 'chase':
-      return 'boarding.ruleType.daily'; // [WT-CH 조정 스텁] chase는 자체 브리핑 — 이 라인 미사용, WT-CH-08 정제
+      return 'boarding.ruleType.daily'; // chase는 BriefingCard 자체 문법 — 도달 불가 폴백.
   }
 }

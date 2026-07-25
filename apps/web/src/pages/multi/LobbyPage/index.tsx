@@ -11,8 +11,9 @@
 // [WT-AUTH-05] 로비 재디자인 + 멀티 로그인 게이트(§11-D68). 방 만들기/입장/퀵매치/코드 참가는 모두
 // isLoggedIn을 먼저 검사하고, 비로그인이면 로그인 모달(reason=multi)을 띄운 뒤 성공 시 보류된 액션을
 // 재개한다(withLoginGate). VITE_WS_BASE(E2E mock)에서는 게이트를 제외한다(구현 지시). 방 목록은
-// GET /rooms/public이 주는 공개 방 상세(title/phase/hostCover)와 counts(공개/비공개)로 렌더하되,
-// 비공개 방은 상세를 노출하지 않고 카운트만 보여준다(D68-⑧).
+// GET /rooms/public이 주는 공개 방 상세(title/phase/hostCover)로 렌더한다(응답의 counts 필드는
+// [WT-TWEAK-LOBBY-SIMPLE]로 소비하지 않는다 — 전체/공개/비밀 카운트 세그먼트 UI 제거, 공개 방
+// 카드 목록만 그대로 전부 노출).
 import {
   useCallback,
   useEffect,
@@ -44,12 +45,11 @@ interface PublicRoomCard {
   hostCover: string | null;
 }
 
+/** 서버 응답은 counts(공개/비공개 집계)도 포함하지만 [WT-TWEAK-LOBBY-SIMPLE]로 카운트 UI를
+ *  제거해 rooms만 소비한다 — 여분 필드(counts)는 타입에서 생략해도 무해(구조적 타이핑, 응답 캐스팅). */
 interface PublicListRes {
   rooms: PublicRoomCard[];
-  counts: { public: number; private: number };
 }
-
-type FilterTab = 'all' | 'public' | 'private';
 
 /** v1 멀티 세트는 race-mixed 15개국 고정(docs/01 §8.1, docs/00 §11-D23) — 카드 메타 표시용 상수. */
 const RACE_SET_SIZE = 15;
@@ -85,10 +85,8 @@ export function LobbyPage() {
   const matchCancelledRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterTab>('all');
   const [createOpen, setCreateOpen] = useState(false);
   const [publicRooms, setPublicRooms] = useState<PublicRoomCard[]>([]);
-  const [counts, setCounts] = useState<{ public: number; private: number }>({ public: 0, private: 0 });
 
   // [§11-D86 F2] 멀티 진입 시 계정 토큰 1회 서버 검증 — 무효면 스토어가 로그아웃으로 강등되고
   // 배너/게이트/AuthChip이 같은 렌더 패스에서 guest로 정합화된다(사용자가 실패하는 클릭을 하기 전에).
@@ -105,7 +103,6 @@ export function LobbyPage() {
         .then((res) => {
           if (cancelled) return;
           setPublicRooms(res.rooms);
-          setCounts(res.counts);
         })
         .catch(() => {
           // 공개 방 목록 실패는 비치명적 — 퀵매치/코드 참가는 계속 가능.
@@ -221,15 +218,14 @@ export function LobbyPage() {
     }
   }
 
-  // 탭 + 검색어(제목)로 노출할 카드 계산. 비공개 탭은 상세 비노출(카운트만) — 카드는 항상 공개 방이다.
+  // 검색어(제목)로 노출할 카드 계산 — [WT-TWEAK-LOBBY-SIMPLE] 카운트/필터 탭 제거, 공개 방 목록
+  // 전부를 기본 노출하고 검색어만 클라 필터로 좁힌다.
   const visibleRooms = useMemo<PublicRoomCard[]>(() => {
-    if (filter === 'private') return [];
     const q = search.trim().toLowerCase();
     if (q === '') return publicRooms;
     return publicRooms.filter((r) => (r.title ?? '').toLowerCase().includes(q));
-  }, [publicRooms, filter, search]);
+  }, [publicRooms, search]);
 
-  const totalCount = counts.public + counts.private;
   // [§11-D88] 방 제목 기본값 = 계정 닉(방 만들기는 withLoginGate 뒤라 프로덕션에선 항상 존재). 빈
   // 문자열이면 CreateRoomModal이 빈 입력으로 시작하고, 서버는 빈 제목이면 키를 생략해 처리한다(무해).
   const defaultRoomTitle = (authNickname ?? '').slice(0, 24);
@@ -340,38 +336,14 @@ export function LobbyPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </form>
-
-          {/* 필터 탭: 전체 / 공개방 / 비밀방(카운트). 비밀방은 상세 비노출 → 코드 참가 안내만. */}
-          <div className="wt-lobby__filters" role="group" aria-label={t('lobby.room.title')}>
-            {(['all', 'public', 'private'] as const).map((f) => {
-              const n = f === 'all' ? totalCount : counts[f];
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  className={`wt-pill wt-pill--compact${filter === f ? ' wt-pill--active' : ''}`}
-                  aria-pressed={filter === f}
-                  data-testid={`lobby-filter-${f}`}
-                  onClick={() => setFilter(f)}
-                >
-                  {t(`lobby.filter.${f}`)}
-                  <span className="wt-lobby__filter-count">{n}</span>
-                </button>
-              );
-            })}
-          </div>
         </section>
 
-        {/* 방 카드 리스트 / 비밀방 안내 / 빈 목록. [Tweak C] 이 영역만 내부 스크롤(flex-1·min-h-0·
+        {/* 방 카드 리스트 / 빈 목록. [Tweak C] 이 영역만 내부 스크롤(flex-1·min-h-0·
             overflow-y-auto)한다 — 목록이 많으면 여기서 스크롤하고, 적거나 없어도 flex-1로 크기를
             유지해 헤더 카드/footer 위치가 흔들리지 않는다. tabIndex={0}은 axe scrollable-region-
             focusable(wcag2a) 대비(전 항목이 잠긴 방이라 포커서블 자식이 없어도 키보드로 스크롤 가능). */}
         <div className="wt-lobby__list" tabIndex={0}>
-          {filter === 'private' ? (
-            <p className="wt-lobby__notice" data-testid="lobby-private-hint">
-              {t('multi.room.join')}
-            </p>
-          ) : visibleRooms.length === 0 ? (
+          {visibleRooms.length === 0 ? (
             <p className="wt-lobby__notice" data-testid="lobby-empty">
               {t('multi.publicRooms.empty')}
             </p>

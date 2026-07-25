@@ -2236,26 +2236,8 @@
   outline-offset: 2px;
 }
 
-/* 필터 탭 + 카운트 배지. */
-.wt-lobby__filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-.wt-lobby__filter-count {
-  margin-inline-start: 0.4rem;
-  padding: 0 0.4rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text) 12%, transparent);
-  color: inherit;
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-}
-.wt-pill--active .wt-lobby__filter-count {
-  background: rgba(255, 255, 255, 0.28);
-}
-
-/* 안내/빈 목록 문구(비밀방 코드 참가 안내·공개방 없음). */
+/* 안내/빈 목록 문구(공개방 없음). [WT-TWEAK-LOBBY-SIMPLE] 필터 탭 + 카운트 배지 CSS 제거(마크업
+   삭제와 함께 미사용). */
 .wt-lobby__notice {
   margin: 0;
   padding: 1.5rem 1rem;

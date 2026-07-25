@@ -167,7 +167,7 @@ afterEach(() => {
 });
 
 describe('ResultView', () => {
-  it('게임오버 라벨·최다 오타를 렌더하고 랭킹은 /rank 링크, 공유(desktop)는 활성 상태다', () => {
+  it('게임오버 라벨·최다 오타를 렌더하고 랭킹은 /rank 링크다', () => {
     useSettingsStore.getState().setLang('ko');
     const { engine } = mkEngine(false);
     renderResult(engine, baseResult());
@@ -176,9 +176,18 @@ describe('ResultView', () => {
     expect(card.textContent).toContain('라이프 소진');
     expect(card.textContent).toContain('일본'); // 최다 오타 국가(errors=3 > 0).
     expect(screen.getByTestId('result-ranking')).toHaveAttribute('href', '/rank');
-    expect(screen.getByTestId('result-share')).not.toBeDisabled();
-    expect(screen.getByTestId('share-card-desktop')).toBeInTheDocument();
     expect(screen.queryByTestId('result-resume')).not.toBeInTheDocument();
+  });
+
+  // [WT-TWEAK-REMOVE-SHARE] 결과 액션 줄에서 공유 버튼을 제거했다 — ShareCard 모듈 자체는
+  // features/result/ShareCard.test.tsx가 계속 검증한다(chase 결과 카드가 여전히 사용).
+  it('공유 버튼(result-share)은 결과 액션 줄에 더 이상 렌더되지 않는다', () => {
+    useSettingsStore.getState().setLang('ko');
+    const { engine } = mkEngine(false);
+    renderResult(engine, baseResult());
+
+    expect(screen.queryByTestId('result-share')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('share-card-desktop')).not.toBeInTheDocument();
   });
 
   it('checkpointResumeAvailable이면 이어하기 버튼이 나타나고 클릭 시 engine.resumeFromCheckpoint를 호출한다', () => {

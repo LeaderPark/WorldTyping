@@ -204,9 +204,9 @@ describe('GamePage — S5→S6→S7 수직 슬라이스(WT-M2-06 acceptance)', (
     expect(cardText).toContain('100%'); // 무오타 완주 — 정확도 100%.
     expect(cardText).toContain('×12'); // 콤보 12(전 국가 무오타 확정).
 
-    // 랭킹은 /rank 링크(WT-M3-06), 공유는 WT-M5-04에서 실배선(desktop 기본 — 클립보드/다운로드).
+    // 랭킹은 /rank 링크(WT-M3-06). 공유 버튼은 [WT-TWEAK-REMOVE-SHARE]로 결과 액션 줄에서 제거됐다.
     expect(screen.getByTestId('result-ranking')).toHaveAttribute('href', '/rank');
-    expect(screen.getByTestId('result-share')).not.toBeDisabled();
+    expect(screen.queryByTestId('result-share')).not.toBeInTheDocument();
 
     // R 리트라이 → 2초(RETRY_COUNTDOWN_MS=1500ms) 내 재개.
     act(() => fireEvent.keyDown(window, { key: 'r' }));

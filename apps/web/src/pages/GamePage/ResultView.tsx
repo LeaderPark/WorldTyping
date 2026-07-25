@@ -26,10 +26,11 @@
 // "제출 재시도"를 호출하지 않는다). 등재 완료(valid/flagged)는 순위 표시에 더해 result.registered
 // 문구를 추가로 보여준다.
 //
-// [WT-M5-04] 공유 이미지(ShareCard/capture.ts)·데일리 공유 텍스트(DailyShareText)·자기 최고
-// 기록 고스트(features/typing/ghost.ts) 배선 추가. shareId(서버 발급 공유 랜딩)는 M6-02
-// 소관이라 ShareCard는 항상 홈 URL 폴백을 쓴다(세션 조정 §3-2).
-import { useEffect, useMemo, useRef, useState } from 'react';
+// [WT-M5-04] 데일리 공유 텍스트(DailyShareText)·자기 최고 기록 고스트(features/typing/ghost.ts)
+// 배선. 공유 이미지 캡처(ShareCard/capture.ts)는 [WT-TWEAK-REMOVE-SHARE]로 결과 액션 줄에서
+// 제거됐다 — 모듈 자체(features/result/ShareCard.tsx·capture.ts)는 chase 결과 카드 등 다른
+// 화면이 계속 사용하므로 손대지 않았다.
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { GameSessionEngine, RunResult as EngineRunResult } from '@wt/engine';
@@ -39,7 +40,6 @@ import { useAuthStore } from '../../stores/auth';
 import { useMetaStore } from '../../stores/meta';
 import { useRunSubmit } from '../../net/run-session';
 import { ResultCard } from '../../features/result/ResultCard';
-import { ShareCard } from '../../features/result/ShareCard';
 import { saveGhostIfBest } from '../../features/typing/ghost';
 import { describeRouteLabel } from './route-label';
 
@@ -101,14 +101,6 @@ export function ResultView({
   useHotkeys({ r: retry, R: retry });
 
   const routeLabel = describeRouteLabel(mode, trackId, countries.length, t);
-  // ShareCard 캡처 대상(WT-M5-04) — 마운트 수명 내내 동일 노드를 가리킨다(카드 자체는 재조정되지
-  // 않는다, ResultCard가 mode/trackId 등 불변 props만 받는 것과 같은 전제).
-  const cardRef = useRef<HTMLDivElement>(null);
-  const shareTitle = t('result.share.text', {
-    route: routeLabel,
-    grade: result.score.grade,
-    score: result.score.finalScore,
-  });
 
   const mostMistyped = useMemo(() => {
     let best: { name: string; count: number } | null = null;
@@ -190,9 +182,7 @@ export function ResultView({
         })}
       </p>
 
-      {/* cardRef: ShareCard의 캡처 대상(WT-M5-04) — wrapper를 캡처해 카드 배경(테마)까지 그대로
-          담는다(ResultCard 자체는 캡처/공유를 모른다, 그 파일 상단 주석과 동일 경계). */}
-      <div ref={cardRef} className="wt-result-view__card">
+      <div className="wt-result-view__card">
         <ResultCard
           routeLabel={routeLabel}
           grade={result.score.grade}
@@ -229,7 +219,6 @@ export function ResultView({
         <Link to="/rank" data-testid="result-ranking" className="wt-btn">
           {t('result.action.ranking')}
         </Link>
-        <ShareCard cardRef={cardRef} platform={platform} shareTitle={shareTitle} />
         <button
           type="button"
           data-testid="result-other-route"

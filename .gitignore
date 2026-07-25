@@ -33,3 +33,4 @@ tooling/selfhost/migration/
 
 # Claude Code 격리 worktree(전이적)
 .claude/worktrees/
+tooling/selfhost/deploy-logs/

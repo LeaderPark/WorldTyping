@@ -8,6 +8,59 @@ Queues / AE / R2 / WS를 전부 로컬 시뮬레이션한다(`[env.*]`는 무시
 터널(cloudflared) 실 배선은 **WT-HOST-02**(cloudflared 인증 후)에서 진행한다. 이 문서는
 `app`/`cron-ping`/`backup`/`autoheal` 스택 기동까지를 다룬다.
 
+## 원클릭 배포 (deploy.cmd — WT-DEPLOY-TOOL)
+
+**최초 1회 기동(아래 "기동" 절)이 끝난 뒤부터는, 배포 전용 PC(git + Docker Desktop만 설치)에서
+재배포할 때 이 절이 표준 경로다.** `tooling/selfhost/deploy.cmd`를 더블클릭하면 지금까지의 수동
+절차(`git pull` → `docker compose --profile tunnel up -d --build` → 헬스체크)를 자동으로 수행한다.
+
+### 사용법
+
+```
+tooling\selfhost\deploy.cmd
+```
+
+더블클릭하거나 커맨드라인에서 실행한다. 끝나면 아무 키나 누르면 창이 닫힌다(결과를 읽을 시간을
+주기 위한 `pause`). 본체는 `tooling/selfhost/deploy.ps1`(PowerShell 5.1 호환 — pwsh 미설치 PC에서도
+동작)이며, 아래 8단계를 순서대로 실행하고 실패 시 그 단계에서 명확한 에러와 함께 중단한다:
+
+1. 프리플라이트(git 저장소·`.env` 존재·Docker 데몬 응답 확인)
+2. Git 동기화(`fetch` → 워킹트리 더티 체크 → `checkout`/`merge --ff-only`)
+3. 롤백 대비(현재 app 이미지를 `worldtyping-rollback:latest`로 보존)
+4. `docker compose --profile tunnel build`
+5. `docker compose --profile tunnel up -d`
+6. 헬스체크 대기(최대 180초 폴링, healthcheck `start_period` 40초 감안)
+7. 스모크 테스트(로컬 `127.0.0.1:8790`은 필수, 터널 경유 `worldtyping.leaderpark.net`은 실패해도 경고만 — 로컬이 성공하면 배포 자체는 성공 판정)
+8. 요약 출력(배포된 커밋·소요 시간·헬스 결과·롤백 명령 안내)
+
+전 단계 로그가 `tooling/selfhost/deploy-logs/deploy-YYYYMMDD-HHmmss.log`에 남는다.
+
+### 옵션 (커맨드라인 인자로 전달, 예: `deploy.cmd -DryRun`)
+
+- `-DryRun` — 실제 git/docker 명령을 하나도 실행하지 않고 8단계를 미리보기만 한다(Docker Desktop이
+  꺼져 있거나 미설치여도 끝까지 완주한다). 사전 점검용.
+- `-SkipPull` — `git fetch`/`checkout`/`pull`을 건너뛰고 현재 로컬 워킹트리 상태 그대로 빌드/배포한다.
+- `-Force` — 워킹트리에 커밋되지 않은 변경이 있어도 중단하지 않고 `git stash push -u`로 치운 뒤
+  진행한다(stash는 자동으로 pop하지 않는다 — 실행 종료 시 요약에 안내가 남는다).
+- `-Ref <branch|sha>` — 배포할 브랜치명 또는 커밋 SHA(기본값 `main` = `origin/main`을 ff-only로 반영).
+  7~40자 16진수 문자열이면 커밋 SHA로 판단해 해당 커밋으로 detached checkout한다.
+
+### 롤백
+
+1. **소스로 롤백 후 재배포**: 배포 요약에 출력된 이전 커밋으로 `git checkout <이전 커밋>` 한 뒤
+   `deploy.cmd -SkipPull`로 그 커밋 그대로 재빌드/재기동한다.
+2. **재빌드 없이 즉시 복구**: 직전 실행의 3단계가 보존해 둔 `worldtyping-rollback:latest` 이미지를
+   실제 app 이미지명(`docker compose config --images app`으로 확인, compose 기본 네이밍은
+   `worldtyping-app`)으로 재태그한 뒤 `docker compose --profile tunnel up -d --no-build`로 기동한다.
+
+### 주의
+
+- **`.env`가 반드시 있어야 한다**(아래 "기동" 절 참고) — 없으면 프리플라이트 단계에서 즉시 중단된다.
+- **Docker Desktop이 실행 중이어야 한다** — 꺼져 있으면 `docker info` 확인에서 중단된다(부팅 시
+  자동 시작 설정 권장, §8.6 운영 주의 참고).
+- 워킹트리가 더티(커밋 안 된 로컬 변경)하면 기본적으로 중단한다 — 배포 PC는 보통 항상 클린해야
+  정상이므로, 더티하다는 신호는 그 자체로 점검이 필요하다는 뜻이다.
+
 ## 기동
 
 ```bash

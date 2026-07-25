@@ -255,3 +255,9 @@ env `CLOUDFLARE_API_TOKEN`(Zone)** 로 나눠 사용(OAuth는 DNS 403, env는 Wo
 - **배포 게이트(전부 그린)**: 전체 e2e **36/36**(axe wcag2aa 스캔 포함) · web 단위 테스트 541 · contrast-check 29/29 · typecheck·lint.
 - **라이브 스모크(통과)**: 홈 배경 지구본(앰비언트 자동 데모, D68-⑦) · Google 로그인 GIS 버튼 렌더(승인된 JavaScript 오리진 정상) · Footer(개인정보/약관/지원, D68-⑨) · 멀티 로비 재디자인 + 로그인 게이트 렌더(D68-①⑧). 멀티 백엔드: `POST /api/v1/rooms` 무토큰 → **401 `INVALID_TOKEN`**, `GET /api/v1/rooms/public` → **200 `{rooms:[], counts:{public,private}}`**.
 - **미실행(리드 결정 — 00 §11-D71)**: **멀티 실-DO 2-클라 라이브 레이스는 실행하지 않았다.** 사유: 멀티 로그인 필수(D68-①) + prod 컨테이너에 `/auth/dev` 우회 없음(`ENVIRONMENT=prod` — D68-⑩) + Google OAuth 헤드리스 자동화 불가. v1은 **현재 커버리지로 수용**: e2e mock DO(E6/E7) + DO 유닛(vitest-pool-workers, CI) + 위 라이브 백엔드 스모크. 실-DO 라이브 레이스 검증은 **수동 2계정 테스트**로만 가능(§6.1-9).
+
+---
+
+## 8.8 원클릭 배포툴 (2026-07-25 — WT-DEPLOY-TOOL)
+
+배포 전용 PC(git + Docker Desktop만 설치)에서 §8.6·§8.7의 수동 절차(`git pull` → `docker compose --profile tunnel up -d --build` → 헬스체크)를 대신 수행하는 원클릭 스크립트를 `tooling/selfhost/deploy.cmd`(+ 본체 `deploy.ps1`, PowerShell 5.1 호환)로 추가했다 — 더블클릭하면 프리플라이트 → git 동기화 → 롤백 이미지 보존(`worldtyping-rollback:latest`) → 이미지 빌드 → 컨테이너 기동 → 헬스체크(최대 180초) → 스모크(로컬+터널) → 요약까지 8단계를 자동 수행하고 `tooling/selfhost/deploy-logs/`에 로그를 남긴다(옵션 `-DryRun`/`-SkipPull`/`-Force`/`-Ref`, 사용법·롤백은 `tooling/selfhost/README.md` "원클릭 배포" 절 참고). **이 커밋부터 배포는 `deploy.cmd`가 표준 경로다** — §8.6·§8.7에 적힌 수동 명령어는 이 스크립트가 내부적으로 수행하는 절차의 참고 문서로 남는다.

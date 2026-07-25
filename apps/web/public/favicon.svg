@@ -1,0 +1,47 @@
+<!--
+  spec: WT-TWEAK-FAVICON. 원본 마스코트는 apps/web/src/components/Mascot.tsx(WT-DC-01,
+  viewBox 0 0 64 40, 홈 히어로 렌더값 `<Mascot width={56} tail="var(--continent-asia)" blush bob />`
+  — apps/web/src/pages/HomePage/index.tsx L167)에서 그대로 추출했다. 컴포넌트 자체는 무수정(추출만).
+
+  [정사각 변환] 원본 도형 bbox(동체+꼬리+날개+눈 기준) x:4~61(폭57) y:4~35(높이31)를 정사각
+  64x64 안에 transform="translate(-3.75,10.55) scale(1.1)"로 스케일·중앙 배치했다(가로 거의
+  풀블리드, 세로는 원본이 가로로 넓은 실루엣이라 상하 여백이 남는다 — 회전은 컴포넌트의 실제
+  화면 형태를 왜곡하므로 적용하지 않았다).
+
+  [색] Mascot.tsx 자체 주석의 "마스코트 일러스트 고유색 예외"(CLAUDE.md)를 그대로 따라 리터럴
+  색을 복제한다: 동체 #ffffff/stroke #c9cec0, 날개 #eceee6, 눈 #171b19는 컴포넌트 원본과 동일.
+  꼬리날개는 홈 히어로 실제 렌더값 tail="var(--continent-asia)"의 라이트 테마 계산값
+  #e5484d(tokens.css :root --continent-asia)를 리터럴로 고정 — 파비콘은 브라우저 탭이라
+  CSS 커스텀 프로퍼티(테마 분기)가 적용되지 않는 정적 문서이므로 고정값이 유일한 선택지다.
+
+  [배경 패드] 동체가 흰색이라 밝은(라이트) 브라우저 탭 배경에서 실루엣이 거의 사라진다 —
+  실측 결정: 브랜드 accent 블루(#0a84ff, tokens.css :root/[data-theme=dark] --accent 공통값 —
+  라이트/다크 두 탭 배경 모두에서 흰 동체와 5:1 이상 대비를 만든다) 라운드 사각 배지를 깔아
+  다크/라이트 탭 모두에서 실루엣이 살도록 했다. 코너 반경 14(64분의 14 ≈ iOS 아이콘 비율)는
+  스퀘어 파비콘의 관례적 "squircle" 룩.
+
+  [디테일 단순화] 16~32px 파비콘 크기에서 얇은 입 곡선(stroke-width 1.6)과 볼터치 원(r 1.6)은
+  안티앨리어싱으로 사실상 소실되므로 실루엣·색 정체성에 기여하지 않는 디테일로 판단해 제외했다
+  (동체·꼬리·날개·눈은 실루엣의 핵심이라 유지 — "색·실루엣 유지, 불필요한 디테일 단순화 가능"
+  지시 반영).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#0a84ff" />
+  <g transform="translate(-3.75,10.55) scale(1.1)">
+    <path
+      d="M6 22 Q4 18 10 17 L44 14 Q56 13 60 20 Q61 23 56 24 L14 27 Q8 27 6 22 Z"
+      fill="#ffffff"
+      stroke="#c9cec0"
+      stroke-width="1.5"
+    />
+    <path d="M44 15 L48 6 Q49 4 52 5 L54 6 L52 16 Z" fill="#e5484d" />
+    <path
+      d="M22 25 L14 33 Q13 35 17 34 L30 27 Z"
+      fill="#eceee6"
+      stroke="#c9cec0"
+      stroke-width="1"
+    />
+    <circle cx="30" cy="20" r="2.4" fill="#171b19" />
+    <circle cx="40" cy="19" r="2.4" fill="#171b19" />
+  </g>
+</svg>

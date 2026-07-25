@@ -5,6 +5,17 @@
     <!-- interactive-widget: Android Chrome 108+ 소프트 키보드가 뷰포트를 리사이즈하도록 (docs/03 §7.1) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>TypeTrip — 세계를 타이핑하다 · Type the world</title>
+    <!-- 파비콘(WT-TWEAK-FAVICON): 홈 히어로 마스코트(Mascot.tsx, WT-DC-01)를 정사각으로 추출한
+         apps/web/public/favicon.svg가 1순위(대부분 최신 브라우저는 svg favicon을 지원하고
+         해상도 무손실). sizes="any"로 브라우저가 png 래스터보다 svg를 우선하도록 힌트한다.
+         png는 svg 미지원 구형 브라우저 폴백(favicon-32.png), apple-touch-icon은 iOS 홈 화면
+         추가용(mascot-192.png, public/icons/ — build:data 산출물이 아닌 손으로 배치한 정적
+         자산이라 generated/ 규칙과 무관). 이 레포에는 기존 favicon.ico가 없었으므로(런칭 이후
+         한 번도 배선되지 않았음) 레거시 ico 폴백은 존치 대상이 없다 — 필요해지면 이 svg에서
+         재생성하면 된다. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/icons/mascot-192.png" sizes="192x192" />
     <!-- SEO/OG 정적 기본값(docs/06 §10-2, docs/00 §11-D18, WT-M6-06). 노출명은 전부 TypeTrip
          (코드네임 WORLD TYPING은 저장소/문서 전용). 이 블록은 홈("/") 및 JS 미실행 크롤러를
          위한 기본값이고, apps/web/src/app/RouteMeta.tsx가 SPA 라우트 전환마다 이 태그들을

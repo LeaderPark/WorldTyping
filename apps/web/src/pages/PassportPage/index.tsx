@@ -5,9 +5,10 @@
 // 여권 = 서버가 확정한 unlock 목록의 읽기 전용 뷰(+커버 선택만 쓰기). 로컬 meta.ts 캐시는 참고용
 // 표시 최적화일 뿐 이 화면의 진실 소스가 아니다 — 항상 GET /users/:id/passport를 다시 조회한다
 // (docs/06 §4.3 "판정은 기록 제출 핸들러에서 서버 재계산 결과 기준으로만" — 조회도 동일 원칙).
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Navigate } from 'react-router-dom';
 import type { Continent, DifficultyTier } from '@wt/shared';
 import { useSettingsStore } from '../../stores/settings';
 import { selectIsLoggedIn, useAuthStore } from '../../stores/auth';
@@ -91,9 +92,11 @@ type Status = 'loading' | 'ready' | 'error';
 export function PassportPage() {
   const { t } = useTranslation();
   const guestId = useSettingsStore((s) => s.guestId);
-  // [WT-PASSPORT-LOGIN-NUDGE] 여권은 로그인 전용 기능(리드 확정, docs/00 §11-D68 계정 로그인 위)이다 —
-  // 비로그인은 콘텐츠(스탬프/기록)를 아예 조회·렌더하지 않고 잠금 화면만 본다(게스트 100% 플레이
-  // 원칙 D68은 "게임 플레이"에 적용되고, 이 화면은 계정 귀속 기록 뷰라 예외 — 리드 승인 사항).
+  // [WT-PASSPORT-LOGIN-GATE v3, 리드 확정] 여권은 로그인 전용 기능(docs/00 §11-D68 계정 로그인 위) —
+  // 정상 진입로는 HomePage의 카드 클릭 게이트(비로그인이면 네비게이션 자체를 막고 모달만 연다)라 이
+  // 컴포넌트는 로그인 상태에서만 마운트되는 것이 보통이다. 그래도 딥링크/새로고침/뒤로가기 등으로
+  // 비로그인 상태로 직접 도달할 수 있어(라우팅 차단은 HomePage 링크뿐 — 라우트 자체는 열려 있다),
+  // 그 경우 렌더 자체를 하지 않고 즉시 홈으로 송환 + 로그인 모달을 연다(아래 렌더 분기).
   const isLoggedIn = useAuthStore(selectIsLoggedIn);
   const openLogin = useAuthStore((s) => s.openLogin);
 
@@ -101,12 +104,9 @@ export function PassportPage() {
   const [data, setData] = useState<PassportRes | null>(null);
   const [coverError, setCoverError] = useState(false);
 
-  // 비로그인 마운트 시 로그인 모달을 "passport" 사유로 1회 자동 연다(유도). 닫아도(취소) 잠금 화면이
-  // 남을 뿐 — ref 가드로 재오픈 루프를 막는다(리렌더/StrictMode 이중 실행에도 이 마운트에서 1회만).
-  const autoOpenedRef = useRef(false);
+  // 비로그인으로 도달한 마운트 1회만 로그인 모달을 "passport" 사유로 연다 — 아래서 즉시 <Navigate>로
+  // 대체되어 이 컴포넌트가 언마운트되므로 재실행/재오픈 루프 우려가 없다(마운트 1회 = 인스턴스 수명 전체).
   useEffect(() => {
-    if (autoOpenedRef.current) return;
-    autoOpenedRef.current = true;
     if (!isLoggedIn) openLogin('passport');
   }, [isLoggedIn, openLogin]);
 
@@ -154,133 +154,114 @@ export function PassportPage() {
     [],
   );
 
+  // 비로그인 도달 방어(위 주석) — 여권 화면은 렌더 자체를 하지 않고 홈으로 송환한다(라우팅 차단이
+  // 아니라 게이트: 홈 카드가 이미 로그인 상태에서만 여기로 보내므로 정상 경로에서는 도달하지 않는다).
+  if (!isLoggedIn) return <Navigate to="/" replace />;
+
   return (
     <main className="wt-passport-page wt-page" data-testid="passport-page">
       <PageHeader title={t('passport.title')} />
 
-      {!isLoggedIn ? (
-        <div
-          className="wt-card flex max-w-sm flex-col items-center gap-3 p-8 text-center"
-          data-testid="passport-locked"
-        >
-          <p className="text-5xl" aria-hidden="true">
-            🛂
-          </p>
-          <h2 className="text-xl font-bold">{t('passport.locked.title')}</h2>
-          <p className="text-sm text-text-muted">{t('passport.locked.body')}</p>
-          <button
-            type="button"
-            data-testid="passport-locked-cta"
-            className="wt-pill mt-2"
-            onClick={() => openLogin('passport')}
-          >
-            {t('passport.locked.cta')}
-          </button>
-        </div>
-      ) : (
-        <>
-          {status === 'loading' && (
-            <p data-testid="passport-loading">{t('passport.loading')}</p>
-          )}
-          {status === 'error' && (
-            <p role="alert" data-testid="passport-error">
-              {t('passport.error')}
+      {status === 'loading' && (
+        <p data-testid="passport-loading">{t('passport.loading')}</p>
+      )}
+      {status === 'error' && (
+        <p role="alert" data-testid="passport-error">
+          {t('passport.error')}
+        </p>
+      )}
+
+      {status === 'ready' && data && (
+        <div className="wt-passport-page__spread">
+          <section className="wt-passport-page__left" data-testid="passport-left">
+            <p className="wt-passport-page__nickname" data-testid="passport-nickname">
+              {data.nickname}
             </p>
-          )}
+            <p className="wt-passport-page__stat" data-testid="passport-streak">
+              {t('passport.streak', { count: data.streakDaily })}
+            </p>
+            <p className="wt-passport-page__stat" data-testid="passport-best-pi">
+              {data.bestPi !== null ? t('passport.bestPi', { pi: data.bestPi }) : t('passport.bestPi.none')}
+            </p>
 
-          {status === 'ready' && data && (
-            <div className="wt-passport-page__spread">
-              <section className="wt-passport-page__left" data-testid="passport-left">
-                <p className="wt-passport-page__nickname" data-testid="passport-nickname">
-                  {data.nickname}
-                </p>
-                <p className="wt-passport-page__stat" data-testid="passport-streak">
-                  {t('passport.streak', { count: data.streakDaily })}
-                </p>
-                <p className="wt-passport-page__stat" data-testid="passport-best-pi">
-                  {data.bestPi !== null ? t('passport.bestPi', { pi: data.bestPi }) : t('passport.bestPi.none')}
-                </p>
+            <h2 className="wt-kicker">{t('passport.covers.title')}</h2>
+            <ul className="wt-passport-page__covers" data-testid="passport-covers">
+              {ALL_COVERS.map((coverId) => {
+                const owned = coverId === DEFAULT_COVER || ownedCovers.has(coverId);
+                const isCurrent = data.passportCover === coverId;
+                return (
+                  <li key={coverId}>
+                    <button
+                      type="button"
+                      className={`wt-btn wt-cover-swatch wt-cover-swatch--${coverId}${isCurrent ? ' wt-btn--active' : ''}`}
+                      data-testid={`passport-cover-${coverId}`}
+                      disabled={!owned}
+                      aria-pressed={isCurrent}
+                      title={owned ? humanizeUnlockId(coverId) : t('passport.cover.locked')}
+                      onClick={() => selectCover(coverId)}
+                    >
+                      {isCurrent ? t('passport.cover.current') : owned ? t('passport.cover.selectBtn') : t('passport.cover.locked')}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            {coverError && (
+              <p role="alert" data-testid="passport-cover-error">
+                {t('passport.error')}
+              </p>
+            )}
+          </section>
 
-                <h2 className="wt-kicker">{t('passport.covers.title')}</h2>
-                <ul className="wt-passport-page__covers" data-testid="passport-covers">
-                  {ALL_COVERS.map((coverId) => {
-                    const owned = coverId === DEFAULT_COVER || ownedCovers.has(coverId);
-                    const isCurrent = data.passportCover === coverId;
-                    return (
-                      <li key={coverId}>
-                        <button
-                          type="button"
-                          className={`wt-btn wt-cover-swatch wt-cover-swatch--${coverId}${isCurrent ? ' wt-btn--active' : ''}`}
-                          data-testid={`passport-cover-${coverId}`}
-                          disabled={!owned}
-                          aria-pressed={isCurrent}
-                          title={owned ? humanizeUnlockId(coverId) : t('passport.cover.locked')}
-                          onClick={() => selectCover(coverId)}
-                        >
-                          {isCurrent ? t('passport.cover.current') : owned ? t('passport.cover.selectBtn') : t('passport.cover.locked')}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {coverError && (
-                  <p role="alert" data-testid="passport-cover-error">
-                    {t('passport.error')}
-                  </p>
-                )}
-              </section>
+          <section className="wt-passport-page__right" data-testid="passport-right">
+            <h2 className="wt-kicker">{t('passport.stamps.title')}</h2>
+            {ownedStampRoutes.size === 0 ? (
+              <p data-testid="passport-stamps-empty">{t('passport.stamps.empty')}</p>
+            ) : (
+              <ul className="wt-passport-page__stamps" data-testid="passport-stamps">
+                {STAMP_ROUTES.map((route) => {
+                  const owned = ownedStampRoutes.has(route);
+                  const visual = owned ? stampOwnedVisual(route) : null;
+                  const circleStyle = visual
+                    ? ({
+                        '--stamp-ring': visual.ring,
+                        '--stamp-bg': visual.bg,
+                        transform: `rotate(${stampRotationDeg(route)}deg)`,
+                      } as CSSProperties)
+                    : undefined;
+                  return (
+                    <li
+                      key={route}
+                      data-testid={`passport-stamp-${route}`}
+                      className={`wt-token wt-passport-page__stamp${owned ? ' wt-passport-page__stamp--owned' : ' wt-token--locked'}`}
+                    >
+                      <span className="wt-token__circle" aria-hidden="true" style={circleStyle}>
+                        {visual ? visual.glyph : '🔒'}
+                      </span>
+                      <span className="wt-token__label">{humanizeUnlockId(route)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-              <section className="wt-passport-page__right" data-testid="passport-right">
-                <h2 className="wt-kicker">{t('passport.stamps.title')}</h2>
-                {ownedStampRoutes.size === 0 ? (
-                  <p data-testid="passport-stamps-empty">{t('passport.stamps.empty')}</p>
-                ) : (
-                  <ul className="wt-passport-page__stamps" data-testid="passport-stamps">
-                    {STAMP_ROUTES.map((route) => {
-                      const owned = ownedStampRoutes.has(route);
-                      const visual = owned ? stampOwnedVisual(route) : null;
-                      const circleStyle = visual
-                        ? ({
-                            '--stamp-ring': visual.ring,
-                            '--stamp-bg': visual.bg,
-                            transform: `rotate(${stampRotationDeg(route)}deg)`,
-                          } as CSSProperties)
-                        : undefined;
-                      return (
-                        <li
-                          key={route}
-                          data-testid={`passport-stamp-${route}`}
-                          className={`wt-token wt-passport-page__stamp${owned ? ' wt-passport-page__stamp--owned' : ' wt-token--locked'}`}
-                        >
-                          <span className="wt-token__circle" aria-hidden="true" style={circleStyle}>
-                            {visual ? visual.glyph : '🔒'}
-                          </span>
-                          <span className="wt-token__label">{humanizeUnlockId(route)}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-
-                <h2 className="wt-kicker">{t('passport.achievements.title')}</h2>
-                <p className="wt-passport-page__stat" data-testid="passport-achievements-count">
-                  {t('passport.achievements.count', { count: achievements.length })}
-                </p>
-                {achievements.length === 0 ? (
-                  <p data-testid="passport-achievements-empty">{t('passport.achievements.empty')}</p>
-                ) : (
-                  <ul className="wt-passport-page__achievements" data-testid="passport-achievements">
-                    {achievements.map((a) => (
-                      <li key={a.id} data-testid={`passport-achievement-${a.id}`}>
-                        {humanizeUnlockId(a.id)}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </div>
-          )}
-        </>
+            <h2 className="wt-kicker">{t('passport.achievements.title')}</h2>
+            <p className="wt-passport-page__stat" data-testid="passport-achievements-count">
+              {t('passport.achievements.count', { count: achievements.length })}
+            </p>
+            {achievements.length === 0 ? (
+              <p data-testid="passport-achievements-empty">{t('passport.achievements.empty')}</p>
+            ) : (
+              <ul className="wt-passport-page__achievements" data-testid="passport-achievements">
+                {achievements.map((a) => (
+                  <li key={a.id} data-testid={`passport-achievement-${a.id}`}>
+                    {humanizeUnlockId(a.id)}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       )}
     </main>
   );

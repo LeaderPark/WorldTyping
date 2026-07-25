@@ -23,11 +23,12 @@
 // 첫 페인트가 지연돼 LCP 예산을 넘긴다)로 React.lazy 청크 경계를 유지한다. Suspense fallback
 // (HomeGlobePlaceholder)은 HomeGlobe 내부의 "지구본 인덱스 아직 없음" 상태와 동일 마크업이라
 // 청크 도착 시점 스왑에 레이아웃 시프트가 없다.
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useRef, useState, type MouseEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { hasChosenLanguage, useSettingsStore } from '../../stores/settings';
 import { useMetaStore } from '../../stores/meta';
+import { selectIsLoggedIn, useAuthStore } from '../../stores/auth';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { Mascot } from '../../components/Mascot';
 import { BrandMark } from '../../components/BrandMark';
@@ -53,9 +54,42 @@ function todayDailyKey(): string {
 
 export function HomePage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const lang = useSettingsStore((s) => s.lang);
   const setLang = useSettingsStore((s) => s.setLang);
   const hasAnyStamp = useMetaStore((s) => Object.keys(s.stamps).length > 0);
+
+  // [WT-PASSPORT-LOGIN-GATE v3, 리드 확정] 여권 카드 게이트 — 비로그인 클릭은 네비게이션을 막고
+  // 로그인 모달만 연다(홈에 머무름). 로그인이 성립하면(같은 탭에서 모달로 성공한 경우) 보류해 둔
+  // /passport 이동을 자동 재개한다 — LobbyPage의 withLoginGate/pendingActionRef 패턴 준용.
+  // redirect(GIS ux_mode:'redirect') 로그인은 전체 페이지 이동이라 이 컴포넌트 인스턴스가 사라지므로
+  // 이 재개는 발화하지 않는다 — 착지 후에도 자동 이동을 원하면 sessionStorage 보류 플래그로 확장이
+  // 필요하지만(리드 지시), 착지 경로가 이미 홈이라 사용자가 카드 하나만 다시 누르면 되는 저비용
+  // 갭이라 이번 배치 범위에서는 제외한다(같은 탭 로그인 성립 케이스만 커버).
+  const isLoggedIn = useAuthStore(selectIsLoggedIn);
+  const openLogin = useAuthStore((s) => s.openLogin);
+  const loginReason = useAuthStore((s) => s.loginReason);
+  const passportPendingRef = useRef(false);
+
+  useEffect(() => {
+    if (isLoggedIn && passportPendingRef.current) {
+      passportPendingRef.current = false;
+      navigate('/passport');
+    }
+  }, [isLoggedIn, navigate]);
+
+  // 모달을 취소했는데(닫혔는데) 여전히 비로그인이면 보류를 폐기한다(홈 언마운트는 ref가 인스턴스와
+  // 함께 사라지므로 별도 처리가 필요 없다).
+  useEffect(() => {
+    if (loginReason === null && !isLoggedIn) passportPendingRef.current = false;
+  }, [loginReason, isLoggedIn]);
+
+  function handlePassportClick(e: MouseEvent<HTMLAnchorElement>): void {
+    if (isLoggedIn) return; // 로그인 상태 — 기존 네비게이션 그대로.
+    e.preventDefault();
+    passportPendingRef.current = true;
+    openLogin('passport');
+  }
 
   // [WT-DC-02] 사운드 토글(②) — 저빈도 사용자 설정 변경이라 §4.5 핫패스 규약(고빈도 값 금지)과
   // 무관하다. 클릭 자체가 pointerdown이라 sound-manager의 첫 제스처 unlock()도 함께 트리거된다.
@@ -99,9 +133,10 @@ export function HomePage() {
 
       <div className="wt-home__content">
         <header className="wt-home__header">
-          {/* [D74] 좌상단 브랜드(홈은 자기 링크 소음 방지로 비링크 span). [D75] 헤더 데일리 뱃지는
+          {/* [D74] 좌상단 브랜드. [WT-TWEAK-BRAND-LINK] 홈에서도 클릭 가능한 `/` 링크로 통일
+              (D74의 "홈=비링크 span" 조항 대체 — 같은 경로 네비라 무해). [D75] 헤더 데일리 뱃지는
               제거 — 데일리 진입은 아래 메뉴 카드(home-card-daily)가 유지한다. */}
-          <BrandMark linkToHome={false} />
+          <BrandMark />
           <div className="wt-home__header-actions">
             <button
               type="button"
@@ -187,7 +222,12 @@ export function HomePage() {
             <span className="wt-menu-row__chevron" aria-hidden="true">›</span>
           </Link>
 
-          <Link to="/passport" data-testid="home-nav-passport" className="wt-menu-row wt-home__menu-row--passport">
+          <Link
+            to="/passport"
+            data-testid="home-nav-passport"
+            className="wt-menu-row wt-home__menu-row--passport"
+            onClick={handlePassportClick}
+          >
             <span className="wt-icon-tile" aria-hidden="true">🛂</span>
             <span className="wt-menu-row__body">
               <span className="wt-kicker wt-kicker--oceania">{t('home.menu.passportKicker')}</span>

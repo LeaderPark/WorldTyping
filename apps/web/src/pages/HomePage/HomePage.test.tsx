@@ -1,18 +1,46 @@
 // @vitest-environment jsdom
 //
 // spec: docs/01 §10.2(S1 홈 와이어프레임), §11.1(1단계 — 싱글플레이 카드 펄스), WT-M2-07,
-//       WT-AUTH-07(홈 배경이 HeroMap+RouteMotifBackdrop에서 HomeGlobe로 교체됨)
+//       WT-AUTH-07(홈 배경이 HeroMap+RouteMotifBackdrop에서 HomeGlobe로 교체됨),
+//       WT-PASSPORT-LOGIN-GATE-v3(리드 확정 — 여권 카드는 비로그인 클릭을 게이트한다)
 //
 // bootLoader를 일부러 목킹하지 않는다 — HomeGlobe(useGlobeIndex)가 부팅 데이터 없이도 안전하게
 // placeholder로 폴백하는지(app/router.test.tsx의 "로더 없이 홈을 렌더" 전제와 동일 계약, 이전
 // HeroMap/useWorldGeoIndex와 동일한 방어 패턴)를 이 파일 자체가 실증한다.
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
 import { useMetaStore } from '../../stores/meta';
 import { useSettingsStore } from '../../stores/settings';
+import { useAuthStore, type AccountSession } from '../../stores/auth';
 import { HomePage } from './index';
+
+function loginSession(): AccountSession {
+  return {
+    token: 'wt1.acct',
+    playerId: 'p1',
+    nickname: 'NIMBUS',
+    expiresAt: Date.now() + 60_000,
+    geo: 'KR',
+    profile: { name: 'NIMBUS', picture: null, email: null },
+  };
+}
+
+/** 여권 카드 게이트는 실제 <Link>/navigate 이동 여부를 관측해야 하므로 목적지 라우트를 갖춘
+ *  트리가 필요하다(맨몸 renderHome()은 HomePage만 마운트해 이동 여부를 볼 수 없다). */
+function renderHomeRouted() {
+  return render(
+    <AppProviders>
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/passport" element={<div data-testid="passport-stub" />} />
+        </Routes>
+      </MemoryRouter>
+    </AppProviders>,
+  );
+}
 
 const fetchDailyTodayMock = vi.fn();
 const fetchDailyMeMock = vi.fn();
@@ -49,10 +77,14 @@ describe('HomePage (S1)', () => {
     fetchDailyTodayMock.mockResolvedValue({ dailyNo: 42, dateKst: '2026-07-21', seed: 's', countryIds: [] });
     fetchDailyMeMock.mockResolvedValue({ dateKst: '2026-07-21', alreadyPlayed: false, streakDaily: 0 });
     ensureSessionMock.mockResolvedValue({ token: 't', playerId: 'p1', nickname: 'GUEST_0001', expiresAt: '' });
+    useAuthStore.getState().logout();
+    useAuthStore.getState().closeLogin();
   });
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    useAuthStore.getState().logout();
+    useAuthStore.getState().closeLogin();
   });
 
   it('부팅 데이터 없이도 배경 지구본이 placeholder로 안전하게 렌더된다(throw 없음, WT-AUTH-07)', () => {
@@ -88,5 +120,49 @@ describe('HomePage (S1)', () => {
     const toggle = screen.getByTestId('home-lang-toggle');
     toggle.click();
     expect(useSettingsStore.getState().lang).toBe('en');
+  });
+
+  // ── 여권 카드 로그인 게이트(WT-PASSPORT-LOGIN-GATE-v3, 리드 확정) ──────────────────────
+  // 비로그인 클릭은 네비게이션을 막고 로그인 모달만 연다(홈에 머무름). 로그인이 같은 탭에서
+  // 성립하면 보류해 둔 /passport 이동을 자동 재개하고, 모달을 취소하면 보류를 폐기한다.
+  describe('여권 카드 로그인 게이트', () => {
+    it('비로그인 상태로 클릭하면 네비게이션 없이 "passport" 사유로 로그인 모달만 연다', () => {
+      renderHomeRouted();
+      fireEvent.click(screen.getByTestId('home-nav-passport'));
+
+      expect(screen.queryByTestId('passport-stub')).not.toBeInTheDocument();
+      expect(screen.getByTestId('home-page')).toBeInTheDocument();
+      expect(useAuthStore.getState().loginReason).toBe('passport');
+    });
+
+    it('로그인 상태로 클릭하면 정상적으로 /passport로 이동한다', () => {
+      act(() => useAuthStore.getState().login(loginSession()));
+      renderHomeRouted();
+      fireEvent.click(screen.getByTestId('home-nav-passport'));
+
+      expect(screen.getByTestId('passport-stub')).toBeInTheDocument();
+    });
+
+    it('비로그인 클릭 후 로그인이 성립하면 보류해 둔 /passport 이동을 자동 재개한다', () => {
+      renderHomeRouted();
+      fireEvent.click(screen.getByTestId('home-nav-passport'));
+      expect(useAuthStore.getState().loginReason).toBe('passport');
+
+      act(() => useAuthStore.getState().login(loginSession()));
+
+      expect(screen.getByTestId('passport-stub')).toBeInTheDocument();
+    });
+
+    it('비로그인 클릭 후 모달을 취소하면 보류가 해제되어 이후 로그인에도 자동 이동하지 않는다', () => {
+      renderHomeRouted();
+      fireEvent.click(screen.getByTestId('home-nav-passport'));
+      expect(useAuthStore.getState().loginReason).toBe('passport');
+
+      act(() => useAuthStore.getState().closeLogin());
+      act(() => useAuthStore.getState().login(loginSession()));
+
+      expect(screen.queryByTestId('passport-stub')).not.toBeInTheDocument();
+      expect(screen.getByTestId('home-page')).toBeInTheDocument();
+    });
   });
 });

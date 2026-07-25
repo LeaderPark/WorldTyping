@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 //
 // spec: docs/01 §10.1(S13)·§10.2(여권 펼침 뷰), docs/06 §4.3, WT-M5-03,
-//       WT-PASSPORT-LOGIN-NUDGE(여권 = 로그인 전용, 리드 확정 — 비로그인은 잠금 화면)
+//       WT-PASSPORT-LOGIN-GATE-v3(여권 = 로그인 전용, 리드 확정 — 비로그인 도달은 홈 송환 + 로그인
+//       모달, 잠금 화면 UI는 폐지)
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
 import { useAuthStore, type AccountSession } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settings';
@@ -197,7 +198,11 @@ describe('PassportPage', () => {
     );
   });
 
-  // ── 로그인 게이팅(WT-PASSPORT-LOGIN-NUDGE, 리드 확정 — 여권은 로그인 전용) ──────────────
+  // ── 로그인 게이팅(WT-PASSPORT-LOGIN-GATE-v3, 리드 확정) ──────────────────────────────
+  // 정상 진입로는 HomePage 카드 클릭 게이트(비로그인이면 네비게이션 자체를 막는다)라 이 컴포넌트가
+  // 비로그인 상태로 마운트되는 것은 딥링크/새로고침/뒤로가기 등 비정상 경로뿐이다. 그 경우 잠금
+  // 화면을 보여주는 대신 렌더 자체를 하지 않고 즉시 홈으로 송환 + 로그인 모달을 연다 — 구 계약
+  // (커밋 a2099ee의 passport-locked/passport-locked-cta 잠금 화면)은 이 배치로 폐지됐다.
   describe('로그인 게이팅', () => {
     beforeEach(() => {
       // 상위 beforeEach가 세운 로그인 상태를 되돌려 이 describe는 항상 비로그인에서 시작한다.
@@ -205,23 +210,38 @@ describe('PassportPage', () => {
       useAuthStore.getState().closeLogin();
     });
 
-    it('비로그인 마운트 → 잠금 화면을 보여주고 여권 콘텐츠는 렌더하지 않는다', async () => {
-      renderPage();
+    // <Navigate>가 실제로 홈으로 보냈는지 확인하려면 목적지 라우트가 트리에 있어야 한다(맨몸
+    // <MemoryRouter><PassportPage /></MemoryRouter>만으로는 송환 여부를 관측할 수 없다).
+    function renderRouted() {
+      return render(
+        <AppProviders>
+          <MemoryRouter initialEntries={['/passport']}>
+            <Routes>
+              <Route path="/" element={<div data-testid="home-stub" />} />
+              <Route path="/passport" element={<PassportPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AppProviders>,
+      );
+    }
 
-      expect(await screen.findByTestId('passport-locked')).toBeInTheDocument();
+    it('비로그인 마운트 → 홈으로 송환하고 여권 콘텐츠는 렌더하지 않는다', () => {
+      renderRouted();
+
+      expect(screen.getByTestId('home-stub')).toBeInTheDocument();
+      expect(screen.queryByTestId('passport-page')).not.toBeInTheDocument();
       expect(screen.queryByTestId('passport-nickname')).not.toBeInTheDocument();
       expect(screen.queryByTestId('passport-loading')).not.toBeInTheDocument();
-      expect(screen.queryByTestId('passport-stamps')).not.toBeInTheDocument();
       expect(fetchPassportMock).not.toHaveBeenCalled();
     });
 
     it('비로그인 마운트 → 로그인 모달을 "passport" 사유로 1회 자동으로 연다', () => {
-      renderPage();
+      renderRouted();
       expect(useAuthStore.getState().loginReason).toBe('passport');
     });
 
-    it('모달을 닫아도(취소) 잠금 화면은 유지되고, 리렌더에도 재오픈되지 않는다', () => {
-      const { rerender } = renderPage();
+    it('모달을 닫아도(취소) 홈 송환 상태는 유지되고, 리렌더에도 재오픈되지 않는다', () => {
+      const { rerender } = renderRouted();
       expect(useAuthStore.getState().loginReason).toBe('passport');
 
       act(() => useAuthStore.getState().closeLogin());
@@ -229,31 +249,25 @@ describe('PassportPage', () => {
 
       rerender(
         <AppProviders>
-          <MemoryRouter>
-            <PassportPage />
+          <MemoryRouter initialEntries={['/passport']}>
+            <Routes>
+              <Route path="/" element={<div data-testid="home-stub" />} />
+              <Route path="/passport" element={<PassportPage />} />
+            </Routes>
           </MemoryRouter>
         </AppProviders>,
       );
 
       expect(useAuthStore.getState().loginReason).toBeNull(); // 재오픈 없음(ref 가드)
-      expect(screen.getByTestId('passport-locked')).toBeInTheDocument();
-    });
-
-    it('잠금 화면의 로그인 버튼을 클릭하면 로그인 모달을 다시 연다', () => {
-      renderPage();
-      act(() => useAuthStore.getState().closeLogin());
-      expect(useAuthStore.getState().loginReason).toBeNull();
-
-      fireEvent.click(screen.getByTestId('passport-locked-cta'));
-      expect(useAuthStore.getState().loginReason).toBe('passport');
+      expect(screen.getByTestId('home-stub')).toBeInTheDocument();
     });
 
     it('로그인 상태로 마운트하면 로그인 모달을 자동으로 열지 않고 여권 콘텐츠를 정상 렌더한다', async () => {
       act(() => useAuthStore.getState().login(loginSession()));
-      renderPage();
+      renderRouted();
 
       await waitFor(() => expect(screen.getByTestId('passport-nickname')).toBeInTheDocument());
-      expect(screen.queryByTestId('passport-locked')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('home-stub')).not.toBeInTheDocument();
       expect(useAuthStore.getState().loginReason).toBeNull();
     });
   });

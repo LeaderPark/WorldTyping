@@ -216,9 +216,6 @@
   "passport.achievements.title": "업적",
   "passport.achievements.empty": "아직 달성한 업적이 없어요",
   "passport.achievements.count": "{count}/24 달성",
-  "passport.locked.title": "여권은 로그인 후 이용할 수 있어요",
-  "passport.locked.body": "여권 스탬프와 기록은 로그인한 계정에 저장돼요. 로그인하면 어디서든 이어서 확인할 수 있어요.",
-  "passport.locked.cta": "로그인하고 여권 보기",
 
   "lang.selectPrompt.ko": "어떤 언어로 여행할까요?",
   "lang.selectPrompt.en": "Which language?",

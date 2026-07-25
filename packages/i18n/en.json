@@ -216,9 +216,6 @@
   "passport.achievements.title": "Achievements",
   "passport.achievements.empty": "No achievements yet",
   "passport.achievements.count": "{count}/24 unlocked",
-  "passport.locked.title": "Sign in to use your passport",
-  "passport.locked.body": "Your passport stamps and records are saved to your signed-in account, so you can pick up right where you left off.",
-  "passport.locked.cta": "Log in to view your passport",
 
   "lang.selectPrompt.ko": "어떤 언어로 여행할까요?",
   "lang.selectPrompt.en": "Which language?",

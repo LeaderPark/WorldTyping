@@ -7,9 +7,11 @@
 // REST가 아니라 서버 WS의 'start'/'race-sync'로 구성(useRaceSession), (2) attachRace로 타이핑
 // 이벤트를 레이스 브리지에 배선, (3) OpponentTracks·하드캡 타이머를 GameView의 race 슬롯에 얹음.
 //
-// [의도적 축소 — 시간 예산] GamePage와 달리 WorldMap 배경/여행 연출은 생략한다(S11 와이어프레임에
-// 지도 요구가 없다 — HUD/프롬프트/타이머/상대 트랙이 전부). 노선 지도 juice는 싱글 전용 계약이라
-// 여기서 재구현하지 않는다.
+// [WT-RACE-GLOBE, 위 "지도 생략" 결정 폐기] S11도 GamePage와 동일하게 지구본을 배경 무대로 깐다 —
+// 여기서 재구현하는 것은 없다: 내 비행기·노선은 GlobeMap 코어 핸들 그대로이고(싱글과 같은 배선의
+// 최소 집합), 상대 비행기 N대만 globe-race.ts의 코어 무접촉 오버레이가 얹는다. 배선 일체는
+// RaceGlobe가 소유하고 이 파일은 마운트 위치(카운트다운·플레이·관전 배경)만 정한다. 웨이포인트
+// 라벨·체크포인트 링·완주 flyTo는 여전히 싱글 전용이다.
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EngineEvent } from '@wt/engine';
@@ -26,6 +28,7 @@ import {
   type RoomPlayer,
 } from '../../../stores/multiplayer';
 import type { useMultiplayer } from '../../../features/multiplayer/useMultiplayer';
+import { RaceGlobe } from './RaceGlobe';
 import { useRaceSession } from './useRaceSession';
 import { useHardCapClock } from './useHardCapClock';
 
@@ -39,6 +42,14 @@ function raceNow(): number {
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
     : Date.now();
+}
+
+/** reduced-motion(§7.3) 판정 — GamePage와 동일. 'auto'는 prefers-reduced-motion을 따른다. */
+function useReducedActive(): boolean {
+  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
+  return reducedMotion === 'auto'
+    ? typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    : reducedMotion;
 }
 
 export interface RaceViewProps {
@@ -71,8 +82,9 @@ function SpectatorView({
   mp: ReturnType<typeof useMultiplayer>;
 }) {
   const { t } = useTranslation();
-  const total = extractRaceStart(replay).countries.length;
+  const countryIds = extractRaceStart(replay).countries;
   const others = players.filter((p) => p.playerId !== myPlayerId);
+  const reducedActive = useReducedActive();
   // 입력/엔진 없이 tick만 소비하도록 no-op 바인딩으로 브리지를 붙인다(complete/progress 미전송).
   useEffect(() => {
     const detach = mp.attachRace({
@@ -83,12 +95,17 @@ function SpectatorView({
     return detach;
   }, [mp]);
   return (
-    <div className="wt-room__spectator" data-testid="race-spectator">
-      <p className="wt-room__spectator-badge" data-testid="spectator-badge">
-        {t('room.spectator')}
-      </p>
-      <OpponentTracks players={others} total={total} />
-    </div>
+    <>
+      {/* WT-RACE-GLOBE: 관전도 같은 무대를 본다 — 내 기체는 없고(엔진 미전달) 상대 기체만 난다.
+          카메라는 RaceGlobe가 선두를 따라간다. */}
+      <RaceGlobe countryIds={countryIds} opponents={others} reducedMotion={reducedActive} />
+      <div className="wt-room__spectator wt-race-above" data-testid="race-spectator">
+        <p className="wt-room__spectator-badge" data-testid="spectator-badge">
+          {t('room.spectator')}
+        </p>
+        <OpponentTracks players={others} total={countryIds.length} />
+      </div>
+    </>
   );
 }
 
@@ -131,12 +148,7 @@ function RaceViewActive({ engine, countries, hardCapAt, players, myPlayerId, lan
   const { bindHardCapEl } = useHardCapClock(hardCapAt, mp.getOffsetMs);
   const myServerAck = useMultiplayerStore((s) => s.myServerAck);
 
-  // reduced-motion(§7.3) — GamePage와 동일 판정. 'auto'는 prefers-reduced-motion을 따른다.
-  const reducedMotion = useSettingsStore((s) => s.reducedMotion);
-  const reducedActive =
-    reducedMotion === 'auto'
-      ? typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-      : reducedMotion;
+  const reducedActive = useReducedActive();
   const juice = !reducedActive;
 
   const [phase, setPhase] = useState(() => engine.getSnapshot().phase);
@@ -231,24 +243,36 @@ function RaceViewActive({ engine, countries, hardCapAt, players, myPlayerId, lan
         </div>
       )}
       {(phase === 'countdown' || phase === 'playing') && (
-        <GameView
-          engine={engine}
-          controller={controller}
-          getInputValue={getInputValue}
-          lang={lang}
-          mode="race"
-          countries={countries}
-          countryIds={countryIds}
-          currentIndex={currentIndex}
-          lives={null}
-          bindTimerEl={bindTimerEl}
-          bindGaugeEl={bindGaugeEl}
-          race={{
-            tracksSlot: <OpponentTracks players={opponents} total={countryIds.length} />,
-            bindHardCapEl,
-            ackIndex: myServerAck?.index ?? null,
-          }}
-        />
+        <>
+          {/* WT-RACE-GLOBE: 지구본 배경 무대(고정 전면, z0) — 내 비행기·노선은 코어 핸들 그대로,
+              상대 비행기는 globe-race 오버레이. 아래 .wt-race-stage(z1)가 HUD를 그 위에 얹는다. */}
+          <RaceGlobe
+            countryIds={countryIds}
+            engine={engine}
+            opponents={opponents}
+            reducedMotion={reducedActive}
+          />
+          <div className="wt-race-stage">
+            <GameView
+              engine={engine}
+              controller={controller}
+              getInputValue={getInputValue}
+              lang={lang}
+              mode="race"
+              countries={countries}
+              countryIds={countryIds}
+              currentIndex={currentIndex}
+              lives={null}
+              bindTimerEl={bindTimerEl}
+              bindGaugeEl={bindGaugeEl}
+              race={{
+                tracksSlot: <OpponentTracks players={opponents} total={countryIds.length} />,
+                bindHardCapEl,
+                ackIndex: myServerAck?.index ?? null,
+              }}
+            />
+          </div>
+        </>
       )}
       {/* WT-DC-05(③): 레이스 카운트다운 오버레이(디자인 S11 L471~478). WT-DC-04 싱글 카운트다운과
           동일 방식 — 전체화면 딤 스크림(rgba 0,0,0,0.45) + 92px 숫자, 숫자색만 파랑(--grade-b =

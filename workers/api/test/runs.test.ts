@@ -244,6 +244,45 @@ describe("POST /runs/submit — 티어(서버 시드 세트 재현)", () => {
     expect(row!.mode_key).toBe("tier:3");
     expect(row!.verdict).toBe("valid");
   });
+
+  // §11-D107(WT-TIER-DIFFICULTY): T4·T5는 긴 이름 가중 샘플링이라 세트가 lang에 의존한다.
+  // start(요청 lang)와 submit 재현(토큰에 서명된 lang)이 어긋나면 즉시 set_mismatch가 난다.
+  it("[§11-D107] T5 가중 세트도 submit이 동일 재현하고(lang은 토큰에서) valid로 기록", async () => {
+    const { token } = await bootstrap();
+    const started = (await (await startRun(token, { mode: "tier", lang: "en", platform: "desktop", tier: 5 })).json()) as StartRes;
+    expect(started.countryIds.length).toBe(20);
+    const built = buildSubmit(started.countryIds, 3, 80);
+    const res = await submitRun(token, {
+      runToken: started.runToken,
+      result: built.result,
+      clientScore: built.clientScore,
+      inputDigest: HUMAN_DIGEST,
+    });
+    expect(((await res.json()) as SubmitRes).verdict).toBe("valid");
+  });
+
+  it("[§11-D107] T5 세트의 평균 L이 T5 풀 평균보다 길다(실데이터 가중 효과)", async () => {
+    const { token } = await bootstrap();
+    const started = (await (await startRun(token, { mode: "tier", lang: "en", platform: "desktop", tier: 5 })).json()) as StartRes;
+    const setMean =
+      started.countryIds.reduce((a, id) => a + requiredKeystrokes(BY_ID.get(id as CountryId)!, "en"), 0) /
+      started.countryIds.length;
+    const pool = COUNTRIES.filter((c) => c.difficultyTier === 5 && !["TW", "XK", "EH"].includes(c.id));
+    const poolMean = pool.reduce((a, c) => a + requiredKeystrokes(c, "en"), 0) / pool.length;
+    expect(setMean).toBeGreaterThan(poolMean);
+  });
+
+  it("[§11-D107] 같은 날 같은 티어라도 T5는 lang별로 세트가 갈리고, T3는 lang과 무관하게 같다", async () => {
+    const { token } = await bootstrap();
+    const t5ko = (await (await startRun(token, { mode: "tier", lang: "ko", platform: "desktop", tier: 5 })).json()) as StartRes;
+    const t5en = (await (await startRun(token, { mode: "tier", lang: "en", platform: "desktop", tier: 5 })).json()) as StartRes;
+    expect(t5ko.seed).toBe(t5en.seed); // 시드(일일 salt 파생)는 동일 — 갈리는 건 가중치뿐
+    expect(t5ko.countryIds).not.toEqual(t5en.countryIds);
+
+    const t3ko = (await (await startRun(token, { mode: "tier", lang: "ko", platform: "desktop", tier: 3 })).json()) as StartRes;
+    const t3en = (await (await startRun(token, { mode: "tier", lang: "en", platform: "desktop", tier: 3 })).json()) as StartRes;
+    expect(t3ko.countryIds).toEqual(t3en.countryIds);
+  });
 });
 
 describe("POST /runs/submit — 리플레이(토큰 재사용)", () => {

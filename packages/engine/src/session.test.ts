@@ -243,8 +243,9 @@ describe('티어 서바이벌 (docs/01 §7.1)', () => {
     const shown = h.events.filter((e) => e.type === 'countryShown') as Array<{
       timeLimitMs: number | null;
     }>;
-    expect(shown[0]!.timeLimitMs).toBe(8200); // 첫 국가 ×2
-    expect(shown[1]!.timeLimitMs).toBe(4100);
+    // §7.2 4100ms × TIER_TIME_FACTOR[T1]=1.2 = 4920ms(§11-D107 티어 모드 계수), 첫 국가 ×2.
+    expect(shown[0]!.timeLimitMs).toBe(9840); // 첫 국가 ×2
+    expect(shown[1]!.timeLimitMs).toBe(4920);
     expect(shown[0]!.timeLimitMs).toBe(2 * shown[1]!.timeLimitMs!);
   });
 

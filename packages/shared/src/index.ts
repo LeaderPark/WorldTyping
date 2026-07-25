@@ -41,6 +41,8 @@ export {
 } from './scoring/grade';
 export {
   timeLimitMs,
+  tierTimeLimitMs,
+  TIER_TIME_FACTOR,
   DEFAULT_TIME_LIMIT_CONFIG,
   type TimeLimitConfig,
   type TimeLimitSource,
@@ -111,7 +113,11 @@ export {
   mulberry32,
   rngFromSeedHex,
   seededShuffle,
+  nextUint32,
   buildRaceSet,
+  buildTierSet,
+  tierSamplingWeight,
+  TIER_SET_SIZE,
   type RaceMode,
 } from './protocol/seeding';
 export {

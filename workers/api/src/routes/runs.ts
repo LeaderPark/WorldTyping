@@ -221,7 +221,7 @@ runs.post("/runs/start", requireAuth, rateLimit("runs/start"), async (c) => {
   const { mode, lang, platform, continent, tier } = parsed.data;
 
   const now = Date.now();
-  const built = await buildSetForStart(c.env, { mode: mode as SingleMode, continent, tier }, now);
+  const built = await buildSetForStart(c.env, { mode: mode as SingleMode, lang, continent, tier }, now);
   const setHash = await computeSetHash(built.countryIds);
   const rid = uuidv7(now);
 

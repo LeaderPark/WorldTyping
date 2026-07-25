@@ -5,14 +5,18 @@
 // 모드별 "이 판의 출제 세트(순서 포함)"를 확정하는 단일 원천. 두 진입점을 공유 헬퍼로 묶어
 // /runs/start(발급)와 /runs/submit(재현·검증)이 반드시 같은 세트를 산출하게 한다:
 //   - buildSetForStart: 시작 시 세트+seed+modeKey 확정(티어는 salt로 시드 파생, 데일리는 저장본 로드).
-//   - rebuildSet: 제출 시 토큰만으로 동일 세트 재현(티어는 토큰의 seed로 재셔플 → salt 불요).
+//   - rebuildSet: 제출 시 토큰만으로 동일 세트 재현(티어는 토큰의 seed+lang으로 재현 → salt 불요).
+//
+// §11-D107(WT-TIER-DIFFICULTY): 티어 세트 생성 로직은 @wt/shared buildTierSet으로 이관됐다.
+// T4·T5는 긴 이름 가중 샘플링이라 세트가 lang에 따라 갈리므로, start는 요청 lang을, submit
+// 재현은 토큰에 서명된 lang을 넘긴다(같은 판은 항상 같은 lang → setHash 일치).
 //
 // continent/worldtour는 packages/data/content/routes.ts 고정 순서 그대로(랭킹 세트가 아니라 시드
 // 불필요). tier는 salt 기반 일일 시드(전 유저 동일 세트, §11-D5). daily는 cron이 확정 저장한
 // daily_challenges(D1) 원본을 로드(클라 사전 계산 불가 — salt 서버 전용, §11-D21).
 import {
-  seededShuffle,
-  rngFromSeedHex,
+  buildTierSet,
+  TIER_SET_SIZE,
   type CountryId,
   type Continent,
   type DifficultyTier,
@@ -28,9 +32,6 @@ import { kstDate } from "./kst";
 
 /** 랭킹 대상 밖(extended) 국가 — 티어/데일리 풀에서 제외(§11-D1, useCountries.ts와 동일 집합). */
 const EXTENDED_IDS = new Set<CountryId>(["TW", "XK", "EH"]);
-const TIER_SET_SIZE = 20;
-/** 티어 세트 셔플 스트림 id(rngFromSeedHex). 단일 셔플이라 고정 스트림 하나. */
-const TIER_SHUFFLE_STREAM = 1;
 
 /** un195(랭킹 대상) 국가만. COUNTRIES는 id 오름차순 고정(생성물)이라 filter 결과도 결정적. */
 const UN195 = COUNTRIES.filter((c) => !EXTENDED_IDS.has(c.id));
@@ -40,6 +41,8 @@ export type SingleMode = "continent" | "tier" | "worldtour" | "daily";
 
 export interface StartSetInput {
   mode: SingleMode;
+  /** 티어 세트의 가중 샘플링(T4·T5)이 L_i 산출에 쓰는 언어(§11-D107). 다른 모드는 미사용. */
+  lang: "ko" | "en";
   continent?: Continent; // mode==='continent'일 때 필수
   tier?: DifficultyTier; // mode==='tier'일 때 필수
 }
@@ -50,10 +53,13 @@ export interface BuiltSet {
   modeKey: string;
 }
 
-/** 티어 세트: 일일 시드 hex → 해당 티어 풀 셔플 → 앞 20개(§11-D5). start·rebuild 공용. */
-function tierSet(seedHex: string, tier: DifficultyTier): CountryId[] {
-  const pool = UN195.filter((c) => c.difficultyTier === tier).map((c) => c.id);
-  return seededShuffle(pool, rngFromSeedHex(seedHex, TIER_SHUFFLE_STREAM)).slice(0, TIER_SET_SIZE);
+/**
+ * 티어 세트: 일일 시드 hex → 해당 티어 풀에서 20개(§11-D5). start·rebuild 공용.
+ * 생성 로직 자체는 @wt/shared buildTierSet 하나뿐이다(§11-D107 — T1~T3 균등 셔플, T4·T5 긴 이름
+ * 가중 샘플링). 여기서 재구현하지 않는다(Gotcha 3·5).
+ */
+function tierSet(seedHex: string, tier: DifficultyTier, lang: "ko" | "en"): CountryId[] {
+  return buildTierSet(seedHex, tier, UN195, lang, TIER_SET_SIZE);
 }
 
 /** 티어 일일 시드 hex(§11-D5). salt는 서버 전용이라 이 파생은 서버에서만 가능하다(§11-D21). */
@@ -91,7 +97,11 @@ export async function buildSetForStart(
       }
       const dateKst = kstDate(now);
       const seedHex = await tierSeedHex(env, input.tier, dateKst);
-      return { countryIds: tierSet(seedHex, input.tier), seed: seedHex, modeKey: `tier:${input.tier}` };
+      return {
+        countryIds: tierSet(seedHex, input.tier, input.lang),
+        seed: seedHex,
+        modeKey: `tier:${input.tier}`,
+      };
     }
     case "daily": {
       const dateKst = kstDate(now);
@@ -107,7 +117,7 @@ export async function buildSetForStart(
  */
 export async function rebuildSet(
   env: Env,
-  token: { mode: string; modeKey: string; seed: string },
+  token: { mode: string; modeKey: string; seed: string; lang: "ko" | "en" },
 ): Promise<CountryId[]> {
   switch (token.mode) {
     case "continent": {
@@ -123,7 +133,8 @@ export async function rebuildSet(
       if (!Number.isInteger(tier) || tier < 1 || tier > 5) {
         throw new ApiHttpError(400, "INVALID_TOKEN", `알 수 없는 tier modeKey: ${token.modeKey}`);
       }
-      return tierSet(token.seed, tier as DifficultyTier);
+      // lang은 토큰에 서명돼 있으므로(발급 시점 값) 재현이 발급과 항상 같은 언어 세트가 된다.
+      return tierSet(token.seed, tier as DifficultyTier, token.lang);
     }
     case "daily": {
       const dateKst = token.modeKey.slice("daily:".length);

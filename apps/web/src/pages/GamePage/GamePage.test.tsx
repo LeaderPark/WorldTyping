@@ -227,15 +227,16 @@ describe('GamePage — S5→S6→S7 수직 슬라이스(WT-M2-06 acceptance)', (
     expect(screen.getByTestId('game-view')).toBeInTheDocument();
     expect(screen.getByTestId('hud-lives').textContent).toBe('♥♥♥');
 
-    // 손계산: 첫 국가(indexInRun=0) 제한시간 = 3.58s×2 = 7.16s. 버퍼 40ms.
-    act(() => vi.advanceTimersByTime(7200));
+    // 손계산: §7.2 3.58s × TIER_TIME_FACTOR[T1]=1.2 = 4.296s(§11-D107 티어 모드 계수),
+    // 첫 국가(indexInRun=0)는 ×2 = 8.592s. 버퍼 48ms.
+    act(() => vi.advanceTimersByTime(8640));
     expect(screen.getByTestId('hud-lives').textContent).toBe('♥♥');
 
-    // 이후 국가(indexInRun>0) 제한시간 = 3.58s(×2 없음).
-    act(() => vi.advanceTimersByTime(3600));
+    // 이후 국가(indexInRun>0) 제한시간 = 4.296s(×2 없음).
+    act(() => vi.advanceTimersByTime(4340));
     expect(screen.getByTestId('hud-lives').textContent).toBe('♥');
 
-    act(() => vi.advanceTimersByTime(3600));
+    act(() => vi.advanceTimersByTime(4340));
 
     // 라이프 0 → 게임오버(부분 점수, 5개국 중 3개국만 진행됐으므로 미완주).
     const resultView = screen.getByTestId('result-view');

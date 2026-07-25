@@ -1,12 +1,12 @@
 // spec: docs/01 §10.2(S8 리더보드 와이어프레임), docs/03 §4.1(lazy route)·§4.3(leaderboard 스토어),
 //       docs/06 §1.1(board_key 4차원)·§1.4(조회 계약 — keyset·rank-of-me), docs/00 §11-D9·D68,
-//       WT-M2-05(스텁) → WT-M3-06(실 배선) → WT-AUTH-04(랭킹 게이팅)
+//       WT-M2-05(스텁) → WT-M3-06(실 배선) → WT-AUTH-04(랭킹 게이팅) → WT-RANK-SIMPLIFY(필터 단순화)
 //
-// [일간|주간|전체]×[모드]×[KO|EN]×[플랫폼] 필터 + keyset 커서 무한 스크롤 + 내 행 고정 표시(§8
-// wireframe "841 나 (GUEST_4821) … ← 고정 표시"). 지역(scope) 탭(docs/03 §1.1 "Global/내 지역
-// 두 탭")은 WT-M5-03에서 활성화(docs/00 §11-D44) — GET /session/me의 geo(§11-D44, users.geo)로
-// 판정한다. geo==="XX"(미확보/차단국가)면 "내 지역" 탭은 여전히 비활성(클라 측 IP/타임존 추정은
-// D44가 명시적으로 금지 — 서버가 준 값만 쓴다).
+// [WT-RANK-SIMPLIFY] 기간/기기/지역 필터 UI를 삭제하고 단일 보드만 노출한다 — board_key의 4차원
+// 자체는 그대로(docs/06 §1.1)이되 기간은 'all' 고정, 플랫폼은 마운트 시점의 사용자 기기
+// (settingsPlatform) 고정, 지역(scope)은 항상 global(geo 파라미터 미전송)이다. 모드·언어(KO/EN)만
+// 사용자가 바꿀 수 있다. keyset 커서 무한 스크롤 + 내 행 고정 표시(§8 wireframe
+// "841 나 (GUEST_4821) … ← 고정 표시")는 그대로 유지한다.
 //
 // [WT-AUTH-04] 랭킹 등재는 로그인 계정 전용(§11-D68-①) — 비로그인은 "내 순위" 고정 표시 자리에
 // 로그인 CTA(rank-login-cta)를 대신 그린다(비로그인 제출은 항상 practice 강등이라 onBoard일 수
@@ -25,11 +25,7 @@ import {
   fetchSessionMe,
   type LbEntry,
   type LbMeRes,
-  type LbPeriod,
 } from '../../net/api-client';
-import { kstDate, kstIsoWeek } from '../../lib/kst';
-
-type PeriodTab = 'daily' | 'weekly' | 'alltime';
 
 const CONTINENTS: readonly Continent[] = ['asia', 'europe', 'africa', 'north-america', 'south-america', 'oceania'];
 const TIERS: readonly DifficultyTier[] = [1, 2, 3, 4, 5];
@@ -37,12 +33,6 @@ const TIERS: readonly DifficultyTier[] = [1, 2, 3, 4, 5];
 interface ModeOption {
   key: string;
   label: string;
-}
-
-function periodKeyFor(period: PeriodTab): LbPeriod {
-  if (period === 'daily') return `d:${kstDate()}`;
-  if (period === 'weekly') return `w:${kstIsoWeek()}`;
-  return 'all';
 }
 
 export function RankPage() {
@@ -64,14 +54,14 @@ export function RankPage() {
     [t],
   );
 
-  const [period, setPeriod] = useState<PeriodTab>('alltime');
   const [modeKey, setModeKey] = useState<string>('worldtour');
   const [lang, setLang] = useState<'ko' | 'en'>(settingsLang);
-  const [platform, setPlatform] = useState<'desktop' | 'mobile'>(settingsPlatform);
-  const [scope, setScope] = useState<'global' | 'mine'>('global');
-  const [myGeo, setMyGeo] = useState<string | null>(null);
+  // [WT-RANK-SIMPLIFY] 기기 필터 UI 삭제 — 마운트 시점의 사용자 기기(settingsPlatform)로 1회
+  // 고정한다(반응형 재조회 불필요).
+  const [platform] = useState<'desktop' | 'mobile'>(settingsPlatform);
 
-  const board = useMemo(() => buildBoardKey(modeKey, lang, platform, periodKeyFor(period)), [modeKey, lang, platform, period]);
+  // [WT-RANK-SIMPLIFY] 기간은 'all' 고정.
+  const board = useMemo(() => buildBoardKey(modeKey, lang, platform, 'all'), [modeKey, lang, platform]);
 
   const [entries, setEntries] = useState<LbEntry[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -80,9 +70,8 @@ export function RankPage() {
   const [me, setMe] = useState<LbMeRes | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
 
-  // 내 pid 자기 조회(행 하이라이트 판정용) + geo(§11-D44, "내 지역" 탭 활성화 판정) — 마운트 1회.
-  // 세션이 아직 없으면(직접 진입 등) ensureSession으로 확보를 시도하고, 그래도 실패(오프라인)
-  // 하면 조용히 하이라이트/지역탭을 생략한다.
+  // 내 pid 자기 조회(행 하이라이트 판정용) — 마운트 1회. 세션이 아직 없으면(직접 진입 등)
+  // ensureSession으로 확보를 시도하고, 그래도 실패(오프라인)하면 조용히 하이라이트를 생략한다.
   useEffect(() => {
     let cancelled = false;
     void ensureSession(guestId)
@@ -90,20 +79,15 @@ export function RankPage() {
       .then((res) => {
         if (cancelled) return;
         setMyPlayerId(res.playerId);
-        setMyGeo(res.geo);
       })
       .catch(() => {
-        // 비로그인 조회(랭킹은 비인증 GET도 허용) — 하이라이트/지역탭만 못 할 뿐 화면은 정상 동작.
+        // 비로그인 조회(랭킹은 비인증 GET도 허용) — 하이라이트만 못 할 뿐 화면은 정상 동작.
       });
     return () => {
       cancelled = true;
     };
     // guestId는 세션 수명 동안 불변(설정 스토어 1회 생성값) — 마운트 시 1회만 시도.
   }, []);
-
-  // 클라 측 IP/타임존 추정 금지(§11-D44) — 서버가 확정한 geo만 쓴다. "XX"(미확보/차단국가)는
-  // 지역을 특정할 수 없어 탭 자체를 비활성으로 둔다.
-  const geoFilter = scope === 'mine' && myGeo && myGeo !== 'XX' ? myGeo : undefined;
 
   // 필터가 바뀌면 첫 페이지부터 다시 조회.
   useEffect(() => {
@@ -113,7 +97,7 @@ export function RankPage() {
     setNextCursor(null);
     setMe(null);
 
-    fetchLbPage(board, geoFilter ? { geo: geoFilter } : {})
+    fetchLbPage(board, {})
       .then((res) => {
         if (cancelled) return;
         setEntries(res.entries);
@@ -128,7 +112,7 @@ export function RankPage() {
     // fetchLbMe는 인증 필요(requireAuth) — 부팅의 세션 부트스트랩과의 경합을 피하려고 먼저
     // ensureSession으로 확정 짓는다(이미 성공했다면 즉시 resolve, 위 pid 자기 조회와 동일 이유).
     void ensureSession(guestId)
-      .then(() => fetchLbMe(board, geoFilter ? { geo: geoFilter } : {}))
+      .then(() => fetchLbMe(board, {}))
       .then((res) => {
         if (!cancelled) setMe(res);
       })
@@ -139,11 +123,11 @@ export function RankPage() {
     return () => {
       cancelled = true;
     };
-  }, [board, geoFilter]);
+  }, [board]);
 
   const loadMore = useCallback(() => {
     if (!nextCursor) return;
-    fetchLbPage(board, { cursor: nextCursor, ...(geoFilter ? { geo: geoFilter } : {}) })
+    fetchLbPage(board, { cursor: nextCursor })
       .then((res) => {
         setEntries((prev) => [...prev, ...res.entries]);
         setNextCursor(res.nextCursor);
@@ -151,7 +135,7 @@ export function RankPage() {
       .catch(() => {
         // 추가 페이지 실패는 조용히 무시 — "더 보기" 버튼이 남아 재시도 가능.
       });
-  }, [board, nextCursor, geoFilter]);
+  }, [board, nextCursor]);
 
   // 무한 스크롤(§4.3): sentinel이 뷰포트에 들어오면 자동으로 다음 페이지를 당긴다.
   // IntersectionObserver 미지원 환경(구형 브라우저·일부 테스트 환경)에서는 조용히 no-op —
@@ -177,21 +161,6 @@ export function RankPage() {
       <PageHeader title={t('rank.title')} />
 
       <div className="wt-rank-page__filters" data-testid="rank-filters">
-        <div role="group" aria-label="period" data-testid="rank-filter-period">
-          {(['daily', 'weekly', 'alltime'] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={`wt-pill${period === p ? ' wt-pill--active' : ''}`}
-              aria-pressed={period === p}
-              data-testid={`rank-period-${p}`}
-              onClick={() => setPeriod(p)}
-            >
-              {t(`rank.period.${p}`)}
-            </button>
-          ))}
-        </div>
-
         <select
           className="wt-rank-page__mode-select"
           data-testid="rank-filter-mode"
@@ -219,45 +188,6 @@ export function RankPage() {
               {t(`settings.inputLang.${l}`)}
             </button>
           ))}
-        </div>
-
-        <div role="group" aria-label="platform" data-testid="rank-filter-platform">
-          {(['desktop', 'mobile'] as const).map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={`wt-pill${platform === p ? ' wt-pill--active' : ''}`}
-              aria-pressed={platform === p}
-              data-testid={`rank-platform-${p}`}
-              onClick={() => setPlatform(p)}
-            >
-              {t(`rank.platformOpt.${p}`)}
-            </button>
-          ))}
-        </div>
-
-        <div role="group" aria-label="scope" data-testid="rank-filter-scope">
-          <button
-            type="button"
-            className={`wt-pill${scope === 'global' ? ' wt-pill--active' : ''}`}
-            aria-pressed={scope === 'global'}
-            data-testid="rank-scope-global"
-            onClick={() => setScope('global')}
-          >
-            {t('rank.scope.global')}
-          </button>
-          {/* geo==="XX"(미확보/차단국가)는 지역을 특정할 수 없어 비활성 유지(§11-D44). */}
-          <button
-            type="button"
-            className={`wt-pill${scope === 'mine' ? ' wt-pill--active' : ''}`}
-            aria-pressed={scope === 'mine'}
-            disabled={!myGeo || myGeo === 'XX'}
-            title={t('rank.scope.mine')}
-            data-testid="rank-scope-mine"
-            onClick={() => setScope('mine')}
-          >
-            {t('rank.scope.mine')}
-          </button>
         </div>
       </div>
 

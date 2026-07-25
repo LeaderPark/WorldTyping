@@ -92,32 +92,20 @@ describe('RankPage', () => {
     expect(fetchLbPageMock).toHaveBeenCalledWith('worldtour|ko|desktop|all', {});
   });
 
-  it('기간/모드/언어/플랫폼 필터를 바꾸면 새 board_key로 재조회한다', async () => {
+  it('모드/언어 필터를 바꾸면 새 board_key로 재조회한다(기간·기기·지역은 고정)', async () => {
     renderPage();
     await waitFor(() => expect(fetchLbPageMock).toHaveBeenCalledTimes(1));
-
-    fireEvent.click(screen.getByTestId('rank-period-daily'));
-    await waitFor(() => {
-      const lastCall = fetchLbPageMock.mock.calls.at(-1) as [string, unknown];
-      expect(lastCall[0]).toMatch(/^worldtour\|ko\|desktop\|d:\d{4}-\d{2}-\d{2}$/);
-    });
 
     fireEvent.change(screen.getByTestId('rank-filter-mode'), { target: { value: 'tier:3' } });
     await waitFor(() => {
       const lastCall = fetchLbPageMock.mock.calls.at(-1) as [string, unknown];
-      expect(lastCall[0]).toMatch(/^tier:3\|ko\|desktop\|d:/);
+      expect(lastCall[0]).toBe('tier:3|ko|desktop|all');
     });
 
     fireEvent.click(screen.getByTestId('rank-lang-en'));
     await waitFor(() => {
       const lastCall = fetchLbPageMock.mock.calls.at(-1) as [string, unknown];
-      expect(lastCall[0]).toMatch(/^tier:3\|en\|desktop\|d:/);
-    });
-
-    fireEvent.click(screen.getByTestId('rank-platform-mobile'));
-    await waitFor(() => {
-      const lastCall = fetchLbPageMock.mock.calls.at(-1) as [string, unknown];
-      expect(lastCall[0]).toMatch(/^tier:3\|en\|mobile\|d:/);
+      expect(lastCall[0]).toBe('tier:3|en|desktop|all');
     });
   });
 
@@ -191,23 +179,5 @@ describe('RankPage', () => {
     fetchLbPageMock.mockRejectedValue(new Error('down'));
     renderPage();
     await waitFor(() => expect(screen.getByTestId('rank-error')).toBeInTheDocument());
-  });
-
-  it('"내 지역" 스코프 탭은 geo="XX"(미확보/차단국가)면 비활성이다(§11-D44)', async () => {
-    renderPage();
-    await waitFor(() => expect(fetchLbPageMock).toHaveBeenCalled());
-    await waitFor(() => expect(screen.getByTestId('rank-scope-mine')).toBeDisabled());
-  });
-
-  it('"내 지역" 스코프 탭은 geo가 실제 국가면 활성화되고 geo 필터로 재조회한다(§11-D44)', async () => {
-    fetchSessionMeMock.mockResolvedValue({ playerId: 'p1', nickname: 'NIMBUS', status: 'active', geo: 'KR' });
-    renderPage();
-    await waitFor(() => expect(screen.getByTestId('rank-scope-mine')).not.toBeDisabled());
-
-    fetchLbPageMock.mockClear();
-    fireEvent.click(screen.getByTestId('rank-scope-mine'));
-    await waitFor(() => {
-      expect(fetchLbPageMock).toHaveBeenCalledWith('worldtour|ko|desktop|all', { geo: 'KR' });
-    });
   });
 });

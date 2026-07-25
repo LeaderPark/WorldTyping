@@ -49,6 +49,7 @@ const KOREA = makeCountry({
   acceptedInputsKo: ['대한민국', '한국'],
 });
 const CHAD = makeCountry({ id: 'TD', nameEn: 'Chad', acceptedInputsEn: ['chad'] });
+const CUBA = makeCountry({ id: 'CU', nameEn: 'Cuba', acceptedInputsEn: ['cuba'] });
 // D70 Gboard 접두 스트립 테스트용: 옛 값 '가나'가 접두로 재삽입된 뒤 확장분('다')이 이 타깃의
 // 접두(다도=ㄷㅏㄷㅗ)로 평가되는지 확인하기 위한 합성 국가('다'는 ㄷㅏ, '다도' 접두).
 const DADO = makeCountry({ id: 'DD', nameKo: '다도', acceptedInputsKo: ['다도'] });
@@ -504,17 +505,19 @@ describe('TypingInputController', () => {
       expect(h.input.value).toBe(''); // 재플러시로 비워짐
     });
 
-    // ③b: 150ms 초과는 genuine — 시간 fail-open 불변식은 경계만 이동해 그대로 유지된다.
-    it('stale tail after the 150ms window is NOT swallowed (treated as genuine → MISS)', () => {
+    // ③b (D98 개정 — 조정 사유: "윈도우 밖 = 무조건 genuine" 단언이 D98 분기 (1) 신규 경로와 직접
+    //   충돌한다. 윈도우 밖 전량 에코도 의미 중재(전체 판정 MISS)를 통과하면 삼킨다 — 늦게 발현하는
+    //   재삽입이 라이브 재발의 원인이었다. fail-open은 이제 시간이 아니라 예산(⑦·N5)이 담당한다.)
+    it('stale tail after the 150ms window IS swallowed when the whole value is MISS (D98)', () => {
       const h = harness('ko');
       h.setNow(0);
       reachGhanaExact(h); // flushAt=0
       const before = contentCount(h.events);
-      h.setNow(151); // 신 윈도우 밖
+      h.setNow(151); // 윈도우 밖 — 의미 중재 경로
       h.ctrl.setCountry(KOREA);
-      h.type('가나', true); // '가나'는 대한민국/한국 접두 아님 → genuine MISS
-      expect(contentCount(h.events)).toBe(before + 1);
-      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+      h.type('가나', true); // '가나'는 대한민국/한국 접두 아님(MISS) → 늦은 에코로 판정, 삼킴
+      expect(contentCount(h.events)).toBe(before);
+      expect(h.input.value).toBe(''); // 재플러시로 비워짐
     });
 
     // ④ Gboard 접두 스트립 + getValue: 옛 전체값('가나')이 접두로 재삽입되고 사용자가 확장('다')을
@@ -730,17 +733,18 @@ describe('TypingInputController', () => {
       expect(h.ctrl.getValue()).toBe('도카'); // 잔여 누수
     });
 
-    // W-T1 (스트립 시간 fail-open): 151ms에 도착한 병합 재삽입은 윈도우 밖이라 스트립되지 않고
-    //   genuine MISS로 누수 — 시간 fail-open 불변식(무한 윈도우 금지)이 경계 이동으로 유지됨.
-    it('W-T1: merged "도대" after the 150ms window is NOT stripped → genuine MISS (time fail-open)', () => {
+    // W-T1 (D98 개정 — 조정 사유: 부분 꼬리 스트립의 inWindow 게이트가 D98로 제거됐다. 151ms 병합
+    //   재삽입은 이제 스트립된다; 시간 fail-open 대신 의미 중재 + 예산(W-B1)이 과삭제를 막는다.)
+    it('W-T1: merged "도대" after the 150ms window IS stripped (no time gate — D98)', () => {
       const h = harness('ko');
       h.setNow(0);
       reachIndiaExact(h);
       h.setNow(151);
       h.ctrl.setCountry(KOREA);
       h.type('도대', true);
-      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
-      expect(h.ctrl.getValue()).toBe('도대');
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+      expect(eventsOf(h.events, 'progress').at(-1)?.rawValue).toBe('대');
+      expect(h.ctrl.getValue()).toBe('대');
     });
 
     // W-B1 (예산 공유 fail-open + 대조): 부분 꼬리 스트립은 전량 삼킴과 reinsertFlushes 예산을
@@ -793,6 +797,114 @@ describe('TypingInputController', () => {
       expect(contentCount(h.events)).toBe(before); // 조용한 리셋
       expect(h.input.value).toBe(''); // 재플러시
       expect(h.ctrl.getValue()).toBe('');
+    });
+  });
+
+  // ── docs/00 §11-D98(D84 개정): 재삽입은 focus 복귀 직후가 아니라 "사용자의 다음 키스트로크"
+  //    시점에 발현할 수 있다(실기기 MS IME) → 국가 전환 후 150ms 넘게 쉬면 방어가 전부 비활성이던
+  //    시간 게이트를 걷어내고, 윈도우 밖은 의미 중재로만 판별한다. staleEcho가 "첫 비어있지 않은
+  //    입력에서 one-shot 소거"이므로 노출은 국가당 1스냅샷으로 이미 유계다. ────────────────────
+  describe('D98 late reinsertion (window gate removed, semantic mediation)', () => {
+    // N1(라이브 재현): 인도 확정 → 500ms 휴지 → '대' 입력이 '도대'로 병합 도착. 시간 게이트가 없으므로
+    //   부분 꼬리 스트립이 그대로 동작한다(전체 '도대'=MISS, 잔여 '대'=PREFIX → 의미 중재 통과).
+    it('N1: merged "도대" 500ms after the flush is stripped — progress "대" only', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h); // staleRaw='인도', flushAt=0
+      const before = contentCount(h.events);
+      h.setNow(500); // 일반적인 플레이 호흡 — 구 150ms 윈도우 한참 밖
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('도대', true);
+      expect(contentCount(h.events)).toBe(before + 1);
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('대'); // 잔여만 평가
+      expect(h.ctrl.getValue()).toBe('대'); // 화면에 '도대'가 남지 않는다(버그 증상)
+      expect(eventsOf(h.events, 'miss')).toHaveLength(0);
+    });
+
+    // N2: 단독 늦은 에코 '도'(병합 없이 에코만 먼저 도착) — 윈도우 밖이지만 전체 판정이 MISS라
+    //   의미 중재를 통과해 삼켜지고, 재플러시로 버퍼가 빈다.
+    it('N2: lone late echo "도" at 500ms is swallowed (whole value MISS) and re-flushed', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.ctrl.setCountry(KOREA);
+      h.type('도', true);
+      expect(contentCount(h.events)).toBe(before); // 무이벤트
+      expect(h.input.value).toBe(''); // 재플러시로 비워짐
+    });
+
+    // N3(대조 ★): 같은 늦은 '도'라도 새 타깃이 도미니카면 전체 판정이 PREFIX(genuine 유효) →
+    //   의미 중재가 삼킴을 막는다. 윈도우 밖에서는 genuine이 항상 우선한다.
+    it('N3: lone "도" at 500ms with DOMINICA target is NOT swallowed (genuine PREFIX wins)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.ctrl.setCountry(DOMINICA);
+      h.compositionStart();
+      h.type('도', true);
+      expect(contentCount(h.events)).toBe(before + 1);
+      const prog = eventsOf(h.events, 'progress');
+      expect(prog.at(-1)?.detail.state).toBe('PREFIX');
+      expect(prog.at(-1)?.rawValue).toBe('도');
+      expect(h.ctrl.getValue()).toBe('도');
+    });
+
+    // N4(§2.10 #4 불변): 확정 직후 첫 타가 단일 자모면 구조 게이트(≥2자모)에 걸려 어떤 경로로도
+    //   삼켜지지 않는다 — D98은 시간 게이트만 걷어냈을 뿐 이 계약을 건드리지 않는다.
+    it('N4: a single jamo "ㄷ" right after the flush is never swallowed (§2.10 #4)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      const before = contentCount(h.events);
+      h.ctrl.setCountry(KOREA);
+      h.compositionStart();
+      h.type('ㄷ', true); // 0ms, 자모 1개 → genuine
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'progress').at(-1)?.detail.state).toBe('PREFIX');
+      expect(h.ctrl.getValue()).toBe('ㄷ');
+    });
+
+    // N5(fail-open 이관): 시간이 아니라 예산이 무한 삼킴을 막는다 — 3회 소진 후의 늦은 에코는
+    //   중재를 통과하더라도 genuine으로 처리된다(입력 잠금 방지).
+    it('N5: with the reinsert budget exhausted, a late echo fails open (genuine MISS)', () => {
+      const h = harness('ko');
+      h.setNow(0);
+      reachIndiaExact(h);
+      h.ctrl.setCountry(KOREA); // reinsertFlushes=0
+      for (let i = 0; i < 3; i++) {
+        h.setNow(10); // 매 재플러시가 flushAt=10으로 갱신
+        h.type('도', true); // 3회 삼킴 → 예산 소진
+      }
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.type('도', true); // 4번째 — 예산 없음 → 삼키지 않는다
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+      expect(h.ctrl.getValue()).toBe('도');
+    });
+
+    // N6(en 경로 불변): 영문 EXACT는 비조합 flush라 staleEcho를 장전하지 않는다 → resolveRaw가
+    //   첫 줄에서 값을 그대로 통과시킨다. 옛 값과 동일한 늦은 입력조차 삼키지 않는다.
+    it('N6: en mode never arms staleEcho (non-composing flush) — nothing is swallowed', () => {
+      const h = harness('en');
+      h.setNow(0);
+      h.ctrl.setCountry(CHAD);
+      h.type('chad'); // EXACT → else 분기 flush(staleEcho 미장전)
+      const before = contentCount(h.events);
+      h.setNow(500);
+      h.ctrl.setCountry(CUBA);
+      h.type('chad'); // 옛 값과 동일해도 genuine
+      expect(contentCount(h.events)).toBe(before + 1);
+      expect(eventsOf(h.events, 'miss').length).toBeGreaterThanOrEqual(1);
+      expect(h.input.value).toBe('chad'); // 재플러시 없음
+      expect(h.ctrl.getValue()).toBe('chad');
     });
   });
 });

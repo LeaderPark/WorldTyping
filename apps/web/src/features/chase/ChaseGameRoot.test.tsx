@@ -185,6 +185,20 @@ describe('ChaseGameRoot — 로딩→브리핑→카운트다운→플레이→�
     expect(screen.getByTestId('chase-candidate-overlay')).toBeInTheDocument();
     // 콜아웃 칩 3개가 고정 생성돼 있다(§8.5 "마운트 시 고정 생성").
     expect(document.querySelectorAll('[data-candidate]').length).toBe(3);
+
+    // §11-D115-B 수배 레이더도 같은 phase에 함께 상주하며, 실 심의 초기 금 4개(§3.5)가 블립으로
+    // 찍힌다(= 엔진 이벤트 → 레이더 배선이 실제 세션에서 성립).
+    const radar = screen.getByTestId('chase-radar');
+    expect(radar).toBeInTheDocument();
+    expect(radar.querySelectorAll('[data-radar-blip="gold"]').length).toBeGreaterThan(0);
+    // 칩이 레이더 위에 오도록 DOM 순서가 잡혀 있다(z-index 경쟁 없음 — §11-D115-B 배치 근거).
+    const overlay = screen.getByTestId('chase-candidate-overlay');
+    expect(radar.compareDocumentPosition(overlay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // §11-D115-A 인텔 행: 실 chase-graph km 행렬에서 파생된 이동 거리·홈 델타가 채워져 있다.
+    const chip = document.querySelector('[data-candidate]')!;
+    expect(chip.querySelector('.wt-candidate-chip__intel-km')!.textContent).toMatch(/^\d+km$/);
+    expect(chip.querySelector('.wt-candidate-chip__intel-home')).not.toBeNull();
   });
 
   it('chase 오버레이는 브리핑(idle)에서 은닉, playing에서 표시, 결과(finished)에서 다시 은닉된다(§11-D111 ②-a)', async () => {

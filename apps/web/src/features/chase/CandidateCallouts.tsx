@@ -22,9 +22,31 @@
 // matching 상태일 수 있다고 명시하지만, GlobeChaseHandle.setCandidatePrehighlight(id|null)는 CH-05가
 // 이미 확정한 단일 id 시그니처다(수정 금지). 슬롯 순서(0→2)상 가장 먼저 matching인 후보만
 // 프리하이라이트한다 — 칩 자체의 금색 테두리 점등(다중 가능)은 그대로 정확하다.
+//
+// ── WT-CH-DEV-4(§11-D115-A) 작전 카드 = 칩 + 인텔 행 ────────────────────────────────────────
+// "판단은 카드에서, 지도는 확인": 홉 결정에 필요한 정보(금·홈 방향·이동 거리)가 회전하는 지구본
+// 위에만 있어 반대편·소형 마커 탐색 부하가 컸다. 칩 하단에 인텔 행 1줄(h16)을 더해 세 값을 카드
+// 안에서 바로 읽게 한다. 데이터는 **전부 기존 이벤트 + chase-graph 전쌍 km 행렬 파생**이며 신규
+// 엔진 이벤트는 만들지 않는다(D7 정신 승계):
+//   💰  후보국에 활성 금(goldSpawned/goldPicked 추적) · 💰↗ 후보의 1홉 이웃(graph.outNeighbors)에 금
+//   ▼/▲ 홈 델타 = km(후보,홈) − km(현재,홈) — 가까워지면 ▼, 멀어지면 ▲(배송 중이면 강조)
+//   km  이동 거리 = km(현재,후보)
+// 갱신은 candidatesShown/goldSpawned/goldPicked/delivered(전부 저빈도)에서만 발생하고, 갱신 방식은
+// 이 파일의 기존 계약대로 **명령형 textContent/속성 조작**이다(React 커밋 0회 유지 — 저빈도라 state를
+// 써도 규약 위반은 아니지만, 이 컴포넌트만은 마운트 후 리렌더 0 계약이 더 강한 제약이라 유지).
+// 위험(danger)은 기존 D97 배선 그대로이며 시각 강조만 강화한다(테두리 2.5px + 적색 글로우, CSS).
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { TypingInputController } from '@wt/engine';
-import { compileTargets, matchInputDetail, type Country, type CountryId, type MatchDetail } from '@wt/shared';
+import {
+  compileTargets,
+  matchInputDetail,
+  type CompiledChaseGraph,
+  type Country,
+  type CountryId,
+  type GoldRing,
+  type MatchDetail,
+} from '@wt/shared';
 import type { ChaseSessionEngine } from '@wt/engine';
 import type { GlobeChaseHandle } from '../map/globe/globe-chase';
 import { PromptRenderer } from '../typing/prompt-renderer';
@@ -50,6 +72,9 @@ export interface CandidateCalloutsProps {
   globe: GlobeChaseHandle;
   /** 전체 국가 테이블(engine 생성 시 넘긴 것과 동일 배열 — candidatesShown.candidates[].id 조회원천). */
   countries: readonly Country[];
+  /** compileGraph(graph) 결과(§11-D115-A 인텔 행 원천) — 전쌍 정수 km(`dist`)과 nearest 12
+   *  (`outNeighbors`)만 읽는다. 심이 쓰는 것과 **동일 객체**라 표시와 판단 기준이 어긋날 수 없다. */
+  graph: CompiledChaseGraph;
   lang: 'ko' | 'en';
 }
 
@@ -67,6 +92,10 @@ interface Slot {
   tierEl: HTMLSpanElement;
   statusEl: HTMLSpanElement;
   glyphsEl: HTMLDivElement;
+  /** §11-D115-A 인텔 행 3셀(금 / 홈 델타 / 이동 거리) — textContent·data 속성만 갱신. */
+  goldEl: HTMLSpanElement;
+  homeEl: HTMLSpanElement;
+  kmEl: HTMLSpanElement;
   renderer: PromptRenderer;
   id: CountryId | null;
   targets: ReturnType<typeof compileTargets>;
@@ -117,7 +146,18 @@ function applyVisualState(slot: Slot): void {
   slot.statusEl.textContent = statusIconFor(slot);
 }
 
-export function CandidateCallouts({ engine, controller, globe, countries, lang }: CandidateCalloutsProps) {
+export function CandidateCallouts({
+  engine,
+  controller,
+  globe,
+  countries,
+  graph,
+  lang,
+}: CandidateCalloutsProps) {
+  // 마운트 시점 t를 캡처해 명령형 effect 안에서 쓴다(engine/globe/lang과 동일한 "마운트 상수"
+  // 취급 — 이 컴포넌트의 리렌더 0 계약, 파일 하단 deps [] 주석 참조). 인텔 행의 가시 텍스트는
+  // 아이콘·숫자뿐이라 언어 중립이고, i18n은 title(툴팁·§7.3 "거리 정보는 툴팁으로 강등")에만 쓴다.
+  const { t } = useTranslation();
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const announceRef = useRef<HTMLDivElement | null>(null);
   const slotsRef = useRef<Slot[]>([]);
@@ -168,7 +208,23 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
 
       const glyphsEl = document.createElement('div');
       glyphsEl.className = 'wt-candidate-chip__slots';
-      chipEl.append(header, glyphsEl);
+
+      // §11-D115-A 인텔 행 — 셀 3개는 마운트 시 고정 생성하고 이후 textContent/data 속성만 바꾼다
+      // (노드 추가·삭제 금지 = 리플로우 최소, §8.6 HUD 관례와 동일).
+      const intelEl = document.createElement('div');
+      intelEl.className = 'wt-candidate-chip__intel';
+      intelEl.setAttribute('aria-hidden', 'true');
+      const goldEl = document.createElement('span');
+      goldEl.className = 'wt-candidate-chip__intel-cell wt-candidate-chip__intel-gold';
+      goldEl.setAttribute('data-gold', 'none');
+      const homeEl = document.createElement('span');
+      homeEl.className = 'wt-candidate-chip__intel-cell wt-candidate-chip__intel-home';
+      homeEl.setAttribute('data-home', 'same');
+      const kmEl = document.createElement('span');
+      kmEl.className = 'wt-candidate-chip__intel-cell wt-candidate-chip__intel-km';
+      intelEl.append(goldEl, homeEl, kmEl);
+
+      chipEl.append(header, glyphsEl, intelEl);
 
       const leaderEl = document.createElement('div');
       leaderEl.className = 'wt-candidate-chip__leader';
@@ -178,7 +234,7 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
       overlay.append(leaderEl, chipEl);
 
       return {
-        chipEl, leaderEl, flagEl, nameEl, tierEl, statusEl, glyphsEl,
+        chipEl, leaderEl, flagEl, nameEl, tierEl, statusEl, glyphsEl, goldEl, homeEl, kmEl,
         renderer: new PromptRenderer(),
         id: null, targets: [], danger: false, gold: false, home: false,
         matching: false, committed: false, committedTimer: null, enterTimer: null,
@@ -189,7 +245,13 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
     slotsRef.current = slots;
 
     let homeId: CountryId | null = null;
-    const goldAt = new Set<CountryId>();
+    /** 활성 금 국가 → 링 등급(가치 힌트). goldSpawned/goldPicked만이 원천(엔진 재구현 없음). */
+    const goldAt = new Map<CountryId, GoldRing>();
+    /** 현재국·소지 수는 candidatesShown 시점 스냅샷에서 읽는다 — chase-session은 심 전진(simState
+     *  갱신) 후에 이벤트를 방출하므로 이 콜백 안의 getSnapshot()은 항상 신선하다(후보 id만이
+     *  예외라 이벤트 값을 쓴다 — 파일 상단 주석). */
+    let currentId: CountryId | null = null;
+    let carried = 0;
     let rotating = false;
     let pendingReposition: CountryId[] | null = null;
 
@@ -210,6 +272,64 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
         clearTimeout(slot.committedTimer);
         slot.committedTimer = null;
       }
+    }
+
+    /**
+     * §11-D115-A 인텔 행 갱신(1슬롯). 전부 기존 이벤트 + km 행렬 파생이며 그래프에 없는 id
+     * (계약상 발생하지 않음 — chase-graph.ids = un195)에서는 셀을 비워 방어한다.
+     */
+    function refreshIntel(slot: Slot): void {
+      const id = slot.id;
+      if (!id) return;
+      const known = graph.has(id);
+
+      // ① 금 — 후보국 본인 > 1홉 이웃 > 없음.
+      const ring = goldAt.get(id);
+      if (ring) {
+        slot.goldEl.textContent = '💰';
+        slot.goldEl.setAttribute('data-gold', 'here');
+        slot.goldEl.setAttribute('data-gold-ring', ring);
+        slot.goldEl.title = t('chase.card.goldHere');
+      } else {
+        const near =
+          known && goldAt.size > 0 && graph.outNeighbors(id).some((nb) => goldAt.has(nb));
+        slot.goldEl.textContent = near ? '💰↗' : '';
+        slot.goldEl.setAttribute('data-gold', near ? 'near' : 'none');
+        slot.goldEl.removeAttribute('data-gold-ring');
+        slot.goldEl.title = near ? t('chase.card.goldNear') : '';
+      }
+
+      // ② 홈 델타 — km(후보,홈) − km(현재,홈). 배송 중(carried>0)이면 강조.
+      const homeKnown = known && homeId !== null && currentId !== null && graph.has(homeId) && graph.has(currentId);
+      if (homeKnown && homeId && currentId) {
+        const delta = graph.dist(id, homeId) - graph.dist(currentId, homeId);
+        const state = delta < 0 ? 'closer' : delta > 0 ? 'farther' : 'same';
+        slot.homeEl.textContent = delta === 0 ? '·' : `${delta < 0 ? '▼' : '▲'}${Math.abs(delta)}`;
+        slot.homeEl.setAttribute('data-home', state);
+        slot.homeEl.title =
+          delta === 0
+            ? ''
+            : t(delta < 0 ? 'chase.card.homeCloser' : 'chase.card.homeFarther', { km: Math.abs(delta) });
+      } else {
+        slot.homeEl.textContent = '';
+        slot.homeEl.setAttribute('data-home', 'same');
+        slot.homeEl.title = '';
+      }
+      slot.homeEl.classList.toggle('is-delivering', carried > 0);
+
+      // ③ 이동 거리 — km(현재, 후보).
+      if (known && currentId && graph.has(currentId)) {
+        const km = graph.dist(currentId, id);
+        slot.kmEl.textContent = t('chase.card.distanceKm', { km });
+        slot.kmEl.title = t('chase.card.moveKm', { km });
+      } else {
+        slot.kmEl.textContent = '';
+        slot.kmEl.title = '';
+      }
+    }
+
+    function refreshAllIntel(): void {
+      for (const slot of slots) if (slot.id) refreshIntel(slot);
     }
 
     /** §8.5 "등장 모션" — 리더 라인 성장 + 칩 스케일 인, 슬롯 순서로 50ms 순차. */
@@ -280,7 +400,10 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
     }
 
     function onCandidatesShown(candidates: readonly { id: CountryId; danger: boolean }[]): void {
-      homeId = engine.getSnapshot().home;
+      const snap = engine.getSnapshot();
+      homeId = snap.home;
+      currentId = snap.player;
+      carried = snap.carriedCount;
       const ids: CountryId[] = [];
       candidates.forEach((cv, i) => {
         const slot = slots[i];
@@ -292,6 +415,7 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
         slot.gold = goldAt.has(cv.id);
         slot.home = cv.id === homeId;
         applyVisualState(slot);
+        refreshIntel(slot);
         slot.chipEl.style.opacity = '';
         triggerEnter(slot, i);
         if (slot.danger) announce(`${lang === 'ko' ? country.nameKo : country.nameEn}: checkpoint`);
@@ -326,23 +450,32 @@ export function CandidateCallouts({ engine, controller, globe, countries, lang }
           break;
         }
         case 'goldSpawned': {
-          goldAt.add(e.at);
+          goldAt.set(e.at, e.ring);
           const slot = slots.find((s) => s.id === e.at);
           if (slot) {
             slot.gold = true;
             applyVisualState(slot);
           }
+          // 이웃 금(💰↗)은 다른 슬롯에도 영향을 주므로 3칩 전부 갱신한다(저빈도 — 최대 3회 루프).
+          refreshAllIntel();
           break;
         }
         case 'goldPicked': {
           goldAt.delete(e.at);
+          carried = engine.getSnapshot().carriedCount;
           const slot = slots.find((s) => s.id === e.at);
           if (slot) {
             slot.gold = false;
             applyVisualState(slot);
           }
+          refreshAllIntel();
           break;
         }
+        case 'delivered':
+          // 배송 정산 = 소지 0 복귀 → 홈 델타 강조 해제(§11-D115-A "배송 중 시각 강조").
+          carried = engine.getSnapshot().carriedCount;
+          refreshAllIntel();
+          break;
         case 'hopCommitted': {
           const slot = slots.find((s) => s.id === e.to);
           if (slot) {

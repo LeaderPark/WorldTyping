@@ -126,6 +126,11 @@
      2px 백색 halo로 지도 위 판독성을 확보(§8.7)하고, 텍스트/라벨은 이 파생값을 쓴다. */
   --chase-gold-text: color-mix(in srgb, var(--chase-gold) 65%, black); /* 실측 5.03:1 / 5.51:1 */
   --chase-siren-red-text: color-mix(in srgb, var(--chase-siren-red) 80%, black); /* 실측 5.20:1 / 5.70:1 */
+  /* [§11-D115-A] 작전 카드 홈 델타 "가까워짐(▼)" 전용 녹색 텍스트. 배경은 크라프트지 칩
+     (color-mix(--chase-paper 92%, --surface) ≈ #d3c2a2, 테마 무관)이라 단일 값으로 충분하다.
+     원색(--continent-north-america #22c55e)은 그 위에서 실측 ≈1.9:1로 크게 미달 — 기존
+     --continent-*-text/--chase-*-text 파생 패턴(D62)대로 어둡게 보정했다(45% 믹스 ≈4.9:1). */
+  --chase-closer-text: color-mix(in srgb, var(--continent-north-america) 45%, black);
 }
 
 /* 다크 테마(옵션, D57 — "삭제 금지, 토글 보존"). 신설 시맨틱 토큰 전부 다크 대응값을 정의한다.
@@ -575,16 +580,39 @@
   transform-origin: center;
   animation: wt-chase-home-pulse 0.8s ease-out infinite;
 }
+/* §11-D115-C 위협 반경 글로우 — 경찰 배지를 감싸는 적색 후광. 강도는 [data-layer='chase-police']의
+   data-threat(= setThreatLevel의 nearestHops 파생)로 3단. 애니메이션 없음(정적 알파)이라
+   reduced-motion 강등 대상이 아니며 리플로우도 0. */
+.wt-chase__police-threat {
+  fill: var(--chase-siren-red);
+  opacity: 0.06;
+  pointer-events: none;
+}
+[data-layer='chase-police'][data-threat='mid'] .wt-chase__police-threat {
+  opacity: 0.12;
+}
+[data-layer='chase-police'][data-threat='high'] .wt-chase__police-threat {
+  opacity: 0.2;
+}
 
-/* 금 마커(§7.5 setGoldMarkers) — 대각선 시머 1회 대체를 상시 저강도 브라이트니스 펄스로 근사. */
+/* 금 마커(§7.5 setGoldMarkers) — 대각선 시머 1회 대체를 상시 저강도 브라이트니스 펄스로 근사.
+   §11-D115-C: 도트 위로 세로 광선 기둥(그라디언트 rect)을 세워 "금이 있는 나라"가 회전하는 구
+   위에서도 즉시 식별되게 한다. color(=currentColor)는 그룹에서 상속되므로 그라디언트 stop이
+   테마 토큰을 그대로 따라간다. */
 .wt-chase__gold {
+  color: var(--chase-gold);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wt-chase-gold-shimmer 2.4s ease-in-out infinite;
+}
+.wt-chase__gold-dot {
   fill: var(--chase-gold);
   stroke: var(--surface);
   stroke-width: 2;
   paint-order: stroke;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: wt-chase-gold-shimmer 2.4s ease-in-out infinite;
+}
+.wt-chase__gold-beam {
+  pointer-events: none;
 }
 @keyframes wt-chase-gold-shimmer {
   0%,
@@ -600,9 +628,14 @@
 /* 전 국가(un195) 노드 도트(§11-D108-B) — 저채도·소형 기본 + 현재국/홈/후보만 강조. 색은 지도
    테마 토큰(--map-*)과 --chase-gold만 사용해 라이트/다크 자동 대응. 반경(r)은 JS가 상태별로
    설정한다(CSS geometry property 미지원 환경 대비 — jsdom 테스트도 속성으로 검증). */
+/* [§11-D115-C] 플레이 중 노드 레이어 감광 0.45 → 0.26. 195개 도트가 금 광선·경찰 글로우·후보
+   연결선과 같은 시각 대역을 놓고 경쟁해 "지도가 지저분하다"는 인상을 만들던 것을 낮춘다 —
+   도트 자체는 유지(위치 감각의 격자 역할)하고 강조 상태(current/home/candidate)는 아래에서
+   자기 불투명도를 그대로 되돌려 받는다. 오버레이는 playing/countdown에만 보이므로(§11-D111 ②-a)
+   이 값이 곧 "RACING 중 투명도"다. */
 .wt-chase__node {
   fill: var(--map-border);
-  opacity: 0.45;
+  opacity: 0.26;
   pointer-events: none;
 }
 .wt-chase__node[data-node-state='candidate'] {

@@ -29,9 +29,11 @@ export interface Point {
 export const GLOBE_VIEWBOX = { w: 960, h: 500 } as const;
 const GLOBE_CENTER: Point = { x: GLOBE_VIEWBOX.w / 2, y: GLOBE_VIEWBOX.h / 2 };
 
-/** 칩 규격(§8.5 해부도 "chip 176×64"). */
+/** 칩 규격(§8.5 해부도 "chip 176×64" + §11-D115-A 인텔 행 h16 추가분 = 80). 배치 알고리즘(겹침
+ *  판정·클램프·리더 라인 교점)은 전부 이 상수만 참조하므로 높이 변경이 그대로 전파된다 — 값은
+ *  globals.css `.wt-candidate-chip { height }`와 반드시 동일해야 한다. */
 export const CHIP_W = 176;
-export const CHIP_H = 64;
+export const CHIP_H = 80;
 
 const RADIAL_OFFSET = 88;
 const MIN_ANGLE_SEP_DEG = 32;

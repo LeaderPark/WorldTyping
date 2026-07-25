@@ -1713,9 +1713,20 @@
    inset:0 처리하므로 이 래퍼는 실제 치수(clientWidth/Height)만 보장하면 된다(GlobeMap의
    resize()가 컨테이너 div를 읽는다). filter+mask는 컨테이너 한 곳에만 걸어 canvas·svg가 합성된
    결과에 한 번만 적용되게 한다(저채도 배경화 + 가장자리 radial fade로 위 카드/텍스트 대비 확보,
-   D50 취지와 동일 — 장식 지도 fill은 원색 그대로 두고 배경으로만 읽히게 채도만 낮춘다). */
+   D50 취지와 동일 — 장식 지도 fill은 원색 그대로 두고 배경으로만 읽히게 채도만 낮춘다).
+   [WT-TWEAK-HOME-GLOBE-CENTER] position:absolute → fixed. .wt-home은 min-height:100%라 콘텐츠가
+   길어지면 .wt-home 자체 높이(= 페이지 높이)가 뷰포트보다 커지고, absolute+inset:0은 그 늘어난
+   .wt-home 박스 전체를 채우던 중이라 구 중심이 페이지 중앙(뷰포트 중앙보다 아래)에 놓였다.
+   fixed+inset:0은 뷰포트(ICB)에 고정되므로 스크롤과 무관하게 항상 창 중앙에 그려진다. .wt-home과
+   AppShell 조상 체인에 transform/filter/backdrop-filter/contain(fixed의 containing block을
+   바꾸는 속성)이 없음을 확인했다(globals.css grep — .wt-home 자신도 position:relative만 있고
+   z-index/opacity/transform 등은 없다) — 따라서 fixed는 의도대로 실제 뷰포트 기준으로 계산된다.
+   overflow:hidden(.wt-home)은 fixed 요소를 클립하지 않지만 애초에 inset:0이 뷰포트 자체를
+   가리키므로 클립이 필요 없다 — width:100vw가 아니라 inset을 쓰므로 세로 스크롤바 유무에 따른
+   레이아웃 시프트도 없다(inset은 ICB — 스크롤바 거터가 이미 제외된 뷰포트 — 기준으로 계산되고,
+   100vw처럼 스크롤바 폭만큼 넘치는 문제가 없다). */
 .wt-home__globe {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 0;
   width: 100%;
@@ -1732,8 +1743,10 @@
   mask-image: radial-gradient(ellipse at center, black 45%, transparent 88%);
   -webkit-mask-image: radial-gradient(ellipse at center, black 45%, transparent 88%);
 }
+/* placeholder(Suspense fallback)도 fixed로 맞춰 청크 도착 전/후 시각이 100% 일치하게 한다
+   (레이아웃 시프트 0 — 위 .wt-home__globe와 동일 근거). */
 .wt-home__globe-placeholder {
-  position: absolute;
+  position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;

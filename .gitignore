@@ -30,6 +30,9 @@ tooling/selfhost/cloudflared/*.json
 tooling/selfhost/cloudflared/cert.pem
 tooling/selfhost/backups/
 tooling/selfhost/migration/
+# WT-DBRESET-TOOL: reset-db.ps1의 자동 백업 산출물(수동 초기화 전 스냅샷) — 위 backups/(일일
+# 자동 백업, 14일 롤링)와 별도 디렉터리라 그 정리 로직에 걸리지 않으므로 여기서 명시 제외한다.
+tooling/selfhost/backup/manual/
 
 # Claude Code 격리 worktree(전이적)
 .claude/worktrees/

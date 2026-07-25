@@ -141,6 +141,65 @@ docker compose down -v       # 완전 초기화가 필요할 때만(모든 로�
      no-op)한 뒤 복원된 데이터로 `wrangler dev`를 기동한다.
   4. `curl http://127.0.0.1:8787/api/v1/daily/today` 등으로 복원된 데이터가 보이는지 확인.
 
+## DB 초기화 (reset-db.cmd — WT-DBRESET-TOOL)
+
+**모든 계정·플레이 기록·랭킹·진행 중인 멀티플레이 방을 영구 삭제하고 "새로 시작" 상태로
+되돌리는 원클릭 도구다 — 되돌릴 수 없는 작업이므로 신중히 사용할 것.** 라이브 데이터 볼륨
+(`worldtyping_wt-data` — `docker-compose.yml`의 프로젝트명 `worldtyping` + 볼륨명 `wt-data`가
+합쳐진 실제 이름. D1/KV/DO SQLite 상태가 전부 이 안에 있다)을 자동 백업한 뒤 내용물을 비우고
+`app` 컨테이너를 재기동해 `entrypoint.sh`가 빈 볼륨에 마이그레이션을 새로 적용하게 만든다.
+볼륨 자체는 삭제하지 않는다(compose 참조 보존).
+
+### 사용법
+
+```
+tooling\selfhost\reset-db.cmd
+```
+
+더블클릭하면 빨간 경고와 함께 대문자로 정확히 `RESET`을 입력하라는 확인 프롬프트가 뜬다(대소문자
+불일치·빈 입력·취소는 전부 중단 — 이 시점까지는 어떤 docker 명령도 실행되지 않는다). 확인 후
+`tooling/selfhost/reset-db.ps1`(PowerShell 5.1 호환)이 아래 8단계를 순서대로 실행하고, 실패 시
+그 단계에서 중단한다(단, 백업이 이미 만들어졌다면 백업 파일은 보존된 채로 중단된다):
+
+1. 프리플라이트(`.env` 존재·Docker 데몬 응답·`worldtyping_wt-data` 볼륨 존재 확인)
+2. **자동 백업** — `docker run busybox tar`로 볼륨 전체를
+   `tooling/selfhost/backup/manual/wt-data-YYYYMMDD-HHmmss.tar.gz`에 스냅샷하고, 파일 존재·크기를
+   확인한다(실패 시 그 뒤 어떤 것도 지우지 않고 중단).
+3. `docker compose --profile tunnel stop app`
+4. **볼륨 내용 삭제** — `worldtyping_wt-data` 안의 파일을 전부 지운다(볼륨 자체는 유지).
+5. `docker compose --profile tunnel start app`
+6. 헬스체크 대기(최대 180초 폴링, healthcheck `start_period` 40초 감안)
+7. 스모크 테스트(`127.0.0.1:8790/api/v1/health`)
+8. 요약 출력(백업 파일 경로·크기, 복원 명령 안내)
+
+전 단계 로그가 `tooling/selfhost/deploy-logs/reset-YYYYMMDD-HHmmss.log`에 남는다.
+
+### 옵션 (커맨드라인 인자로 전달, 예: `reset-db.cmd -DryRun`)
+
+- `-DryRun` — 실제 docker 명령을 하나도 실행하지 않고 8단계를 미리보기만 한다(`RESET` 확인
+  입력도 건너뛴다). Docker Desktop이 꺼져 있거나 미설치여도 끝까지 완주한다. 사전 점검용.
+- `-Force` — 시작 시 요구하는 `RESET` 확인 입력을 건너뛰고 바로 진행한다(자동화/무인 실행용).
+
+### 백업 위치와 복원
+
+- 백업 파일: `tooling/selfhost/backup/manual/wt-data-<타임스탬프>.tar.gz`(`.gitignore` 제외 —
+  커밋 대상 아님). 아래 "백업 / 복원" 절의 자동 일일 백업(`tooling/selfhost/backups/`, 14일
+  롤링)과는 별도 디렉터리이므로 서로의 보존 정책에 영향받지 않는다.
+- 복원 절차(초기화 요약 출력에도 동일하게 안내됨):
+  1. `docker compose --profile tunnel stop app`
+  2. `docker run --rm -v worldtyping_wt-data:/data -v <backup 디렉터리>:/backup:ro busybox sh -c "rm -rf /data/* /data/.[!.]* 2>/dev/null; tar xzf /backup/wt-data-<타임스탬프>.tar.gz -C /data"`
+  3. `docker compose --profile tunnel start app`
+
+### 주의
+
+- **KV `config:*` 원격 설정 오버라이드(등급 컷·안티치트 임계값·배너 등)도 함께 초기화된다** —
+  전체 볼륨 삭제이므로 D1/KV/DO 구분 없이 전부 지워진다. 필요하면 초기화 후 운영 런북
+  (`tooling/ops/runbook.md`)을 참고해 재적용할 것.
+- 확인 프롬프트를 통과하기 전까지는 docker 명령이 전혀 실행되지 않는다 — `-Force` 없이 실행 중
+  실수로 취소해도 안전하다.
+- 이 도구는 `docker-compose.yml`/`Dockerfile`/`entrypoint.sh`를 수정하지 않는다 — 기존 스택
+  정의를 그대로 두고 볼륨 내용만 조작한다.
+
 ## cron-ping (Cloudflare Cron Triggers 대체)
 
 `cron-ping` 서비스가 `workers/api/wrangler.toml`의 `[triggers].crons` 4개 문자열과 같은 주기로

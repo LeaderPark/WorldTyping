@@ -1,13 +1,26 @@
 // @vitest-environment jsdom
 //
-// spec: docs/01 §10.1(S13)·§10.2(여권 펼침 뷰), docs/06 §4.3, WT-M5-03
+// spec: docs/01 §10.1(S13)·§10.2(여권 펼침 뷰), docs/06 §4.3, WT-M5-03,
+//       WT-PASSPORT-LOGIN-NUDGE(여권 = 로그인 전용, 리드 확정 — 비로그인은 잠금 화면)
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders } from '../../app/providers';
+import { useAuthStore, type AccountSession } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settings';
 import { PassportPage } from './index';
 import type { PassportRes } from '../../net/api-client';
+
+function loginSession(): AccountSession {
+  return {
+    token: 'wt1.acct',
+    playerId: 'p1',
+    nickname: 'NIMBUS',
+    expiresAt: Date.now() + 60_000,
+    geo: 'KR',
+    profile: { name: 'NIMBUS', picture: null, email: null },
+  };
+}
 
 const ensureSessionMock = vi.fn();
 const fetchSessionMeMock = vi.fn();
@@ -54,15 +67,23 @@ function renderPage() {
 
 describe('PassportPage', () => {
   beforeEach(() => {
+    localStorage.clear();
+    useAuthStore.getState().logout();
+    useAuthStore.getState().closeLogin();
     useSettingsStore.getState().setLang('ko');
     ensureSessionMock.mockResolvedValue({ token: 't', playerId: 'p1', nickname: 'NIMBUS', expiresAt: '', geo: 'KR' });
     fetchSessionMeMock.mockResolvedValue({ playerId: 'p1', nickname: 'NIMBUS', status: 'active', geo: 'KR' });
     fetchPassportMock.mockResolvedValue(basePassport());
+    // 여권은 로그인 전용(WT-PASSPORT-LOGIN-NUDGE) — 콘텐츠를 검증하는 기존 테스트는 로그인 상태를
+    // 전제한다. 게이팅 자체를 검증하는 아래 describe만 별도로 로그아웃 상태를 세팅한다.
+    act(() => useAuthStore.getState().login(loginSession()));
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    useAuthStore.getState().logout();
+    useAuthStore.getState().closeLogin();
   });
 
   it('로딩 중에도 h1은 즉시 렌더된다', () => {
@@ -174,5 +195,66 @@ describe('PassportPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('passport-cover-continent-asia').textContent).toBe('사용 중'),
     );
+  });
+
+  // ── 로그인 게이팅(WT-PASSPORT-LOGIN-NUDGE, 리드 확정 — 여권은 로그인 전용) ──────────────
+  describe('로그인 게이팅', () => {
+    beforeEach(() => {
+      // 상위 beforeEach가 세운 로그인 상태를 되돌려 이 describe는 항상 비로그인에서 시작한다.
+      useAuthStore.getState().logout();
+      useAuthStore.getState().closeLogin();
+    });
+
+    it('비로그인 마운트 → 잠금 화면을 보여주고 여권 콘텐츠는 렌더하지 않는다', async () => {
+      renderPage();
+
+      expect(await screen.findByTestId('passport-locked')).toBeInTheDocument();
+      expect(screen.queryByTestId('passport-nickname')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('passport-loading')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('passport-stamps')).not.toBeInTheDocument();
+      expect(fetchPassportMock).not.toHaveBeenCalled();
+    });
+
+    it('비로그인 마운트 → 로그인 모달을 "passport" 사유로 1회 자동으로 연다', () => {
+      renderPage();
+      expect(useAuthStore.getState().loginReason).toBe('passport');
+    });
+
+    it('모달을 닫아도(취소) 잠금 화면은 유지되고, 리렌더에도 재오픈되지 않는다', () => {
+      const { rerender } = renderPage();
+      expect(useAuthStore.getState().loginReason).toBe('passport');
+
+      act(() => useAuthStore.getState().closeLogin());
+      expect(useAuthStore.getState().loginReason).toBeNull();
+
+      rerender(
+        <AppProviders>
+          <MemoryRouter>
+            <PassportPage />
+          </MemoryRouter>
+        </AppProviders>,
+      );
+
+      expect(useAuthStore.getState().loginReason).toBeNull(); // 재오픈 없음(ref 가드)
+      expect(screen.getByTestId('passport-locked')).toBeInTheDocument();
+    });
+
+    it('잠금 화면의 로그인 버튼을 클릭하면 로그인 모달을 다시 연다', () => {
+      renderPage();
+      act(() => useAuthStore.getState().closeLogin());
+      expect(useAuthStore.getState().loginReason).toBeNull();
+
+      fireEvent.click(screen.getByTestId('passport-locked-cta'));
+      expect(useAuthStore.getState().loginReason).toBe('passport');
+    });
+
+    it('로그인 상태로 마운트하면 로그인 모달을 자동으로 열지 않고 여권 콘텐츠를 정상 렌더한다', async () => {
+      act(() => useAuthStore.getState().login(loginSession()));
+      renderPage();
+
+      await waitFor(() => expect(screen.getByTestId('passport-nickname')).toBeInTheDocument());
+      expect(screen.queryByTestId('passport-locked')).not.toBeInTheDocument();
+      expect(useAuthStore.getState().loginReason).toBeNull();
+    });
   });
 });

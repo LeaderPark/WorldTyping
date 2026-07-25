@@ -44,8 +44,8 @@ export interface AccountSession {
   profile: GoogleProfile;
 }
 
-/** 로그인 모달을 여는 맥락(문구 분기) — 일반/멀티 진입/랭킹 등재. */
-export type LoginReason = 'general' | 'multi' | 'ranking';
+/** 로그인 모달을 여는 맥락(문구 분기) — 일반/멀티 진입/랭킹 등재/여권 게이팅. */
+export type LoginReason = 'general' | 'multi' | 'ranking' | 'passport';
 
 export interface AuthState {
   playerId: string | null;

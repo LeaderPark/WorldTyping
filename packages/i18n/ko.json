@@ -216,6 +216,9 @@
   "passport.achievements.title": "업적",
   "passport.achievements.empty": "아직 달성한 업적이 없어요",
   "passport.achievements.count": "{count}/24 달성",
+  "passport.locked.title": "여권은 로그인 후 이용할 수 있어요",
+  "passport.locked.body": "여권 스탬프와 기록은 로그인한 계정에 저장돼요. 로그인하면 어디서든 이어서 확인할 수 있어요.",
+  "passport.locked.cta": "로그인하고 여권 보기",
 
   "lang.selectPrompt.ko": "어떤 언어로 여행할까요?",
   "lang.selectPrompt.en": "Which language?",
@@ -363,6 +366,7 @@
   "auth.reason.general": "로그인하고 더 많은 기능을 즐겨보세요.",
   "auth.reason.multi": "멀티플레이는 로그인이 필요해요.",
   "auth.reason.ranking": "랭킹 등록에는 로그인이 필요해요.",
+  "auth.reason.passport": "로그인하면 여권 기록이 계정에 저장돼 어디서든 이어집니다.",
 
   "theme.toggle": "테마 전환(라이트/다크)",
 

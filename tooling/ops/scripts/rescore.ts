@@ -196,7 +196,8 @@ async function rescoreOne(
     return { skipped: "detail_json 파싱 실패" };
   }
 
-  const fullSet = await rebuildSet({} as Env, { mode, modeKey: row.mode_key, seed: row.seed });
+  // lang은 티어 세트 재현에 필요하다(§11-D107 — T4·T5 가중 샘플링이 L_i 언어에 의존).
+  const fullSet = await rebuildSet({} as Env, { mode, modeKey: row.mode_key, seed: row.seed, lang: row.lang });
   const setHash = await computeSetHash(fullSet);
 
   // 파일 상단 주석 #2: 이미 통과한 원 제출의 토큰/리플레이/세트-일치 단계는 합성 값으로
